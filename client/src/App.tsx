@@ -9,6 +9,8 @@ import ApplicantAssessmentComplete from "@/pages/ApplicantAssessmentComplete";
 import ApplicantReviewPlaceholder from "@/pages/ApplicantReviewPlaceholder";
 import ApplicantSubmitted from "@/pages/ApplicantSubmitted";
 import AdminDashboard from "@/pages/AdminDashboard";
+import AdminApplications from "@/pages/AdminApplications";
+import AdminCandidatePlaceholder from "@/pages/AdminCandidatePlaceholder";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminPlaceholder from "@/pages/AdminPlaceholder";
 import ApplicantInformation from "@/pages/ApplicantInformation";
@@ -30,7 +32,8 @@ function Router() {
       <Route component={Home} path="/" />
       <Route component={AdminLogin} path="/admin/login" />
       <Route component={AdminDashboard} path="/admin" />
-      <Route path="/admin/applications">{() => <AdminPlaceholder title="Applications" />}</Route>
+      <Route component={AdminCandidatePlaceholder} path="/admin/applications/:candidateId" />
+      <Route component={AdminApplications} path="/admin/applications" />
       <Route path="/admin/roles">{() => <AdminPlaceholder title="Recruitment Roles" />}</Route>
       <Route path="/admin/assessments">{() => <AdminPlaceholder title="Assessments" />}</Route>
       <Route path="/admin/questions">{() => <AdminPlaceholder title="Question Bank" />}</Route>
