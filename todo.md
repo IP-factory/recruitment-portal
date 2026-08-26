@@ -50,6 +50,17 @@ The `/apply` page displays the Business Development Manager role, its specified 
 - [x] Connect CV Back and Continue actions while preserving Applicant Information data.
 - [x] Verify valid selection, invalid type and size handling, replacement/removal, routing, responsive layouts, and production build behavior.
 
+## Assessment Introduction
+
+- [x] Build the Assessment Introduction content card within the existing application shell.
+- [x] Add the assessment-questions placeholder and route the start action to it.
+- [x] Preserve stage completion state and existing Information and CV metadata through the flow.
+- [x] Verify stage indicators, navigation, responsive layouts, and production build behavior.
+
+## Assessment Introduction Verification Notes
+
+The Assessment Introduction renders the requested three expectation rows, four guidance rows, no-score information note, completed Information and CV stages, and active Assessment stage. The Start assessment route handler opens `/apply/business-development-manager/assessment/questions`, where Assessment remains active and the requested questions placeholder appears without any sample questions or scoring. The questions placeholder return action restores the introduction. Back to CV restores the completed CV stage with the temporary selected-file metadata intact.
+
 ## CV Upload Verification Notes
 
 The CV route renders the active CV progress state, upload surface, guidance rows, action controls, and the summary panel with Information completed and CV current. The file control declares the required PDF, DOC, and DOCX selection types. A temporary unsupported text-file selection renders “Upload your CV as a PDF, DOC or DOCX file.” inline, and an 11 MB PDF selection renders “Your CV must be 10 MB or smaller.” inline. A valid PDF selection displays the compact filename row, type and size metadata, and “CV selected successfully.” The Remove action clears the temporary metadata and returns to the upload state. Selecting Continue with no valid file renders “Upload your CV before continuing.” inline; a valid PDF routes to `/apply/business-development-manager/assessment`, where Assessment is active and the requested placeholder is displayed. Back to CV returns to the selected-file state without attempting a server upload. The Replace action updates the displayed metadata to the new valid DOCX file.
