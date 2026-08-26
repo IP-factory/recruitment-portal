@@ -8,6 +8,9 @@ import ApplicantAssessmentQuestionsPlaceholder from "@/pages/ApplicantAssessment
 import ApplicantAssessmentComplete from "@/pages/ApplicantAssessmentComplete";
 import ApplicantReviewPlaceholder from "@/pages/ApplicantReviewPlaceholder";
 import ApplicantSubmitted from "@/pages/ApplicantSubmitted";
+import AdminDashboard from "@/pages/AdminDashboard";
+import AdminLogin from "@/pages/AdminLogin";
+import AdminPlaceholder from "@/pages/AdminPlaceholder";
 import ApplicantInformation from "@/pages/ApplicantInformation";
 import Auth from "@/pages/Auth";
 import AuthCreateAccount from "@/pages/AuthCreateAccount";
@@ -25,6 +28,13 @@ function Router() {
   return (
     <Switch>
       <Route component={Home} path="/" />
+      <Route component={AdminLogin} path="/admin/login" />
+      <Route component={AdminDashboard} path="/admin" />
+      <Route path="/admin/applications">{() => <AdminPlaceholder title="Applications" />}</Route>
+      <Route path="/admin/roles">{() => <AdminPlaceholder title="Recruitment Roles" />}</Route>
+      <Route path="/admin/assessments">{() => <AdminPlaceholder title="Assessments" />}</Route>
+      <Route path="/admin/questions">{() => <AdminPlaceholder title="Question Bank" />}</Route>
+      <Route path="/admin/settings">{() => <AdminPlaceholder title="Settings" />}</Route>
       <Route component={Apply} path="/apply" />
       <Route component={ApplicantInformation} path="/apply/business-development-manager" />
       <Route component={ApplicantCvPlaceholder} path="/apply/business-development-manager/cv" />

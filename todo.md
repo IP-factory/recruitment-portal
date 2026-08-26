@@ -71,6 +71,17 @@ The `/apply` page displays the Business Development Manager role, its specified 
 - [x] Build the prototype completion route and read-only post-submission review state.
 - [x] Verify data rendering, edit routes, incomplete handling, declarations, local submission, responsive layouts, and production build behavior.
 
+## Admin Demo Login and Dashboard
+
+- [x] Add frontend-only admin session helpers, protected routes, and demo credential validation.
+- [x] Build the focused admin login page with local credential feedback.
+- [x] Build the reusable admin shell, dashboard overview, central mock data, and placeholder routes.
+- [x] Verify session redirects, sign-in/sign-out, dashboard navigation, responsive layouts, and production build behavior.
+
+## Admin Verification Notes
+
+Unauthenticated access to `/admin` redirects to `/admin/login`, where the separate focused Administration sign-in page renders without applicant-page chrome. Incorrect credentials render “The email address or password is incorrect.” inline without creating a session. The approved demo credentials create a local session and route to the structured Dashboard Overview with all four metrics, five recent applications, Active Role, and application-status summary. Applications navigation opens the protected shared-shell placeholder with the specified later-stage copy. The sign-out handler clears the local session and returns to `/admin/login`; authenticated visits to `/admin/login` redirect back to `/admin`; after sign-out, a direct `/admin` visit is again redirected to `/admin/login`. The desktop and mobile login layouts were reviewed, and the protected dashboard renders its desktop shell with table overflow control and responsive mobile drawer implementation. `pnpm check` and the production `pnpm build` both succeed; the bundle-size advisory is non-blocking.
+
 ## Review and Submission Verification Notes
 
 With the existing locally retained prototype data, the Review page renders Applicant Information, CV metadata, all five assessment responses, and no score data. The desktop summary shows Information, CV, and Assessment completed with Review active. Submission remains disabled until both independent declaration confirmations are selected. With both confirmations selected, Submit application stores the completed frontend-prototype state and routes to the no-score completion page with Role, Completed status, and 4 of 4 stages. View completed application returns to a read-only Review state: all sections use Completed labels and no edit, declaration, or submit controls are available. Before submission, Applicant Information Edit returns to the original Information step with all existing browser-stored values preserved, and CV Edit returns to the existing selected-file state with Replace and Remove controls.
