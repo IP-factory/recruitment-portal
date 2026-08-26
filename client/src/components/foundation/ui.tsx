@@ -197,6 +197,7 @@ export function FileUploadBox() {
 
 const statusClass: Record<string, string> = {
   Open: "status-open",
+  Completed: "status-completed",
   "In Progress": "status-in-progress",
   Submitted: "status-submitted",
   "Under Review": "status-under-review",

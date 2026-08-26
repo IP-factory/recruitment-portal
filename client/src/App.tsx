@@ -7,6 +7,7 @@ import ApplicantAssessmentPlaceholder from "@/pages/ApplicantAssessmentPlacehold
 import ApplicantAssessmentQuestionsPlaceholder from "@/pages/ApplicantAssessmentQuestionsPlaceholder";
 import ApplicantAssessmentComplete from "@/pages/ApplicantAssessmentComplete";
 import ApplicantReviewPlaceholder from "@/pages/ApplicantReviewPlaceholder";
+import ApplicantSubmitted from "@/pages/ApplicantSubmitted";
 import ApplicantInformation from "@/pages/ApplicantInformation";
 import Auth from "@/pages/Auth";
 import AuthCreateAccount from "@/pages/AuthCreateAccount";
@@ -31,6 +32,7 @@ function Router() {
       <Route component={ApplicantAssessmentQuestionsPlaceholder} path="/apply/business-development-manager/assessment/questions" />
       <Route component={ApplicantAssessmentComplete} path="/apply/business-development-manager/assessment/complete" />
       <Route component={ApplicantReviewPlaceholder} path="/apply/business-development-manager/review" />
+      <Route component={ApplicantSubmitted} path="/apply/business-development-manager/submitted" />
       <Route component={Auth} path="/auth" />
       <Route component={AuthSignIn} path="/auth/sign-in" />
       <Route component={AuthCreateAccount} path="/auth/create-account" />

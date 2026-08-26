@@ -64,6 +64,17 @@ The `/apply` page displays the Business Development Manager role, its specified 
 - [x] Add the assessment completion page and Review placeholder routes.
 - [x] Verify answer validation, persistence, stage routing, responsive layouts, and production build behavior.
 
+## Review and Submit Experience
+
+- [x] Add shared frontend-only submission state and readiness validation helpers.
+- [x] Build the data-driven Review page with applicant, CV, assessment, and declaration sections.
+- [x] Build the prototype completion route and read-only post-submission review state.
+- [x] Verify data rendering, edit routes, incomplete handling, declarations, local submission, responsive layouts, and production build behavior.
+
+## Review and Submission Verification Notes
+
+With the existing locally retained prototype data, the Review page renders Applicant Information, CV metadata, all five assessment responses, and no score data. The desktop summary shows Information, CV, and Assessment completed with Review active. Submission remains disabled until both independent declaration confirmations are selected. With both confirmations selected, Submit application stores the completed frontend-prototype state and routes to the no-score completion page with Role, Completed status, and 4 of 4 stages. View completed application returns to a read-only Review state: all sections use Completed labels and no edit, declaration, or submit controls are available. Before submission, Applicant Information Edit returns to the original Information step with all existing browser-stored values preserved, and CV Edit returns to the existing selected-file state with Replace and Remove controls.
+
 ## Assessment Question Verification Notes
 
 The assessment opens with one Business Development question, its five selectable answer rows, the question-only progress bar, and unavailable future navigator controls. Selecting Next without an answer renders “Select an answer before continuing.” inline and remains on Question 1. Choosing one answer creates the selected state, marks Question 1 answered, enables the next sequential question, and advances to Question 2. Previous returns to Question 1 with the selected answer intact; a browser refresh retains the response and current-question state. All five locally retained answers restore on Question 5, where Complete assessment replaces Next and no score is shown. Completing the assessment opens the no-score completion state; Review assessment responses returns to Question 1 with all retained answers marked in the navigator. Continue to review opens the Review placeholder with Information, CV, and Assessment completed and Review active.
