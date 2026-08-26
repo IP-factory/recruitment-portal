@@ -1,6 +1,6 @@
 /**
  * Quiet Authority foundation primitives: restrained enterprise controls, clear workflow states,
- * and reusable surfaces built around Portal Navy, precise spacing, and functional hierarchy.
+ * and reusable surfaces built around Primary Navy, precise spacing, and functional hierarchy.
  */
 import { cn } from "@/lib/utils";
 import {
@@ -285,9 +285,9 @@ export function EmptyState({ onAction }: { onAction: () => void }) {
 
 export function CandidateTable({ onPlaceholder }: { onPlaceholder: (name: string) => void }) {
   const rows = [
-    ["Maya Patel", "Data Analyst", "86", "Shortlisted"] as const,
-    ["Jordan Smith", "Operations Associate", "74", "Under Review"] as const,
-    ["Amara Okafor", "People Coordinator", "91", "Interview"] as const,
+    ["Maya Patel", "Business Development Manager", "86", "Shortlisted"] as const,
+    ["Jordan Smith", "Business Development Manager", "74", "Under Review"] as const,
+    ["Amara Okafor", "Business Development Manager", "91", "Interview"] as const,
   ];
 
   return (

@@ -25,7 +25,7 @@ Contemporary enterprise software with the composure of a professional-services d
 ### Core Principles
 1. **Structured calm:** Use clear sectional cadence, measured whitespace, and narrow horizontal rules to establish order without visual noise.
 2. **Utility with restraint:** Every visual choice should clarify hierarchy, status, or interaction. Decoration is limited to the fine system grid and small typographic markers.
-3. **Navy as an anchor:** The signature navy belongs to headings, action controls, and active information—not as a continuous page background.
+3. **Navy as an anchor:** Primary Navy belongs to headings, action controls, and active information—not as a continuous page background.
 4. **Reusable by default:** Components should look consistent whether they eventually belong in applicant, recruiter, or administrative workflows.
 
 ### Color Philosophy
@@ -64,10 +64,10 @@ Headlines should be direct and systems-oriented. CTAs should name the next actio
 Use the requested **text placeholder**, “Recruitment Portal,” set in a distinct navy medium-weight wordmark. A minimal two-line navy alignment mark may sit before it as a tiny, non-elaborate visual anchor; the text remains the identity.
 
 ### Signature Brand Color
-**Portal Navy — `#16263D`**
+**Primary Navy — `#16263D`**
 
 ## Style Decisions
 
-- The Portal Navy two-line alignment mark is the recurring identity motif. It appears next to the text wordmark, within sparse workspace markers, and beside empty or transitional states.
+- The Primary Navy two-line alignment mark is the recurring identity motif. It appears next to the text wordmark, within sparse workspace markers, and beside empty or transitional states.
 - Internal shell pages extend the same dossier language as the UI kit through compact uppercase context labels, decisive headings, and fine divider rules. This direction is applied without adding future dashboard content beyond the requested visual shell.
 - Temporary copy remains explicitly grounded in the recruitment workflow when the specification permits it. The requested portal placeholder text remains intact because it is a mandatory foundation requirement.
