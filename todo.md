@@ -43,6 +43,17 @@ The `/apply` page displays the Business Development Manager role, its specified 
 - [x] Add the CV placeholder route and connect the role action to the application information step.
 - [x] Verify form validation, retained local data, routing, responsive layouts, and production build behavior.
 
+## CV Upload Experience
+
+- [x] Build the frontend-only CV upload surface, selected-file state, and inline file validation.
+- [x] Update the application summary for the active CV stage and add the Assessment placeholder route.
+- [x] Connect CV Back and Continue actions while preserving Applicant Information data.
+- [x] Verify valid selection, invalid type and size handling, replacement/removal, routing, responsive layouts, and production build behavior.
+
+## CV Upload Verification Notes
+
+The CV route renders the active CV progress state, upload surface, guidance rows, action controls, and the summary panel with Information completed and CV current. The file control declares the required PDF, DOC, and DOCX selection types. A temporary unsupported text-file selection renders “Upload your CV as a PDF, DOC or DOCX file.” inline, and an 11 MB PDF selection renders “Your CV must be 10 MB or smaller.” inline. A valid PDF selection displays the compact filename row, type and size metadata, and “CV selected successfully.” The Remove action clears the temporary metadata and returns to the upload state. Selecting Continue with no valid file renders “Upload your CV before continuing.” inline; a valid PDF routes to `/apply/business-development-manager/assessment`, where Assessment is active and the requested placeholder is displayed. Back to CV returns to the selected-file state without attempting a server upload. The Replace action updates the displayed metadata to the new valid DOCX file.
+
 ## Applicant Information Verification Notes
 
 The Business Development Manager workspace renders the focused application header, four-step progress area, two form sections, and desktop summary panel. Attempting to continue with empty required fields triggers the local field-validation treatment and keeps the applicant on the Information step. Required text fields and total professional experience can be populated locally in preparation for CV-stage continuation. A fully valid required-field set routes to `/apply/business-development-manager/cv`, where the CV stage is active and the requested placeholder is displayed. Returning to Information restores the entered temporary browser data, and Exit application returns to `/apply`.

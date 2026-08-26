@@ -4,6 +4,7 @@
 export const BUSINESS_DEVELOPMENT_MANAGER = "Business Development Manager";
 export const APPLICATION_STEPS = ["Information", "CV", "Assessment", "Review"] as const;
 export const APPLICATION_INFORMATION_STORAGE_KEY = "recruitment-portal:bdm:applicant-information";
+export const CV_FILE_METADATA_STORAGE_KEY = "recruitment-portal:bdm:cv-file-metadata";
 
 export type ApplicantInformation = {
   fullName: string;
@@ -29,6 +30,12 @@ export const emptyApplicantInformation: ApplicantInformation = {
   linkedInProfile: "",
 };
 
+export type CvFileMetadata = {
+  name: string;
+  type: string;
+  size: number;
+};
+
 export function loadApplicantInformation(): ApplicantInformation {
   if (typeof window === "undefined") return emptyApplicantInformation;
   try {
@@ -42,4 +49,24 @@ export function loadApplicantInformation(): ApplicantInformation {
 export function saveApplicantInformation(data: ApplicantInformation) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(APPLICATION_INFORMATION_STORAGE_KEY, JSON.stringify(data));
+}
+
+export function loadCvFileMetadata(): CvFileMetadata | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = window.sessionStorage.getItem(CV_FILE_METADATA_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveCvFileMetadata(data: CvFileMetadata) {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(CV_FILE_METADATA_STORAGE_KEY, JSON.stringify(data));
+}
+
+export function clearCvFileMetadata() {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(CV_FILE_METADATA_STORAGE_KEY);
 }

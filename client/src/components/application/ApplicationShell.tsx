@@ -4,7 +4,7 @@
 import { AlignmentMark } from "@/components/foundation/navigation";
 import { ProgressStepper, StatusBadge } from "@/components/foundation/ui";
 import { APPLICATION_STEPS, BUSINESS_DEVELOPMENT_MANAGER } from "@/lib/applicationData";
-import { ChevronLeft } from "lucide-react";
+import { Check, ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
 
 function ApplicationHeader() {
@@ -18,14 +18,14 @@ function ApplicationHeader() {
   );
 }
 
-export function ApplicationSummary() {
+export function ApplicationSummary({ activeStep }: { activeStep: number }) {
   return (
     <aside className="sticky top-8 rounded-xl border border-border bg-white p-6 shadow-none">
       <p className="section-kicker">Your application</p>
       <h2 className="mt-3 text-base font-semibold text-primary">{BUSINESS_DEVELOPMENT_MANAGER}</h2>
       <div className="mt-3"><StatusBadge status="In Progress" /></div>
-      <div className="mt-6 border-t border-border pt-5"><p className="text-sm font-semibold text-primary">Current stage</p><p className="mt-1 text-sm text-muted-foreground">Information</p></div>
-      <div className="mt-6"><p className="text-sm font-semibold text-primary">Application stages</p><ol className="mt-3 space-y-1.5">{APPLICATION_STEPS.map((stage, index) => <li className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] ${index === 0 ? "bg-portal-blue-soft font-medium text-primary" : "text-muted-foreground"}`} key={stage}><span className="text-[11px] font-semibold tracking-[0.08em]">0{index + 1}</span>{stage}</li>)}</ol></div>
+      <div className="mt-6 border-t border-border pt-5"><p className="text-sm font-semibold text-primary">Current stage</p><p className="mt-1 text-sm text-muted-foreground">{APPLICATION_STEPS[activeStep]}</p></div>
+      <div className="mt-6"><p className="text-sm font-semibold text-primary">Application stages</p><ol className="mt-3 space-y-1.5">{APPLICATION_STEPS.map((stage, index) => <li className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] ${index === activeStep ? "bg-portal-blue-soft font-medium text-primary" : index < activeStep ? "text-primary" : "text-muted-foreground"}`} key={stage}>{index < activeStep ? <span className="flex size-4 items-center justify-center rounded-full bg-primary text-white"><Check className="size-2.5" /></span> : <span className="text-[11px] font-semibold tracking-[0.08em]">0{index + 1}</span>}{stage}</li>)}</ol></div>
       <p className="mt-6 border-t border-border pt-4 text-[12px] leading-5 text-muted-foreground">Your information is currently stored on this device while the application experience is being developed.</p>
     </aside>
   );
@@ -36,7 +36,7 @@ export function ApplicationShell({ activeStep, children, showSummary = false }: 
     <div className="min-h-screen bg-portal-surface text-foreground">
       <ApplicationHeader />
       <section className="border-b border-border bg-white"><div className="mx-auto max-w-[1000px] px-4 py-5 sm:px-6"><ProgressStepper current={activeStep} steps={APPLICATION_STEPS} /></div></section>
-      <main className="mx-auto max-w-[1000px] px-4 py-10 sm:px-6 sm:py-12">{showSummary ? <div className="grid gap-10 lg:grid-cols-[minmax(0,69fr)_minmax(250px,31fr)] lg:gap-12"><div>{children}</div><div className="hidden lg:block"><ApplicationSummary /></div></div> : children}</main>
+      <main className="mx-auto max-w-[1000px] px-4 py-10 sm:px-6 sm:py-12">{showSummary ? <div className="grid gap-10 lg:grid-cols-[minmax(0,69fr)_minmax(250px,31fr)] lg:gap-12"><div>{children}</div><div className="hidden lg:block"><ApplicationSummary activeStep={activeStep} /></div></div> : children}</main>
     </div>
   );
 }

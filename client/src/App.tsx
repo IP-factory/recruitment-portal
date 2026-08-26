@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Apply from "@/pages/Apply";
 import ApplicantCvPlaceholder from "@/pages/ApplicantCvPlaceholder";
+import ApplicantAssessmentPlaceholder from "@/pages/ApplicantAssessmentPlaceholder";
 import ApplicantInformation from "@/pages/ApplicantInformation";
 import Auth from "@/pages/Auth";
 import AuthCreateAccount from "@/pages/AuthCreateAccount";
@@ -23,6 +24,7 @@ function Router() {
       <Route component={Apply} path="/apply" />
       <Route component={ApplicantInformation} path="/apply/business-development-manager" />
       <Route component={ApplicantCvPlaceholder} path="/apply/business-development-manager/cv" />
+      <Route component={ApplicantAssessmentPlaceholder} path="/apply/business-development-manager/assessment" />
       <Route component={Auth} path="/auth" />
       <Route component={AuthSignIn} path="/auth/sign-in" />
       <Route component={AuthCreateAccount} path="/auth/create-account" />
