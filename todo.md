@@ -57,6 +57,17 @@ The `/apply` page displays the Business Development Manager role, its specified 
 - [x] Preserve stage completion state and existing Information and CV metadata through the flow.
 - [x] Verify stage indicators, navigation, responsive layouts, and production build behavior.
 
+## Assessment Question Experience
+
+- [x] Create shared frontend demo-question data and locally retained answer state.
+- [x] Build the one-question-at-a-time assessment navigation, answer rows, and sequential question navigator.
+- [x] Add the assessment completion page and Review placeholder routes.
+- [x] Verify answer validation, persistence, stage routing, responsive layouts, and production build behavior.
+
+## Assessment Question Verification Notes
+
+The assessment opens with one Business Development question, its five selectable answer rows, the question-only progress bar, and unavailable future navigator controls. Selecting Next without an answer renders “Select an answer before continuing.” inline and remains on Question 1. Choosing one answer creates the selected state, marks Question 1 answered, enables the next sequential question, and advances to Question 2. Previous returns to Question 1 with the selected answer intact; a browser refresh retains the response and current-question state. All five locally retained answers restore on Question 5, where Complete assessment replaces Next and no score is shown. Completing the assessment opens the no-score completion state; Review assessment responses returns to Question 1 with all retained answers marked in the navigator. Continue to review opens the Review placeholder with Information, CV, and Assessment completed and Review active.
+
 ## Assessment Introduction Verification Notes
 
 The Assessment Introduction renders the requested three expectation rows, four guidance rows, no-score information note, completed Information and CV stages, and active Assessment stage. The Start assessment route handler opens `/apply/business-development-manager/assessment/questions`, where Assessment remains active and the requested questions placeholder appears without any sample questions or scoring. The questions placeholder return action restores the introduction. Back to CV restores the completed CV stage with the temporary selected-file metadata intact.
