@@ -79,7 +79,7 @@ export default function Apply() {
         <section className="portal-container pb-20 pt-14 sm:pb-24 sm:pt-16">
           <div className="mb-6 flex items-center justify-between border-b border-border pb-5"><div><p className="section-kicker">Available role</p><h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-primary">Available role</h2></div></div>
           <div className="space-y-5">
-            {availableRoles.map((role) => <RoleCard key={role.title} onApply={() => setLocation("/auth")} role={role} />)}
+            {availableRoles.map((role) => <RoleCard key={role.title} onApply={() => setLocation("/auth/create-account")} role={role} />)}
           </div>
 
           <div className="mt-8 border border-border bg-portal-surface px-6 py-5 sm:px-7">

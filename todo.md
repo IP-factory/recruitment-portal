@@ -28,3 +28,14 @@ The `/#how-it-works` anchor places the How it works section in the viewport. The
 ## Role Selection Verification Notes
 
 The `/apply` page displays the Business Development Manager role, its specified metadata, assessment items, open status, and the five-stage information panel. Selecting “Apply for this role” routes to `/auth`, where the account-access placeholder is displayed. “Back to opportunities” returns to `/apply`; the homepage hero Start Application action routes to `/apply`, and the public navigation and final CTA use the same route behavior. Desktop, tablet, and mobile layouts were reviewed; the production build succeeds.
+
+## Applicant Authentication Screens
+
+- [x] Build the shared focused authentication layout and route `/auth` to sign in.
+- [x] Implement create-account, sign-in, and forgot-password visual-only forms with inline validation.
+- [x] Update the Business Development Manager action to route to account creation.
+- [x] Verify auth routing, validation states, responsive layouts, and production build behavior.
+
+## Authentication Verification Notes
+
+The `/auth/create-account` route displays the required shared application-context panel, required applicant fields, terms confirmation, disabled primary state, and sign-in alternative. Invalid email input produces the local “Enter a valid email address.” field error after blur. The legacy `/auth` route redirects to `/auth/sign-in`. The sign-in Forgot password link routes to `/auth/forgot-password`, and Back to sign in returns to `/auth/sign-in`. The sign-in Create an account link routes to `/auth/create-account`. Valid email and matching-password states are accepted locally while the action remains disabled until terms are accepted. With terms confirmed, the enabled Create account action displays “Account creation will be connected in the next implementation stage.” and does not create an account or navigate away. The Business Development Manager action from `/apply` routes to `/auth/create-account`.

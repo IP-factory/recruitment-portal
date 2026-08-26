@@ -3,6 +3,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Apply from "@/pages/Apply";
 import Auth from "@/pages/Auth";
+import AuthCreateAccount from "@/pages/AuthCreateAccount";
+import AuthForgotPassword from "@/pages/AuthForgotPassword";
+import AuthSignIn from "@/pages/AuthSignIn";
 import Home from "@/pages/Home";
 import NotFound from "@/pages/NotFound";
 import Portal from "@/pages/Portal";
@@ -17,6 +20,9 @@ function Router() {
       <Route component={Home} path="/" />
       <Route component={Apply} path="/apply" />
       <Route component={Auth} path="/auth" />
+      <Route component={AuthSignIn} path="/auth/sign-in" />
+      <Route component={AuthCreateAccount} path="/auth/create-account" />
+      <Route component={AuthForgotPassword} path="/auth/forgot-password" />
       <Route component={UiKit} path="/ui-kit" />
       <Route component={Portal} path="/portal" />
       <Route component={NotFound} path="/404" />
