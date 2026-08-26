@@ -36,6 +36,17 @@ The `/apply` page displays the Business Development Manager role, its specified 
 - [x] Update the Business Development Manager action to route to account creation.
 - [x] Verify auth routing, validation states, responsive layouts, and production build behavior.
 
+## Applicant Information Step
+
+- [x] Build the reusable focused application shell with header, progress area, and summary panel.
+- [x] Implement the Business Development Manager Applicant Information form with local validation and browser storage.
+- [x] Add the CV placeholder route and connect the role action to the application information step.
+- [x] Verify form validation, retained local data, routing, responsive layouts, and production build behavior.
+
+## Applicant Information Verification Notes
+
+The Business Development Manager workspace renders the focused application header, four-step progress area, two form sections, and desktop summary panel. Attempting to continue with empty required fields triggers the local field-validation treatment and keeps the applicant on the Information step. Required text fields and total professional experience can be populated locally in preparation for CV-stage continuation. A fully valid required-field set routes to `/apply/business-development-manager/cv`, where the CV stage is active and the requested placeholder is displayed. Returning to Information restores the entered temporary browser data, and Exit application returns to `/apply`.
+
 ## Authentication Verification Notes
 
 The `/auth/create-account` route displays the required shared application-context panel, required applicant fields, terms confirmation, disabled primary state, and sign-in alternative. Invalid email input produces the local “Enter a valid email address.” field error after blur. The legacy `/auth` route redirects to `/auth/sign-in`. The sign-in Forgot password link routes to `/auth/forgot-password`, and Back to sign in returns to `/auth/sign-in`. The sign-in Create an account link routes to `/auth/create-account`. Valid email and matching-password states are accepted locally while the action remains disabled until terms are accepted. With terms confirmed, the enabled Create account action displays “Account creation will be connected in the next implementation stage.” and does not create an account or navigate away. The Business Development Manager action from `/apply` routes to `/auth/create-account`.

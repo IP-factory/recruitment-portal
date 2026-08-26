@@ -211,11 +211,11 @@ export function StatusBadge({ status }: { status: keyof typeof statusClass }) {
 
 const steps = ["Profile", "Experience", "CV", "Assessment", "Review"];
 
-export function ProgressStepper({ current = 2 }: { current?: number }) {
+export function ProgressStepper({ current = 2, steps: customSteps = steps }: { current?: number; steps?: readonly string[] }) {
   return (
-    <ol className="relative grid grid-cols-5 gap-1 sm:gap-3" aria-label="Application progress">
-      <div className="absolute left-[10%] right-[10%] top-4 hidden h-px bg-border sm:block" aria-hidden="true" />
-      {steps.map((step, index) => {
+    <ol className="relative grid gap-1 sm:gap-3" style={{ gridTemplateColumns: `repeat(${customSteps.length}, minmax(0, 1fr))` }} aria-label="Application progress">
+      <div className="absolute top-4 hidden h-px bg-border sm:block" style={{ left: `calc(50% / ${customSteps.length})`, right: `calc(50% / ${customSteps.length})` }} aria-hidden="true" />
+      {customSteps.map((step, index) => {
         const state = index < current ? "complete" : index === current ? "current" : "upcoming";
         return (
           <li className="relative z-10 flex min-w-0 flex-col items-center text-center" key={step}>

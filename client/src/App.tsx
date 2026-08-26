@@ -2,6 +2,8 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Apply from "@/pages/Apply";
+import ApplicantCvPlaceholder from "@/pages/ApplicantCvPlaceholder";
+import ApplicantInformation from "@/pages/ApplicantInformation";
 import Auth from "@/pages/Auth";
 import AuthCreateAccount from "@/pages/AuthCreateAccount";
 import AuthForgotPassword from "@/pages/AuthForgotPassword";
@@ -19,6 +21,8 @@ function Router() {
     <Switch>
       <Route component={Home} path="/" />
       <Route component={Apply} path="/apply" />
+      <Route component={ApplicantInformation} path="/apply/business-development-manager" />
+      <Route component={ApplicantCvPlaceholder} path="/apply/business-development-manager/cv" />
       <Route component={Auth} path="/auth" />
       <Route component={AuthSignIn} path="/auth/sign-in" />
       <Route component={AuthCreateAccount} path="/auth/create-account" />

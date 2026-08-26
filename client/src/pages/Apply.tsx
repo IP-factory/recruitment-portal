@@ -1,5 +1,5 @@
 /**
- * Quiet Authority role selection: a concise, reusable opportunity selector for applicants before account access and application forms exist.
+ * Quiet Authority role selection: a concise, reusable opportunity selector before the focused application workspace begins.
  */
 import { AlignmentMark, PublicFooter, PublicNavigation } from "@/components/foundation/navigation";
 import { FoundationButton, StatusBadge } from "@/components/foundation/ui";
@@ -54,7 +54,7 @@ function RoleCard({ role, onApply }: { role: Role; onApply: () => void }) {
           <p className="section-kicker">Application</p>
           <div className="mt-3"><StatusBadge status="Open" /></div>
           <FoundationButton className="mt-6 w-full" onClick={onApply} size="lg">Apply for this role</FoundationButton>
-          <p className="mt-4 text-[13px] leading-5 text-muted-foreground">You will be asked to create or sign in to an account before completing your application.</p>
+          <p className="mt-4 text-[13px] leading-5 text-muted-foreground">You will begin by providing your contact and professional information.</p>
         </div>
       </div>
     </article>
@@ -79,7 +79,7 @@ export default function Apply() {
         <section className="portal-container pb-20 pt-14 sm:pb-24 sm:pt-16">
           <div className="mb-6 flex items-center justify-between border-b border-border pb-5"><div><p className="section-kicker">Available role</p><h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-primary">Available role</h2></div></div>
           <div className="space-y-5">
-            {availableRoles.map((role) => <RoleCard key={role.title} onApply={() => setLocation("/auth/create-account")} role={role} />)}
+            {availableRoles.map((role) => <RoleCard key={role.title} onApply={() => setLocation("/apply/business-development-manager")} role={role} />)}
           </div>
 
           <div className="mt-8 border border-border bg-portal-surface px-6 py-5 sm:px-7">
