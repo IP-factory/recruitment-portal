@@ -1,6 +1,8 @@
 /** Quiet Authority routes: the internal UI-kit review and a visual-only portal shell. */
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import Apply from "@/pages/Apply";
+import Auth from "@/pages/Auth";
 import Home from "@/pages/Home";
 import NotFound from "@/pages/NotFound";
 import Portal from "@/pages/Portal";
@@ -13,6 +15,8 @@ function Router() {
   return (
     <Switch>
       <Route component={Home} path="/" />
+      <Route component={Apply} path="/apply" />
+      <Route component={Auth} path="/auth" />
       <Route component={UiKit} path="/ui-kit" />
       <Route component={Portal} path="/portal" />
       <Route component={NotFound} path="/404" />

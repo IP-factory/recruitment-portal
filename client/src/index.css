@@ -83,6 +83,7 @@
   .portal-container { width: 100%; max-width: 1200px; margin-inline: auto; padding-inline: 1rem; }
   .section-kicker { color: var(--portal-blue); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.11em; line-height: 1; text-transform: uppercase; }
   .status-in-progress { background: #f4f1eb; color: #725b2c; }
+  .status-open { background: #edf6f1; color: #397457; }
   .status-submitted { background: #edf2f7; color: #415b76; }
   .status-under-review { background: #eef3f8; color: #355d89; }
   .status-shortlisted { background: #edf6f1; color: #397457; }

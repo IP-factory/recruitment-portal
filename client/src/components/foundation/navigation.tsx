@@ -4,6 +4,7 @@
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 import { FoundationButton } from "./ui";
 
 export function AlignmentMark({ className = "" }: { className?: string }) {
@@ -17,11 +18,10 @@ export function AlignmentMark({ className = "" }: { className?: string }) {
 }
 
 const placeholder = (name: string) => toast.info(`${name} is a placeholder in the foundation preview.`);
-export const showApplicationWorkflowNotice = () => toast.info("The application workflow will be available in a later phase.");
 
 export function PublicNavigation() {
   const [open, setOpen] = useState(false);
-  const handlePlaceholder = (name: string) => { setOpen(false); placeholder(name); };
+  const [, setLocation] = useLocation();
 
   return (
     <header className="border-b border-border bg-white">
@@ -33,7 +33,7 @@ export function PublicNavigation() {
         <nav aria-label="Public navigation" className="hidden items-center gap-6 md:flex">
           <a className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary" href="/">Home</a>
           <a className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary" href="/#how-it-works">How It Works</a>
-          <FoundationButton onClick={showApplicationWorkflowNotice} size="md">Start Application</FoundationButton>
+          <FoundationButton onClick={() => setLocation("/apply")} size="md">Start Application</FoundationButton>
         </nav>
         <button aria-expanded={open} aria-label="Toggle navigation menu" className="rounded-lg p-2 text-primary hover:bg-portal-surface md:hidden" onClick={() => setOpen((value) => !value)} type="button">
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -44,7 +44,7 @@ export function PublicNavigation() {
           <nav aria-label="Mobile public navigation" className="portal-container flex flex-col gap-1 px-0">
             <a className="rounded-md px-3 py-2.5 text-left text-sm font-medium text-foreground hover:bg-portal-surface" href="/" onClick={() => setOpen(false)}>Home</a>
             <a className="rounded-md px-3 py-2.5 text-left text-sm font-medium text-foreground hover:bg-portal-surface" href="/#how-it-works" onClick={() => setOpen(false)}>How It Works</a>
-            <FoundationButton className="mt-2 w-full" onClick={() => { setOpen(false); showApplicationWorkflowNotice(); }}>Start Application</FoundationButton>
+            <FoundationButton className="mt-2 w-full" onClick={() => { setOpen(false); setLocation("/apply"); }}>Start Application</FoundationButton>
           </nav>
         </div>
       ) : null}

@@ -17,3 +17,14 @@
 ## Homepage Verification Notes
 
 The `/#how-it-works` anchor places the How it works section in the viewport. The Start Application control displays “The application workflow will be available in a later phase.” and does not navigate to or create an application workflow.
+
+## Role Selection and Auth Routing
+
+- [x] Build the public `/apply` role-selection page with reusable role-card structure.
+- [x] Build the minimal `/auth` routing placeholder without authentication controls.
+- [x] Route public Start Application actions to `/apply` and role selection to `/auth`.
+- [x] Verify required route behavior, responsive layouts, and the production build.
+
+## Role Selection Verification Notes
+
+The `/apply` page displays the Business Development Manager role, its specified metadata, assessment items, open status, and the five-stage information panel. Selecting “Apply for this role” routes to `/auth`, where the account-access placeholder is displayed. “Back to opportunities” returns to `/apply`; the homepage hero Start Application action routes to `/apply`, and the public navigation and final CTA use the same route behavior. Desktop, tablet, and mobile layouts were reviewed; the production build succeeds.

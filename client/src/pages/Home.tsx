@@ -1,9 +1,10 @@
 /**
  * Quiet Authority public homepage: a concise, recruitment-focused gateway using the approved foundation without introducing workflow functionality.
  */
-import { AlignmentMark, PublicFooter, PublicNavigation, showApplicationWorkflowNotice } from "@/components/foundation/navigation";
+import { AlignmentMark, PublicFooter, PublicNavigation } from "@/components/foundation/navigation";
 import { FoundationButton, SpecimenCard } from "@/components/foundation/ui";
 import { Check, ClipboardList, FileText, Info, ListChecks, UserRound } from "lucide-react";
+import { useLocation } from "wouter";
 
 const processSteps = [
   ["01", "Profile", "Tell us the essential information we need for your application."],
@@ -32,6 +33,7 @@ function DossierLabel({ children, centered = false }: { children: string; center
 }
 
 export default function Home() {
+  const [, setLocation] = useLocation();
   return (
     <div className="min-h-screen bg-white text-foreground">
       <PublicNavigation />
@@ -42,7 +44,7 @@ export default function Home() {
             <h1 className="mt-4 max-w-2xl text-[38px] font-semibold leading-[1.08] tracking-[-0.045em] text-primary sm:text-[42px]">Take the next step in your application.</h1>
             <p className="mt-5 max-w-xl text-[15px] leading-7 text-muted-foreground">Complete your profile, upload your CV and take a short role-specific assessment to help us understand your experience and approach to work.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <FoundationButton className="w-full sm:w-auto" onClick={showApplicationWorkflowNotice} size="lg">Start Application</FoundationButton>
+              <FoundationButton className="w-full sm:w-auto" onClick={() => setLocation("/apply")} size="lg">Start Application</FoundationButton>
               <a className="inline-flex h-11 items-center justify-center rounded-lg px-4 text-sm font-medium text-portal-blue transition-colors hover:bg-portal-blue-soft hover:text-primary sm:w-auto" href="#how-it-works">How It Works</a>
             </div>
           </div>
@@ -104,7 +106,7 @@ export default function Home() {
               <DossierLabel centered>Next step</DossierLabel>
               <h2 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">Ready to begin your application?</h2>
               <p className="mt-4 text-[15px] leading-7 text-muted-foreground">Start your application and complete each stage when you are ready.</p>
-              <FoundationButton className="mt-7" onClick={showApplicationWorkflowNotice} size="lg">Start Application</FoundationButton>
+              <FoundationButton className="mt-7" onClick={() => setLocation("/apply")} size="lg">Start Application</FoundationButton>
             </div>
           </div>
         </section>
