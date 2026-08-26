@@ -4,7 +4,7 @@
 import { AdminShell } from "@/components/admin/AdminShell";
 import { FoundationInput, FoundationSelect, StatusBadge } from "@/components/foundation/ui";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
-import { adminApplications, type AdminApplication, type AdminStatus, type AssessmentState } from "@/lib/adminMockData";
+import { getAdminApplications, type AdminApplication, type AdminStatus, type AssessmentState } from "@/lib/adminMockData";
 import { ArrowDown, ArrowUp, ArrowUpDown, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -26,6 +26,7 @@ function CandidateCell({ application }: { application: AdminApplication }) {
 
 export default function AdminApplications() {
   const [, setLocation] = useLocation();
+  const [applications] = useState(() => getAdminApplications());
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("all");
   const [applicationStatus, setApplicationStatus] = useState("all");
@@ -37,7 +38,7 @@ export default function AdminApplications() {
   const hasActiveFilters = Boolean(normalizedSearch) || role !== "all" || applicationStatus !== "all" || assessmentStatus !== "all";
 
   const filteredApplications = useMemo(() => {
-    const records = adminApplications.filter((application) => {
+    const records = applications.filter((application) => {
       const matchesSearch = !normalizedSearch || application.candidateName.toLowerCase().includes(normalizedSearch) || application.email.toLowerCase().includes(normalizedSearch);
       return matchesSearch && (role === "all" || application.role === role) && (applicationStatus === "all" || application.applicationStatus === applicationStatus) && (assessmentStatus === "all" || application.assessmentStatus === assessmentStatus);
     });
@@ -45,7 +46,7 @@ export default function AdminApplications() {
       const comparison = first[sortKey].localeCompare(second[sortKey]);
       return sortDirection === "asc" ? comparison : -comparison;
     });
-  }, [applicationStatus, assessmentStatus, normalizedSearch, role, sortDirection, sortKey]);
+  }, [applicationStatus, applications, assessmentStatus, normalizedSearch, role, sortDirection, sortKey]);
 
   const totalPages = Math.max(1, Math.ceil(filteredApplications.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);

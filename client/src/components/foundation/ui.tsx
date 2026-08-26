@@ -205,6 +205,8 @@ const statusClass: Record<string, string> = {
   Shortlisted: "status-shortlisted",
   Interview: "status-interview",
   Rejected: "status-rejected",
+  Hired: "status-hired",
+  Available: "status-available",
 };
 
 export function StatusBadge({ status }: { status: keyof typeof statusClass }) {
