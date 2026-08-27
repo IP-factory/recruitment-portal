@@ -3,7 +3,7 @@
  */
 import { ApplicationShell } from "@/components/application/ApplicationShell";
 import { FoundationButton, StatusBadge } from "@/components/foundation/ui";
-import { BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS, loadAssessmentResponseState, type AssessmentResponseState } from "@/lib/assessmentData";
+import { getApplicantBusinessDevelopmentAssessmentQuestions, loadAssessmentResponseState, type AssessmentResponseState } from "@/lib/assessmentData";
 import { emptyApplicantInformation, loadApplicantInformation, loadCvFileMetadata, type ApplicantInformation, type CvFileMetadata } from "@/lib/applicationData";
 import { getApplicationReadiness, loadApplicationSubmissionState, saveApplicationSubmissionState, type ApplicationReadiness } from "@/lib/submissionData";
 import { AlertTriangle, Check, CheckCircle2, FileText, Info } from "lucide-react";
@@ -23,15 +23,16 @@ export default function ApplicantReviewPlaceholder() {
   const [applicant, setApplicant] = useState<ApplicantInformation>(emptyApplicantInformation);
   const [cvFile, setCvFile] = useState<CvFileMetadata | null>(null);
   const [assessment, setAssessment] = useState<AssessmentResponseState>({ answers: {}, currentQuestionIndex: 0 });
+  const [questions, setQuestions] = useState(() => getApplicantBusinessDevelopmentAssessmentQuestions());
   const [readiness, setReadiness] = useState<ApplicationReadiness>({ applicantInformationComplete: false, cvComplete: false, assessmentComplete: false, ready: false });
   const [submitted, setSubmitted] = useState(false);
   const [declarationOne, setDeclarationOne] = useState(false);
   const [declarationTwo, setDeclarationTwo] = useState(false);
   const [attempted, setAttempted] = useState(false);
-  const refreshData = () => { setApplicant(loadApplicantInformation()); setCvFile(loadCvFileMetadata()); setAssessment(loadAssessmentResponseState()); setReadiness(getApplicationReadiness()); setSubmitted(loadApplicationSubmissionState().submitted); };
+  const refreshData = () => { setApplicant(loadApplicantInformation()); setCvFile(loadCvFileMetadata()); setQuestions(getApplicantBusinessDevelopmentAssessmentQuestions()); setAssessment(loadAssessmentResponseState()); setReadiness(getApplicationReadiness()); setSubmitted(loadApplicationSubmissionState().submitted); };
   useEffect(() => { refreshData(); }, []);
   const submit = () => { setAttempted(true); const latestReadiness = getApplicationReadiness(); setReadiness(latestReadiness); if (!latestReadiness.ready || !declarationOne || !declarationTwo) return; saveApplicationSubmissionState({ submitted: true }); setSubmitted(true); setLocation("/apply/business-development-manager/submitted"); };
-  const assessedCount = BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS.filter((question) => assessment.answers[question.id]).length;
+  const assessedCount = questions.filter((question) => assessment.answers[question.id]).length;
 
   return (
     <ApplicationShell activeStep={3} showSummary submitted={submitted}>
@@ -51,8 +52,8 @@ export default function ApplicantReviewPlaceholder() {
             {!submitted && !readiness.cvComplete ? <FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-manager/cv")} size="sm" variant="secondary">Select CV</FoundationButton> : null}
           </ReviewCard>
           <ReviewCard actionLabel="Review responses" completed={submitted} incomplete={!readiness.assessmentComplete} onAction={() => setLocation("/apply/business-development-manager/assessment/questions")} title="Assessment">
-            <div className="mt-5"><p className="text-sm font-semibold text-primary">Business Development Assessment</p><p className="mt-1 text-[13px] text-muted-foreground">{assessedCount} of {BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS.length} questions answered</p></div>
-            <div className="mt-5 divide-y divide-border border-y border-border">{BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS.map((question, index) => { const option = question.options.find((entry) => entry.id === assessment.answers[question.id]); return <div className="py-5" key={question.id}><p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-portal-blue">{String(index + 1).padStart(2, "0")} · {question.category}</p><p className="mt-2 text-sm font-medium leading-6 text-primary">{question.question}</p><p className="mt-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Your response</p><p className="mt-1 text-sm leading-6 text-foreground">{option?.text ?? "Not provided"}</p></div>; })}</div>
+            <div className="mt-5"><p className="text-sm font-semibold text-primary">Business Development Assessment</p><p className="mt-1 text-[13px] text-muted-foreground">{assessedCount} of {questions.length} questions answered</p></div>
+            <div className="mt-5 divide-y divide-border border-y border-border">{questions.map((question, index) => { const option = question.options.find((entry) => entry.id === assessment.answers[question.id]); return <div className="py-5" key={question.id}><p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-portal-blue">{String(index + 1).padStart(2, "0")} · {question.category}</p><p className="mt-2 text-sm font-medium leading-6 text-primary">{question.question}</p><p className="mt-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Your response</p><p className="mt-1 text-sm leading-6 text-foreground">{option?.text ?? "Not provided"}</p></div>; })}</div>
             {!submitted && !readiness.assessmentComplete ? <FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-manager/assessment/questions")} size="sm" variant="secondary">Complete assessment</FoundationButton> : null}
           </ReviewCard>
         </div>

@@ -19,6 +19,9 @@ import AdminRoles from "@/pages/AdminRoles";
 import AdminQuestionBank from "@/pages/AdminQuestionBank";
 import AdminQuestionDetail from "@/pages/AdminQuestionDetail";
 import AdminQuestionForm from "@/pages/AdminQuestionForm";
+import AdminAssessmentDetail from "@/pages/AdminAssessmentDetail";
+import AdminAssessments from "@/pages/AdminAssessments";
+import AdminAssessmentBuilder from "@/pages/AdminAssessmentBuilder";
 import ApplicantInformation from "@/pages/ApplicantInformation";
 import Auth from "@/pages/Auth";
 import AuthCreateAccount from "@/pages/AuthCreateAccount";
@@ -44,7 +47,9 @@ function Router() {
       <Route path="/admin/roles/:roleSlug/edit">{(params) => <AdminRoleForm roleSlug={params.roleSlug} />}</Route>
       <Route component={AdminRoleDetail} path="/admin/roles/:roleSlug" />
       <Route component={AdminRoles} path="/admin/roles" />
-      <Route path="/admin/assessments">{() => <AdminPlaceholder title="Assessments" />}</Route>
+      <Route component={AdminAssessmentBuilder} path="/admin/assessments/:assessmentSlug/edit" />
+      <Route component={AdminAssessmentDetail} path="/admin/assessments/:assessmentSlug" />
+      <Route component={AdminAssessments} path="/admin/assessments" />
       <Route path="/admin/questions/new">{() => <AdminQuestionForm />}</Route>
       <Route path="/admin/questions/:questionId/edit">{(params) => <AdminQuestionForm questionId={params.questionId} />}</Route>
       <Route component={AdminQuestionDetail} path="/admin/questions/:questionId" />

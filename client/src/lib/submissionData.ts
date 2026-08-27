@@ -1,7 +1,7 @@
 /**
  * Quiet Authority submission state: frontend-only readiness checks and local completion status designed to be replaced by a future submission service.
  */
-import { BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS, loadAssessmentResponseState } from "@/lib/assessmentData";
+import { getApplicantBusinessDevelopmentAssessmentQuestions, loadAssessmentResponseState } from "@/lib/assessmentData";
 import { loadApplicantInformation, loadCvFileMetadata } from "@/lib/applicationData";
 
 export const APPLICATION_SUBMISSION_STORAGE_KEY = "recruitment-portal:bdm:submission-state";
@@ -32,6 +32,7 @@ export function getApplicationReadiness(): ApplicationReadiness {
   const applicantInformationComplete = Boolean(applicant.fullName.trim() && applicant.email.trim() && applicant.phoneNumber.trim() && applicant.location.trim() && applicant.jobTitle.trim() && applicant.totalExperience && applicant.businessDevelopmentExperience);
   const cvComplete = Boolean(loadCvFileMetadata());
   const answers = loadAssessmentResponseState().answers;
-  const assessmentComplete = BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS.every((question) => Boolean(answers[question.id]));
+  const questions = getApplicantBusinessDevelopmentAssessmentQuestions();
+  const assessmentComplete = questions.length > 0 && questions.every((question) => Boolean(answers[question.id]));
   return { applicantInformationComplete, cvComplete, assessmentComplete, ready: applicantInformationComplete && cvComplete && assessmentComplete };
 }

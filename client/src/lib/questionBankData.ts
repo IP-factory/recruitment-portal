@@ -2,7 +2,7 @@
  * Quiet Authority Question Bank data: frontend-only Admin question content and separately stored internal option-score maps.
  * Applicant assessment objects remain score-free in assessmentData.ts by design.
  */
-import { BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS, type AssessmentOption } from "@/lib/assessmentData";
+import { DEFAULT_BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS as BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS, type AssessmentOption } from "@/lib/assessmentQuestionContent";
 
 export type QuestionType = "Experience" | "Scenario";
 export type QuestionStatus = "Active" | "Inactive";
