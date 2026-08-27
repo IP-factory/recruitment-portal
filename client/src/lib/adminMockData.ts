@@ -32,7 +32,7 @@ export type AdminApplication = {
 export const ADMIN_APPLICATIONS_STORAGE_KEY = "recruitment-portal:admin-demo-applications";
 const responseSet = (optionIds: readonly string[]): AssessmentResponse[] => BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS.slice(0, optionIds.length).map((question, index) => {
   const option = question.options.find((item) => item.id === optionIds[index]);
-  return { questionId: question.id, selectedOptionId: optionIds[index], selectedOptionText: option?.text ?? "" };
+  return { questionId: `q-${String(index + 1).padStart(3, "0")}`, selectedOptionId: optionIds[index], selectedOptionText: option?.text ?? "" };
 });
 const stages = (assessmentStatus: AssessmentState, cv: CvMetadata | null, applicationStatus: AdminStatus): ApplicationStage[] => [
   { label: "Information", state: "Completed" },
