@@ -310,3 +310,17 @@ The Admin Question Bank now normalizes the seven formal question types, D1–D8 
 - [x] Add timed OPEN start, countdown, focus, local expiry persistence, paste prevention, word limit, expiry save, and read-only revisit behavior.
 - [x] Add deterministic renderer/persistence tests without implementing new scoring, penalties, bands, backend, or database behavior.
 - [x] Verify Admin protection, v2 isolation, live applicant compatibility, responsive UX, TypeScript, production build, and browser flows.
+
+## Task 23C-1 — Business Development Officer v2 Base Scoring Engine
+
+- [x] Preserve the live five-question assessment, existing 70/30 Overall Fit model, applicant routing, and applicant score isolation.
+- [x] Centralize the eight v2 dimension weights at 22/18/14/12/12/8/8/6 percent and validate their 100% total.
+- [x] Convert ORDINAL, MULTI, NUMERIC, SJT, OPEN, EVIDENCE, and GATE responses into raw-score outcomes according to Question Bank configuration.
+- [x] Treat the D1.Q1 close-application response as scoring unavailable rather than zero.
+- [x] Normalize scored questions within each D1–D8 dimension using qWeight and maxScore, then bound dimension results to 0–100.
+- [x] Produce the weighted Base Assessment Score without verification multipliers, integrity penalties, bonuses, floors, or decision bands.
+- [x] Add Admin-only manual 0–5 rubric ratings for preview OPEN responses with local persistence and no AI claim.
+- [x] Show OPEN rubric-review readiness and score-unavailable states in Admin-only surfaces without exposing controls to applicants.
+- [x] Keep D2.Q1E evidence and GATE questions outside scored dimension denominators.
+- [x] Add deterministic tests for scoring formulas, configured bands, negative SJT bounds, invalid weights, missing rubric ratings, close outcomes, and live-flow isolation.
+- [x] Verify Admin and applicant behavior, responsive UX, TypeScript, production build, and browser flows.
