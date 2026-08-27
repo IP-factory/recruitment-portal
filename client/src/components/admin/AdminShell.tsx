@@ -4,7 +4,7 @@
 import { AlignmentMark } from "@/components/foundation/navigation";
 import { FoundationButton } from "@/components/foundation/ui";
 import { isAdminAuthenticated, signOutAdmin } from "@/lib/adminSession";
-import { BriefcaseBusiness, ClipboardList, FileText, LayoutDashboard, LibraryBig, LogOut, Menu, Settings, X } from "lucide-react";
+import { BriefcaseBusiness, ClipboardList, FileText, LayoutDashboard, LibraryBig, ListChecks, LogOut, Menu, Settings, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -12,6 +12,7 @@ import { useLocation } from "wouter";
 const navigation = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Applications", href: "/admin/applications", icon: FileText },
+  { label: "Screening", href: "/admin/screening", icon: ListChecks },
   { label: "Recruitment Roles", href: "/admin/roles", icon: BriefcaseBusiness },
   { label: "Assessments", href: "/admin/assessments", icon: ClipboardList },
   { label: "Question Bank", href: "/admin/questions", icon: LibraryBig },
@@ -22,7 +23,7 @@ function BrandLockup() {
 }
 
 function NavigationList({ location, navigate, close }: { location: string; navigate: (href: string) => void; close?: () => void }) {
-  const itemClass = (href: string) => `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${(location === href || (["/admin/applications", "/admin/roles", "/admin/assessments", "/admin/questions"].includes(href) && location.startsWith(`${href}/`))) ? "bg-portal-blue-soft text-primary" : "text-muted-foreground hover:bg-portal-surface hover:text-primary"}`;
+  const itemClass = (href: string) => `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${(location === href || (["/admin/applications", "/admin/screening", "/admin/roles", "/admin/assessments", "/admin/questions"].includes(href) && location.startsWith(`${href}/`))) ? "bg-portal-blue-soft text-primary" : "text-muted-foreground hover:bg-portal-surface hover:text-primary"}`;
   return <nav className="space-y-1" aria-label="Admin navigation">{navigation.map((item) => { const Icon = item.icon; return <button className={itemClass(item.href)} key={item.href} onClick={() => { navigate(item.href); close?.(); }} type="button"><Icon className="size-[18px]" />{item.label}</button>; })}<div className="my-4 border-t border-border" /><button className={itemClass("/admin/settings")} onClick={() => { navigate("/admin/settings"); close?.(); }} type="button"><Settings className="size-[18px]" />Settings</button></nav>;
 }
 

@@ -22,6 +22,7 @@ import AdminQuestionForm from "@/pages/AdminQuestionForm";
 import AdminAssessmentDetail from "@/pages/AdminAssessmentDetail";
 import AdminAssessments from "@/pages/AdminAssessments";
 import AdminAssessmentBuilder from "@/pages/AdminAssessmentBuilder";
+import AdminScreening from "@/pages/AdminScreening";
 import ApplicantInformation from "@/pages/ApplicantInformation";
 import Auth from "@/pages/Auth";
 import AuthCreateAccount from "@/pages/AuthCreateAccount";
@@ -41,6 +42,7 @@ function Router() {
       <Route component={Home} path="/" />
       <Route component={AdminLogin} path="/admin/login" />
       <Route component={AdminDashboard} path="/admin" />
+      <Route component={AdminScreening} path="/admin/screening" />
       <Route component={AdminCandidatePlaceholder} path="/admin/applications/:candidateId" />
       <Route component={AdminApplications} path="/admin/applications" />
       <Route path="/admin/roles/new">{() => <AdminRoleForm />}</Route>
