@@ -297,3 +297,16 @@ The Admin Question Bank now normalizes the seven formal question types, D1–D8 
 - [x] Keep the draft assessment incomplete and visibly under development because only 14 of approximately 24 questions are supplied.
 - [x] Keep the exact framework questions out of the current applicant journey and preserve current scoring behavior.
 - [x] Add deterministic migration and isolation tests, then verify TypeScript, production build, and Admin presentation.
+
+## Task 23B-3 — Applicant Renderer and Assessment v2 Preview
+
+- [x] Preserve the live five-question applicant assessment, routing, responses, review, submission behavior, and scoring prototype.
+- [x] Keep Assessment v2 inactive and hidden from real applicants.
+- [x] Add a protected Admin-only candidate-experience preview route and entry action for Assessment v2.
+- [x] Render the preview from the v2 assessment assignment order and Question Bank data, without a hard-coded preview question array.
+- [x] Add the shared one-question-at-a-time v2 renderer with applicant-safe title, progress, and hidden scoring architecture.
+- [x] Support ORDINAL, MULTI, SJT, EVIDENCE, NUMERIC, and OPEN question experiences with required validation.
+- [x] Add preview-only D1.Q1 close-application modal behavior without live closure.
+- [x] Add timed OPEN start, countdown, focus, local expiry persistence, paste prevention, word limit, expiry save, and read-only revisit behavior.
+- [x] Add deterministic renderer/persistence tests without implementing new scoring, penalties, bands, backend, or database behavior.
+- [x] Verify Admin protection, v2 isolation, live applicant compatibility, responsive UX, TypeScript, production build, and browser flows.

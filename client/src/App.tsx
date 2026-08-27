@@ -22,6 +22,7 @@ import AdminQuestionForm from "@/pages/AdminQuestionForm";
 import AdminAssessmentDetail from "@/pages/AdminAssessmentDetail";
 import AdminAssessments from "@/pages/AdminAssessments";
 import AdminAssessmentBuilder from "@/pages/AdminAssessmentBuilder";
+import AdminAssessmentPreview from "@/pages/AdminAssessmentPreview";
 import AdminScreening from "@/pages/AdminScreening";
 import ApplicantInformation from "@/pages/ApplicantInformation";
 import ApplicantEligibilityCloseout from "@/pages/ApplicantEligibilityCloseout";
@@ -52,6 +53,7 @@ function Router() {
       <Route component={AdminRoleDetail} path="/admin/roles/:roleSlug" />
       <Route component={AdminRoles} path="/admin/roles" />
       <Route component={AdminAssessmentBuilder} path="/admin/assessments/:assessmentSlug/edit" />
+      <Route component={AdminAssessmentPreview} path="/admin/assessments/business-development-officer-assessment-v2/preview" />
       <Route component={AdminAssessmentDetail} path="/admin/assessments/:assessmentSlug" />
       <Route component={AdminAssessments} path="/admin/assessments" />
       <Route path="/admin/questions/new">{() => <AdminQuestionForm />}</Route>
