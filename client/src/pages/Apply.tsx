@@ -3,35 +3,14 @@
  */
 import { AlignmentMark, PublicFooter, PublicNavigation } from "@/components/foundation/navigation";
 import { FoundationButton, StatusBadge } from "@/components/foundation/ui";
+import { getBusinessDevelopmentManagerRole, type RecruitmentRole } from "@/lib/adminRoleData";
 import { BriefcaseBusiness, Check, ChevronRight, Clock3, MapPin } from "lucide-react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 
-type Role = {
-  title: string;
-  department: string;
-  employmentType: string;
-  location: string;
-  description: string;
-  assessments: readonly string[];
-};
+const assessments = ["Relevant business development experience", "Commercial and sales judgement", "Client relationship capability", "Approach to business growth opportunities"] as const;
 
-const availableRoles: readonly Role[] = [
-  {
-    title: "Business Development Manager",
-    department: "Business Development",
-    employmentType: "Full-time",
-    location: "Location: To be confirmed",
-    description: "We are looking for a commercially minded Business Development Manager who can identify opportunities, build strong client relationships and contribute to sustainable business growth.",
-    assessments: [
-      "Relevant business development experience",
-      "Commercial and sales judgement",
-      "Client relationship capability",
-      "Approach to business growth opportunities",
-    ],
-  },
-];
-
-function RoleCard({ role, onApply }: { role: Role; onApply: () => void }) {
+function RoleCard({ role, onApply }: { role: RecruitmentRole; onApply: () => void }) {
   return (
     <article className="rounded-xl border border-border bg-white p-7 shadow-none sm:p-8">
       <div className="grid gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(240px,3fr)] lg:gap-8">
@@ -40,20 +19,20 @@ function RoleCard({ role, onApply }: { role: Role; onApply: () => void }) {
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-muted-foreground">
             <span className="inline-flex items-center gap-1.5"><BriefcaseBusiness className="size-3.5 text-portal-blue" />{role.department}</span>
             <span className="inline-flex items-center gap-1.5"><Clock3 className="size-3.5 text-portal-blue" />{role.employmentType}</span>
-            <span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5 text-portal-blue" />{role.location}</span>
+            <span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5 text-portal-blue" />Location: {role.location}</span>
           </div>
-          <p className="mt-6 max-w-3xl text-[15px] leading-7 text-muted-foreground">{role.description}</p>
+          <p className="mt-6 max-w-3xl text-[15px] leading-7 text-muted-foreground">{role.shortDescription}</p>
           <div className="mt-7 border-t border-border pt-6">
             <h3 className="text-sm font-semibold text-primary">What we will assess</h3>
             <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-              {role.assessments.map((item) => <li className="flex gap-2.5 text-[13px] leading-5 text-muted-foreground" key={item}><Check className="mt-0.5 size-3.5 shrink-0 text-portal-blue" />{item}</li>)}
+            {assessments.map((item) => <li className="flex gap-2.5 text-[13px] leading-5 text-muted-foreground" key={item}><Check className="mt-0.5 size-3.5 shrink-0 text-portal-blue" />{item}</li>)}
             </ul>
           </div>
         </div>
         <div className="border-t border-border pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
           <p className="section-kicker">Application</p>
-          <div className="mt-3"><StatusBadge status="Open" /></div>
-          <FoundationButton className="mt-6 w-full" onClick={onApply} size="lg">Apply for this role</FoundationButton>
+          <div className="mt-3"><StatusBadge status={role.status} /></div>
+          <FoundationButton className="mt-6 w-full" disabled={role.status === "Closed"} onClick={onApply} size="lg">{role.status === "Closed" ? "Applications closed" : "Apply for this role"}</FoundationButton>
           <p className="mt-4 text-[13px] leading-5 text-muted-foreground">You will begin by providing your contact and professional information.</p>
         </div>
       </div>
@@ -63,6 +42,7 @@ function RoleCard({ role, onApply }: { role: Role; onApply: () => void }) {
 
 export default function Apply() {
   const [, setLocation] = useLocation();
+  const [availableRoles] = useState(() => [getBusinessDevelopmentManagerRole()].filter((role) => role.status === "Open" || role.status === "Closed"));
 
   return (
     <div className="min-h-screen bg-white text-foreground">

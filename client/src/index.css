@@ -93,6 +93,10 @@
   .status-rejected { background: #fbefef; color: #984848; }
   .status-hired { background: #edf6f1; color: #397457; }
   .status-available { background: #edf2f7; color: #415b76; }
+  .status-draft { background: #f4f1e8; color: #7a6534; }
+  .status-open { background: #edf6f1; color: #397457; }
+  .status-closed { background: #fbefef; color: #984848; }
+  .status-archived { background: #f1f2f4; color: #667085; }
   .alert-success { background: #f1f8f4; border-color: #cfe6d8; color: #286443; }
   .alert-warning { background: #fbf7ee; border-color: #eadfbd; color: #765d22; }
   .alert-error { background: #fdf2f2; border-color: #efcece; color: #984848; }
