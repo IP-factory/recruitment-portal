@@ -363,3 +363,28 @@ The Admin Question Bank now normalizes the seven formal question types, D1–D8 
 - [x] Verify applicants see no scoring, dimension, modifier, band, or floor information and Assessment v2 remains Draft / Inactive.
 - [x] Add deterministic regression tests for legacy/v2 isolation, framework configuration sourcing, CV review neutrality, Applications, Screening, band/floor/integrity states, and manual shortlist behavior.
 - [x] Run TypeScript, full tests, production build, and responsive browser verification; document and checkpoint Task 23C-3.
+
+## Task 24A — Manus Database Foundation for Business Development Officer v2
+
+- [x] Audit the complete Task 24A specification and current frontend configuration sources.
+- [x] Preserve frontend-only behavior, localStorage persistence, applicant UX, Admin UX, legacy utilities, and inactive v2 status.
+- [x] Add native Manus Database schema for recruitment_roles with approved role fields and statuses.
+- [x] Add eligibility_gates with role ownership, references G1–G7, gate type, status, ordering, and structured configuration.
+- [x] Add assessment_dimensions with centralized D1–D8 weights, floors, ordering, and status.
+- [x] Add assessment_questions with stable references, nullable dimension, supported question types, qWeight, max score, required, status, and optional timing.
+- [x] Add question_options with stable IDs, display ordering, optional score/outcome/verification fields, and gate relationships.
+- [x] Add type-specific question configuration tables or structured configuration without collapsing all question types into one option model.
+- [x] Add assessment_question_links for ordered v2 assessment membership while keeping Assessment v2 Draft / Inactive.
+- [x] Add OPEN rubrics and rubric criteria with scoring and manual-review metadata.
+- [x] Add EVIDENCE pairing configuration and evidence-answer metadata without applicant submission wiring.
+- [x] Add verification, integrity cross-check, bonus, dimension-floor, and screening-band configuration tables or structured configuration.
+- [x] Seed the approved Business Development Officer role using current frontend configuration without inventing missing content.
+- [x] Seed G1–G7 eligibility gate configuration, including G4/G5 Configuration Required states and no invented dates or salary figures.
+- [x] Seed D1–D8 weights and floors with active weight total 100.
+- [x] Seed the current 14-question Business Development Officer v2 framework with stable references and supported type-specific configuration.
+- [x] Seed question options using stable option IDs rather than display letters.
+- [x] Seed v2 assessment membership in the approved question order with Draft / Inactive status.
+- [x] Add server-side database helpers for recruitment configuration reads without wiring existing frontend surfaces.
+- [x] Apply one reviewed native migration through the schema-first workflow and verify tables, foreign keys, seed counts, and key values.
+- [x] Add deterministic database schema/seed verification tests with no fabricated candidate submissions, CV files, or reviews.
+- [x] Run TypeScript, full tests, production build, and frontend regression checks; document Task 24A scope boundaries and checkpoint.
