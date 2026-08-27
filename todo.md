@@ -282,3 +282,18 @@ The `/auth/create-account` route displays the required shared application-contex
 ## Task 23B-1 Verification Notes
 
 The Admin Question Bank now normalizes the seven formal question types, D1–D8 plus Gate / Eligibility and Not Applicable dimensions, stable references, qWeight, standard maximum, required state, timing, evidence relationship, flag metadata, and nested type-specific configuration. The existing twelve-question bank remains intact; older browser-local records are normalized and missing legacy records are restored without replacing the bank. The Question Bank list exposes the requested Question, Dimension, Type, qWeight, Status, Used In and Action columns, plus Dimension, Type and Status filters. Question Detail renders common metadata and read-only ORDINAL, MULTI, NUMERIC, SJT, OPEN, EVIDENCE and GATE configuration states. Create/Edit keeps the two-column Admin pattern with conditional controls for binary outcomes, ordinal close-application outcomes, multi-select decoys and caps, numeric derived modes and bands, SJT explanations, open rubrics, evidence pairing/multipliers, and collapsed integrity cross-check configuration. Stable-reference uniqueness and type-specific validation block obviously invalid saves. The Assessment Builder now keeps future types visible but prevents assigning them into the current legacy applicant-compatible flow. Applicant rendering and scoring remain unchanged. Browser checks covered the Question Bank list, Question Detail, GATE, NUMERIC and EVIDENCE form states, and assessment compatibility; 13 deterministic tests pass, TypeScript passes, and the production build succeeds with only the existing non-blocking chunk-size advisory.
+
+## Task 23B-2 — Business Development Officer Framework Migration
+
+- [x] Preserve the current live applicant assessment, question order, answers, review, completion, and scoring.
+- [x] Migrate exactly the 14 complete supplied framework question objects without inventing a fifteenth question.
+- [x] Correct the serviced-apartment source label to D5.Q1 and avoid creating D3.Q2.
+- [x] Store the exact question references, dimensions, prompts, options, qWeights, maxima, required states, and type-specific configurations.
+- [x] Configure the D1.Q1 ordinal close-application outcome related to G3 without assigning points to that option.
+- [x] Configure D1.Q2 calendar-year numeric bands and its D1.Q1 integrity cross-check without applying penalties.
+- [x] Configure D2.Q1/D2.Q1E evidence pairing, D2.Q2 attainment bands, and D2.Q3 ordinal responses.
+- [x] Configure the supplied D3, D4, D5, D6, D7, and D8 framework questions exactly as provided.
+- [x] Create Business Development Officer Assessment v2 as a separate Draft / Inactive assessment assigned to the Business Development Officer role.
+- [x] Keep the draft assessment incomplete and visibly under development because only 14 of approximately 24 questions are supplied.
+- [x] Keep the exact framework questions out of the current applicant journey and preserve current scoring behavior.
+- [x] Add deterministic migration and isolation tests, then verify TypeScript, production build, and Admin presentation.

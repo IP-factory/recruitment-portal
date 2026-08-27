@@ -6,6 +6,7 @@
  * legacy `question` / `competency` / `options` shape through assessmentData.ts.
  */
 import { DEFAULT_BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS as BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS, type AssessmentOption } from "@/lib/assessmentQuestionContent";
+import { FRAMEWORK_QUESTIONS } from "@/lib/frameworkQuestionData";
 
 export type QuestionType = "GATE" | "ORDINAL" | "MULTI" | "NUMERIC" | "SJT" | "OPEN" | "EVIDENCE";
 export type LegacyQuestionType = "Experience" | "Scenario";
@@ -169,7 +170,7 @@ const legacyAdditionalQuestions: QuestionBankQuestion[] = [
   { id: "q-011", reference: "Q-011", competency: "Commercial Judgement", question: "When evaluating a potential commercial opportunity, what information is most important to understand before committing further time?", type: "SJT", dimension: "D5", dimensionLabel: dimensionLabel("D5"), prompt: "When evaluating a potential commercial opportunity, what information is most important to understand before committing further time?", helpText: "", qWeight: 2, max: 5, required: true, status: "Active", evidenceRef: "", flagIf: "", timeLimitSec: null, usedIn: "Not assigned", options: standardOptions(["Whether the organisation has a well-known name.", "The likely needs, decision process, value potential and delivery feasibility.", "Whether the prospect responds quickly to messages.", "Whether competitors have already contacted the prospect.", "Whether a discount may be requested later."]), config: defaultConfigFor("SJT", standardOptions(["Whether the organisation has a well-known name.", "The likely needs, decision process, value potential and delivery feasibility.", "Whether the prospect responds quickly to messages.", "Whether competitors have already contacted the prospect.", "Whether a discount may be requested later."])) },
   { id: "q-012", reference: "Q-012", competency: "Business Development Experience", question: "Which statement best reflects your approach to building a sustainable pipeline of new business opportunities?", type: "SJT", dimension: "D1", dimensionLabel: dimensionLabel("D1"), prompt: "Which statement best reflects your approach to building a sustainable pipeline of new business opportunities?", helpText: "", qWeight: 2, max: 5, required: true, status: "Active", evidenceRef: "", flagIf: "", timeLimitSec: null, usedIn: "Not assigned", options: standardOptions(["I focus only on opportunities that can close quickly.", "I rely on one lead source whenever possible.", "I maintain a balanced pipeline, qualify opportunities and build relationships over time.", "I pursue every available lead with the same level of effort.", "I wait until current opportunities are complete before prospecting again."]), config: defaultConfigFor("SJT", standardOptions(["I focus only on opportunities that can close quickly.", "I rely on one lead source whenever possible.", "I maintain a balanced pipeline, qualify opportunities and build relationships over time.", "I pursue every available lead with the same level of effort.", "I wait until current opportunities are complete before prospecting again."])) },
 ];
-export const QUESTION_BANK_QUESTIONS: readonly QuestionBankQuestion[] = [...defaultQuestions, ...legacyAdditionalQuestions];
+export const QUESTION_BANK_QUESTIONS: readonly QuestionBankQuestion[] = [...defaultQuestions, ...legacyAdditionalQuestions, ...FRAMEWORK_QUESTIONS];
 const cloneQuestion = (question: QuestionBankQuestion): QuestionBankQuestion => ({ ...question, config: structuredClone(question.config), options: question.options.map((option) => ({ ...option })) });
 const readStorage = <Value,>(key: string): Value | null => { if (typeof window === "undefined") return null; try { const value = window.localStorage.getItem(key); return value ? JSON.parse(value) as Value : null; } catch { return null; } };
 const saveStorage = (key: string, value: unknown) => { if (typeof window !== "undefined") window.localStorage.setItem(key, JSON.stringify(value)); };
@@ -208,9 +209,9 @@ export function getQuestionBankQuestions(): QuestionBankQuestion[] {
   if (Array.isArray(saved) && saved.length) {
     const normalized = saved.map(normalizeQuestion);
     const existingIds = new Set(normalized.map((question) => question.id));
-    return [...normalized, ...legacyAdditionalQuestions.filter((question) => !existingIds.has(question.id)).map(cloneQuestion)];
+    return [...normalized, ...legacyAdditionalQuestions.filter((question) => !existingIds.has(question.id)).map(cloneQuestion), ...FRAMEWORK_QUESTIONS.filter((question) => !existingIds.has(question.id)).map(cloneQuestion)];
   }
-  return [...defaultQuestions, ...legacyAdditionalQuestions].map(cloneQuestion);
+  return [...defaultQuestions, ...legacyAdditionalQuestions, ...FRAMEWORK_QUESTIONS].map(cloneQuestion);
 }
 export function getQuestionBankQuestion(id: string) { return getQuestionBankQuestions().find((question) => question.id === id); }
 export function getQuestionBankScores(): QuestionScoreMap { const saved = readStorage<QuestionScoreMap>(QUESTION_SCORE_STORAGE_KEY); return saved && typeof saved === "object" ? saved : {}; }
@@ -227,8 +228,14 @@ export function hasQuestionScoring(question: QuestionBankQuestion) {
 }
 export function getQuestionBankSummary() { const questions = getQuestionBankQuestions(); return { total: questions.length, active: questions.filter((question) => question.status === "Active").length, competencies: new Set(questions.map((question) => question.dimension)).size }; }
 
+export function hasQuestionConfiguration(question: QuestionBankQuestion) {
+  if (question.type === "GATE") return Boolean(question.config.gateConfig?.options.length === 2);
+  if (question.type === "EVIDENCE") return Boolean(question.config.evidenceConfig?.pairedQuestionRef && question.config.evidenceConfig.options.length && question.config.evidenceConfig.options.every((option) => option.verificationMultiplier === 1 || option.verificationMultiplier === 0.95 || option.verificationMultiplier === 0.85));
+  return hasQuestionScoring(question);
+}
+
 export function isApplicantCompatibleQuestion(question: QuestionBankQuestion): boolean {
-  return (question.type === "ORDINAL" || question.type === "SJT") && question.options.length >= 4 && question.options.length <= 5;
+  return question.id.startsWith("q-") && (question.type === "ORDINAL" || question.type === "SJT") && question.options.length >= 4 && question.options.length <= 5;
 }
 
 export function validateQuestionInput(input: QuestionBankInput): string[] {
