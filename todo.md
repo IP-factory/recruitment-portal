@@ -324,3 +324,18 @@ The Admin Question Bank now normalizes the seven formal question types, D1–D8 
 - [x] Keep D2.Q1E evidence and GATE questions outside scored dimension denominators.
 - [x] Add deterministic tests for scoring formulas, configured bands, negative SJT bounds, invalid weights, missing rubric ratings, close outcomes, and live-flow isolation.
 - [x] Verify Admin and applicant behavior, responsive UX, TypeScript, production build, and browser flows.
+
+## Task 23C-2 — v2 Modifiers, Floors, and Screening Bands
+
+- [x] Preserve the live five-question assessment, existing 70/30 Overall Fit model, Applications, Screening, Dashboard, and candidate status flows.
+- [x] Derive the verification multiplier from completed EVIDENCE responses using the lowest configured multiplier.
+- [x] Add Admin-local integrity flags with Clear, Flagged, Confirmed, and Dismissed states and confirmed-only penalties.
+- [x] Evaluate the configured D1.Q1/D1.Q2 and D2.Q3/D2.Q2 deterministic cross-checks without auto-confirming flags.
+- [x] Keep the D4 free-text cross-check manual-review-only and do not implement unsupported future integrity controls.
+- [x] Add the capped Admin-only bonus review for diplomatic account, French/Arabic proficiency, and commercial certification criteria.
+- [x] Add centralized D1, D2, and D5 floor rules and visibly distinguish floor status from score mutation.
+- [x] Add centralized A/B/C/D screening bands using Final Score, floor rules, and confirmed integrity flags.
+- [x] Calculate bounded Final Score as Base × Verification − Confirmed Penalties + Applied Bonus.
+- [x] Show modifier explanations, verification, penalties, bonus pool, floor status, band, and manual-review messaging only in the Admin v2 Scoring Preview.
+- [x] Add deterministic tests for verification, flags, penalties, bonuses, floors, bands, bounds, unresolved states, and live-flow isolation.
+- [x] Verify Admin preview UX, responsive behavior, TypeScript, production build, and browser flows.
