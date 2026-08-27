@@ -339,3 +339,27 @@ The Admin Question Bank now normalizes the seven formal question types, D1–D8 
 - [x] Show modifier explanations, verification, penalties, bonus pool, floor status, band, and manual-review messaging only in the Admin v2 Scoring Preview.
 - [x] Add deterministic tests for verification, flags, penalties, bonuses, floors, bands, bounds, unresolved states, and live-flow isolation.
 - [x] Verify Admin preview UX, responsive behavior, TypeScript, production build, and browser flows.
+
+## Task 23C-3 — Retire Legacy Overall Fit and Align Admin Evaluation UX to v2
+
+- [x] Audit active Business Development Officer evaluation surfaces for Overall Fit, CV Evidence Score, 70/30 references, and legacy score imports.
+- [x] Isolate legacy five-question scoring and 70/30/CV utilities from future-facing v2 evaluation architecture without breaking the live applicant flow.
+- [x] Add the Admin-only Business Development Officer Evaluation Framework tab with centralized D1–D8 weights and floors.
+- [x] Add the v2 Eligibility → Dimension scoring → Base Assessment Score → Verification → Integrity adjustments → Bonus → Final Screening Score → Applied Band pipeline reference.
+- [x] Add read-only verification, integrity, bonus, and A/B/C/D band rules to the Evaluation Framework tab from centralized configuration.
+- [x] Replace Business Development Officer role CV Criteria navigation with Evaluation Framework while preserving legacy browser-local data for compatibility.
+- [x] Rename Candidate Detail CV Evidence to CV Review and remove weighted CV score presentation from the active review UX.
+- [x] Preserve applicant CV upload, filename, metadata, Admin access, notes, and neutral evidence observations without converting them to points.
+- [x] Replace future-facing Candidate Overview Overall Fit architecture with Screening Evaluation using the v2 modifier utility when v2 data exists.
+- [x] Add the Admin-side eight-dimension profile with scores, weights, floors, and floor status.
+- [x] Add restrained floor-failure and integrity-status messaging without automatic status changes or rejection.
+- [x] Refactor Applications columns to Eligibility, Assessment, Final Score, Applied Band, Application Status, Applied, and Action with explicit Legacy states.
+- [x] Refactor Screening to use Eligibility, Final Score, Applied Band, Integrity, Application Status, Shortlist, and Action.
+- [x] Set Screening default order to newest applications first and retain optional manual sorting without leaderboard controls.
+- [x] Add Applied Band, Floor status, and Integrity filters with Pending and Legacy states and no automatic actions.
+- [x] Preserve manual shortlist controls and remove Show Top 5 / Show Top 10 controls.
+- [x] Remove active Dashboard Overall Fit or leaderboard metrics while retaining operational metrics.
+- [x] Clearly distinguish Base Assessment Score and Final Screening Score in v2 Admin detail surfaces.
+- [x] Verify applicants see no scoring, dimension, modifier, band, or floor information and Assessment v2 remains Draft / Inactive.
+- [x] Add deterministic regression tests for legacy/v2 isolation, framework configuration sourcing, CV review neutrality, Applications, Screening, band/floor/integrity states, and manual shortlist behavior.
+- [x] Run TypeScript, full tests, production build, and responsive browser verification; document and checkpoint Task 23C-3.

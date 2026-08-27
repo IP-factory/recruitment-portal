@@ -74,14 +74,14 @@ export function updateAdminApplicationStatus(id: string, applicationStatus: Admi
 
 export const adminMockData = {
   metrics: [
-    { label: "Total Applications", value: "24", detail: "Business Development Manager" },
+    { label: "Total Applications", value: "24", detail: "Business Development Officer" },
     { label: "Completed Applications", value: "18", detail: "6 still in progress" },
     { label: "Assessments Completed", value: "16", detail: "Across submitted applications" },
     { label: "Shortlisted", value: "0", detail: "Shortlisting not started" },
   ],
   recentApplications: adminApplications.slice(0, 5),
   activeRole: {
-    title: "Business Development Manager",
+    title: "Business Development Officer",
     status: "Open" as const,
     applications: "24",
     completed: "18",
