@@ -4,7 +4,7 @@
 import { AdminShell } from "@/components/admin/AdminShell";
 import { FoundationButton, FoundationInput, FoundationSelect, StatusBadge } from "@/components/foundation/ui";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
-import { getQuestionBankSummary, QUESTION_BANK_COMPETENCIES, QUESTION_BANK_QUESTIONS, type QuestionBankQuestion, type QuestionStatus, type QuestionType } from "@/lib/questionBankData";
+import { getQuestionBankQuestions, getQuestionBankSummary, QUESTION_BANK_COMPETENCIES, type QuestionBankQuestion, type QuestionStatus, type QuestionType } from "@/lib/questionBankData";
 import { ArrowDown, ArrowUp, ArrowUpDown, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -26,13 +26,14 @@ export default function AdminQuestionBank() {
   const [sortKey, setSortKey] = useState<SortKey>("reference");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [page, setPage] = useState(1);
+  const questions = getQuestionBankQuestions();
   const summary = getQuestionBankSummary();
   const normalisedSearch = search.trim().toLowerCase();
   const hasActiveFilters = Boolean(normalisedSearch) || competency !== "all" || type !== "all" || status !== "all";
   const filteredQuestions = useMemo(() => {
-    const records = QUESTION_BANK_QUESTIONS.filter((question) => (!normalisedSearch || question.question.toLowerCase().includes(normalisedSearch) || question.competency.toLowerCase().includes(normalisedSearch)) && (competency === "all" || question.competency === competency) && (type === "all" || question.type === type) && (status === "all" || question.status === status));
+    const records = questions.filter((question) => (!normalisedSearch || question.question.toLowerCase().includes(normalisedSearch) || question.competency.toLowerCase().includes(normalisedSearch)) && (competency === "all" || question.competency === competency) && (type === "all" || question.type === type) && (status === "all" || question.status === status));
     return [...records].sort((first, second) => { const compared = first[sortKey].localeCompare(second[sortKey]); return sortDirection === "asc" ? compared : -compared; });
-  }, [competency, normalisedSearch, sortDirection, sortKey, status, type]);
+  }, [competency, normalisedSearch, questions, sortDirection, sortKey, status, type]);
   const totalPages = Math.max(1, Math.ceil(filteredQuestions.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const visibleQuestions = filteredQuestions.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);

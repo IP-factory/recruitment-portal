@@ -1,17 +1,22 @@
 /**
- * Quiet Authority Question Bank data: a frontend-only administrative index that derives assigned applicant questions from the shared assessment schema without scores or evaluation fields.
+ * Quiet Authority Question Bank data: frontend-only Admin question content and separately stored internal option-score maps.
+ * Applicant assessment objects remain score-free in assessmentData.ts by design.
  */
 import { BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS, type AssessmentOption } from "@/lib/assessmentData";
 
 export type QuestionType = "Experience" | "Scenario";
 export type QuestionStatus = "Active" | "Inactive";
 export type QuestionBankQuestion = { id: string; reference: string; competency: string; type: QuestionType; question: string; options: readonly AssessmentOption[]; status: QuestionStatus; usedIn: string };
+export type QuestionBankInput = { competency: string; type: QuestionType; question: string; options: AssessmentOption[]; status: QuestionStatus };
+export type QuestionScoreMap = Record<string, Record<string, number>>;
+export const QUESTION_BANK_STORAGE_KEY = "recruitment-portal:admin-demo-question-bank";
+export const QUESTION_SCORE_STORAGE_KEY = "recruitment-portal:admin-demo-question-scores";
 const assessmentName = "Business Development Assessment";
-const standardOptions = (choices: readonly string[]): readonly AssessmentOption[] => choices.map((text, index) => ({ id: String.fromCharCode(97 + index), label: String.fromCharCode(65 + index), text }));
+const standardOptions = (choices: readonly string[]): AssessmentOption[] => choices.map((text, index) => ({ id: String.fromCharCode(97 + index), label: String.fromCharCode(65 + index), text }));
 const existingQuestionTypes: QuestionType[] = ["Experience", "Scenario", "Scenario", "Scenario", "Scenario"];
 
-export const QUESTION_BANK_QUESTIONS: readonly QuestionBankQuestion[] = [
-  ...BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS.map((question, index) => ({ id: `q-${String(index + 1).padStart(3, "0")}`, reference: `Q-${String(index + 1).padStart(3, "0")}`, competency: question.category, type: existingQuestionTypes[index], question: question.question, options: question.options, status: "Active" as const, usedIn: assessmentName })),
+const defaultQuestions: QuestionBankQuestion[] = [
+  ...BUSINESS_DEVELOPMENT_ASSESSMENT_QUESTIONS.map((question, index) => ({ id: `q-${String(index + 1).padStart(3, "0")}`, reference: `Q-${String(index + 1).padStart(3, "0")}`, competency: question.category, type: existingQuestionTypes[index], question: question.question, options: [...question.options], status: "Active" as const, usedIn: assessmentName })),
   { id: "q-006", reference: "Q-006", competency: "Negotiation & Closing", type: "Scenario", question: "A prospect says they are ready to proceed but asks for a final concession that could affect the commercial value of the opportunity. What would you most likely do?", options: standardOptions(["Agree immediately to avoid losing the opportunity.", "Clarify the underlying concern, protect the agreed value and explore an appropriate commercial trade-off.", "End the conversation because the prospect is changing the terms.", "Refer every request to a senior colleague without further discussion.", "Offer several concessions before understanding the request."]), status: "Active", usedIn: "Not assigned" },
   { id: "q-007", reference: "Q-007", competency: "Communication", type: "Experience", question: "Which statement best describes how you communicate the value of a new product or service to a prospective client?", options: standardOptions(["I provide the same overview to every prospect.", "I focus mainly on the product features.", "I connect the offer to the prospect's priorities and confirm that the value is understood.", "I avoid discussing value until the client requests pricing.", "I rely on written materials instead of conversations."]), status: "Active", usedIn: "Not assigned" },
   { id: "q-008", reference: "Q-008", competency: "Leadership", type: "Scenario", question: "A colleague is struggling to move several opportunities forward. What would you most likely do first?", options: standardOptions(["Take over all of the opportunities immediately.", "Review the pipeline together, identify the blockers and agree practical next steps.", "Tell the colleague to increase the number of follow-up emails.", "Wait for the next reporting cycle before discussing it.", "Raise the issue publicly in a team meeting."]), status: "Active", usedIn: "Not assigned" },
@@ -21,6 +26,22 @@ export const QUESTION_BANK_QUESTIONS: readonly QuestionBankQuestion[] = [
   { id: "q-012", reference: "Q-012", competency: "Business Development Experience", type: "Experience", question: "Which statement best reflects your approach to building a sustainable pipeline of new business opportunities?", options: standardOptions(["I focus only on opportunities that can close quickly.", "I rely on one lead source whenever possible.", "I maintain a balanced pipeline, qualify opportunities and build relationships over time.", "I pursue every available lead with the same level of effort.", "I wait until current opportunities are complete before prospecting again."]), status: "Active", usedIn: "Not assigned" },
 ];
 
+export const QUESTION_BANK_QUESTIONS: readonly QuestionBankQuestion[] = defaultQuestions;
 export const QUESTION_BANK_COMPETENCIES = ["Business Development Experience", "Prospecting", "Pipeline Management", "Commercial Judgement", "Client Relationship Management", "Negotiation & Closing", "Communication", "Leadership"] as const;
-export function getQuestionBankQuestion(id: string) { return QUESTION_BANK_QUESTIONS.find((question) => question.id === id); }
-export function getQuestionBankSummary() { return { total: QUESTION_BANK_QUESTIONS.length, active: QUESTION_BANK_QUESTIONS.filter((question) => question.status === "Active").length, competencies: QUESTION_BANK_COMPETENCIES.length }; }
+const cloneDefaults = () => defaultQuestions.map((question) => ({ ...question, options: question.options.map((option) => ({ ...option })) }));
+const labelsFor = (options: AssessmentOption[]) => options.map((option, index) => ({ ...option, label: String.fromCharCode(65 + index) }));
+const readStorage = <Value,>(key: string): Value | null => { if (typeof window === "undefined") return null; try { const value = window.localStorage.getItem(key); return value ? JSON.parse(value) as Value : null; } catch { return null; } };
+const saveStorage = (key: string, value: unknown) => { if (typeof window !== "undefined") window.localStorage.setItem(key, JSON.stringify(value)); };
+
+export function getQuestionBankQuestions(): QuestionBankQuestion[] { const saved = readStorage<QuestionBankQuestion[]>(QUESTION_BANK_STORAGE_KEY); return Array.isArray(saved) && saved.length ? saved.map((question) => ({ ...question, options: labelsFor([...question.options]) })) : cloneDefaults(); }
+export function getQuestionBankQuestion(id: string) { return getQuestionBankQuestions().find((question) => question.id === id); }
+export function getQuestionBankScores(): QuestionScoreMap { const saved = readStorage<QuestionScoreMap>(QUESTION_SCORE_STORAGE_KEY); return saved && typeof saved === "object" ? saved : {}; }
+export function getQuestionScoreConfiguration(questionId: string) { return getQuestionBankScores()[questionId]; }
+export function hasQuestionScoring(question: QuestionBankQuestion) { const scores = getQuestionScoreConfiguration(question.id); return Boolean(scores) && question.options.every((option) => typeof scores?.[option.id] === "number" && scores[option.id] >= 0 && scores[option.id] <= 5); }
+export function getQuestionBankSummary() { const questions = getQuestionBankQuestions(); return { total: questions.length, active: questions.filter((question) => question.status === "Active").length, competencies: QUESTION_BANK_COMPETENCIES.length }; }
+
+function nextReference(questions: QuestionBankQuestion[]) { const last = questions.reduce((highest, question) => Math.max(highest, Number(question.reference.replace("Q-", "")) || 0), 0); return `Q-${String(last + 1).padStart(3, "0")}`; }
+function saveQuestions(questions: QuestionBankQuestion[]) { saveStorage(QUESTION_BANK_STORAGE_KEY, questions); return questions; }
+function saveScores(scores: QuestionScoreMap) { saveStorage(QUESTION_SCORE_STORAGE_KEY, scores); return scores; }
+export function createQuestionBankQuestion(input: QuestionBankInput, scores: Record<string, number>) { const questions = getQuestionBankQuestions(); const reference = nextReference(questions); const id = `q-${reference.slice(2).toLowerCase()}`; const question: QuestionBankQuestion = { id, reference, competency: input.competency, type: input.type, question: input.question, options: labelsFor(input.options), status: input.status, usedIn: "Not assigned" }; saveQuestions([...questions, question]); saveScores({ ...getQuestionBankScores(), [id]: scores }); return question; }
+export function updateQuestionBankQuestion(id: string, input: QuestionBankInput, scores: Record<string, number>) { let updated: QuestionBankQuestion | undefined; const questions = getQuestionBankQuestions().map((question) => { if (question.id !== id) return question; updated = { ...question, competency: input.competency, type: input.type, question: input.question, options: labelsFor(input.options), status: input.status }; return updated; }); if (!updated) return undefined; saveQuestions(questions); const scopedScores: Record<string, number> = {}; updated.options.forEach((option) => { if (typeof scores[option.id] === "number") scopedScores[option.id] = scores[option.id]; }); saveScores({ ...getQuestionBankScores(), [id]: scopedScores }); return updated; }
