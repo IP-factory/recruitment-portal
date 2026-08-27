@@ -24,6 +24,8 @@ import AdminAssessments from "@/pages/AdminAssessments";
 import AdminAssessmentBuilder from "@/pages/AdminAssessmentBuilder";
 import AdminScreening from "@/pages/AdminScreening";
 import ApplicantInformation from "@/pages/ApplicantInformation";
+import ApplicantEligibilityCloseout from "@/pages/ApplicantEligibilityCloseout";
+import { ApplicantEligibilityGuard } from "@/components/application/ApplicantEligibilityGuard";
 import Auth from "@/pages/Auth";
 import AuthCreateAccount from "@/pages/AuthCreateAccount";
 import AuthForgotPassword from "@/pages/AuthForgotPassword";
@@ -32,7 +34,7 @@ import Home from "@/pages/Home";
 import NotFound from "@/pages/NotFound";
 import Portal from "@/pages/Portal";
 import UiKit from "@/pages/UiKit";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
@@ -58,13 +60,21 @@ function Router() {
       <Route component={AdminQuestionBank} path="/admin/questions" />
       <Route path="/admin/settings">{() => <AdminPlaceholder title="Settings" />}</Route>
       <Route component={Apply} path="/apply" />
-      <Route component={ApplicantInformation} path="/apply/business-development-manager" />
-      <Route component={ApplicantCvPlaceholder} path="/apply/business-development-manager/cv" />
-      <Route component={ApplicantAssessmentPlaceholder} path="/apply/business-development-manager/assessment" />
-      <Route component={ApplicantAssessmentQuestionsPlaceholder} path="/apply/business-development-manager/assessment/questions" />
-      <Route component={ApplicantAssessmentComplete} path="/apply/business-development-manager/assessment/complete" />
-      <Route component={ApplicantReviewPlaceholder} path="/apply/business-development-manager/review" />
-      <Route component={ApplicantSubmitted} path="/apply/business-development-manager/submitted" />
+      <Route component={ApplicantInformation} path="/apply/business-development-officer" />
+      <Route component={ApplicantEligibilityCloseout} path="/apply/business-development-officer/eligibility" />
+      <Route path="/apply/business-development-officer/cv">{() => <ApplicantEligibilityGuard><ApplicantCvPlaceholder /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/business-development-officer/assessment">{() => <ApplicantEligibilityGuard><ApplicantAssessmentPlaceholder /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/business-development-officer/assessment/questions">{() => <ApplicantEligibilityGuard><ApplicantAssessmentQuestionsPlaceholder /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/business-development-officer/assessment/complete">{() => <ApplicantEligibilityGuard><ApplicantAssessmentComplete /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/business-development-officer/review">{() => <ApplicantEligibilityGuard><ApplicantReviewPlaceholder /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/business-development-officer/submitted">{() => <ApplicantEligibilityGuard><ApplicantSubmitted /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/business-development-manager/assessment/complete"><Redirect to="/apply/business-development-officer/assessment/complete" /></Route>
+      <Route path="/apply/business-development-manager/assessment/questions"><Redirect to="/apply/business-development-officer/assessment/questions" /></Route>
+      <Route path="/apply/business-development-manager/assessment"><Redirect to="/apply/business-development-officer/assessment" /></Route>
+      <Route path="/apply/business-development-manager/review"><Redirect to="/apply/business-development-officer/review" /></Route>
+      <Route path="/apply/business-development-manager/submitted"><Redirect to="/apply/business-development-officer/submitted" /></Route>
+      <Route path="/apply/business-development-manager/cv"><Redirect to="/apply/business-development-officer/cv" /></Route>
+      <Route path="/apply/business-development-manager"><Redirect to="/apply/business-development-officer" /></Route>
       <Route component={Auth} path="/auth" />
       <Route component={AuthSignIn} path="/auth/sign-in" />
       <Route component={AuthCreateAccount} path="/auth/create-account" />

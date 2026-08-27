@@ -20,7 +20,7 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
   const questionIndex = assessment.currentQuestionIndex;
   const currentQuestion = questions[questionIndex];
   const answeredIndexes = useMemo(() => questions.map((question, index) => assessment.answers[question.id] ? index : null).filter((index): index is number => index !== null), [assessment.answers, questions]);
-  if (!currentQuestion) return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="section-kicker">Assessment</p><h1 className="mt-3 text-2xl font-semibold tracking-[-0.025em] text-primary">Assessment questions are not available</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">There are no questions assigned to this assessment at present. Please return to your application and try again later.</p><FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-manager")} variant="secondary">Return to application</FoundationButton></div></section></ApplicationShell>;
+  if (!currentQuestion) return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="section-kicker">Assessment</p><h1 className="mt-3 text-2xl font-semibold tracking-[-0.025em] text-primary">Assessment questions are not available</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">There are no questions assigned to this assessment at present. Please return to your application and try again later.</p><FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer")} variant="secondary">Return to application</FoundationButton></div></section></ApplicationShell>;
 
   const selectedOptionId = assessment.answers[currentQuestion.id];
   const progressPercent = ((questionIndex + 1) / questions.length) * 100;
@@ -28,7 +28,7 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
   const moveTo = (index: number) => { setAssessment((current) => ({ ...current, currentQuestionIndex: index })); setValidationError(""); };
   const nextQuestion = () => {
     if (!selectedOptionId) { setValidationError("Select an answer before continuing."); return; }
-    if (questionIndex === questions.length - 1) { saveAssessmentResponseState(assessment); setLocation("/apply/business-development-manager/assessment/complete"); return; }
+    if (questionIndex === questions.length - 1) { saveAssessmentResponseState(assessment); setLocation("/apply/business-development-officer/assessment/complete"); return; }
     moveTo(questionIndex + 1);
   };
 

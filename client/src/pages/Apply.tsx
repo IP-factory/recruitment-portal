@@ -3,7 +3,7 @@
  */
 import { AlignmentMark, PublicFooter, PublicNavigation } from "@/components/foundation/navigation";
 import { FoundationButton, StatusBadge } from "@/components/foundation/ui";
-import { getBusinessDevelopmentManagerRole, type RecruitmentRole } from "@/lib/adminRoleData";
+import { getBusinessDevelopmentOfficerRole, type RecruitmentRole } from "@/lib/adminRoleData";
 import { BriefcaseBusiness, Check, ChevronRight, Clock3, MapPin } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -42,7 +42,7 @@ function RoleCard({ role, onApply }: { role: RecruitmentRole; onApply: () => voi
 
 export default function Apply() {
   const [, setLocation] = useLocation();
-  const [availableRoles] = useState(() => [getBusinessDevelopmentManagerRole()].filter((role) => role.status === "Open" || role.status === "Closed"));
+  const [availableRoles] = useState(() => [getBusinessDevelopmentOfficerRole()].filter((role) => role.status === "Open" || role.status === "Closed"));
 
   return (
     <div className="min-h-screen bg-white text-foreground">
@@ -59,15 +59,15 @@ export default function Apply() {
         <section className="portal-container pb-20 pt-14 sm:pb-24 sm:pt-16">
           <div className="mb-6 flex items-center justify-between border-b border-border pb-5"><div><p className="section-kicker">Available role</p><h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-primary">Available role</h2></div></div>
           <div className="space-y-5">
-            {availableRoles.map((role) => <RoleCard key={role.title} onApply={() => setLocation("/apply/business-development-manager")} role={role} />)}
+            {availableRoles.map((role) => <RoleCard key={role.title} onApply={() => setLocation("/apply/business-development-officer")} role={role} />)}
           </div>
 
           <div className="mt-8 border border-border bg-portal-surface px-6 py-5 sm:px-7">
             <h2 className="text-base font-semibold text-primary">What happens after you start?</h2>
             <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-2 text-[13px] font-medium text-primary">
-              {["Profile", "Experience", "CV", "Assessment", "Review"].map((stage, index, stages) => <span className="inline-flex items-center gap-2" key={stage}><span>{stage}</span>{index < stages.length - 1 ? <ChevronRight className="size-3.5 text-portal-blue" /> : null}</span>)}
+              {["Information", "CV", "Assessment", "Review"].map((stage, index, stages) => <span className="inline-flex items-center gap-2" key={stage}><span>{stage}</span>{index < stages.length - 1 ? <ChevronRight className="size-3.5 text-portal-blue" /> : null}</span>)}
             </div>
-            <p className="mt-3 text-[13px] leading-5 text-muted-foreground">Your application will move through these five stages before final submission.</p>
+            <p className="mt-3 text-[13px] leading-5 text-muted-foreground">Your application will move through these four stages before final submission.</p>
           </div>
         </section>
       </main>

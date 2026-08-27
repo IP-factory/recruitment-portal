@@ -24,16 +24,18 @@ export type RecruitmentRole = {
 
 export type RecruitmentRoleInput = Omit<RecruitmentRole, "id" | "slug" | "applicationCount" | "submittedCount" | "inProgressCount" | "lastUpdated" | "lastUpdatedLabel">;
 export const RECRUITMENT_ROLES_STORAGE_KEY = "recruitment-portal:admin-demo-roles";
-export const BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID = "role-business-development-manager";
+export const BUSINESS_DEVELOPMENT_OFFICER_ROLE_ID = "role-business-development-officer";
+/** Legacy alias retained so existing Admin data contracts remain stable while the visible role title migrates. */
+export const BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID = BUSINESS_DEVELOPMENT_OFFICER_ROLE_ID;
 
 const defaultRoles: RecruitmentRole[] = [{
-  id: BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID,
-  slug: "business-development-manager",
-  title: "Business Development Manager",
+  id: BUSINESS_DEVELOPMENT_OFFICER_ROLE_ID,
+  slug: "business-development-officer",
+  title: "Business Development Officer",
   department: "Business Development",
   location: "To be confirmed",
   employmentType: "Full-time",
-  shortDescription: "We are looking for a commercially minded Business Development Manager who can identify opportunities, build strong client relationships and contribute to sustainable business growth.",
+  shortDescription: "We are looking for a commercially minded Business Development Officer who can identify opportunities, build strong client relationships and contribute to sustainable business growth.",
   fullDescription: "",
   status: "Open",
   openingDate: null,
@@ -53,13 +55,21 @@ function labelForDate(date: string) {
 }
 function saveRoles(roles: RecruitmentRole[]) { if (typeof window !== "undefined") window.localStorage.setItem(RECRUITMENT_ROLES_STORAGE_KEY, JSON.stringify(roles)); return roles; }
 
-export function getRecruitmentRoles(): RecruitmentRole[] {
-  if (typeof window === "undefined") return defaultRoles;
-  try { const stored = window.localStorage.getItem(RECRUITMENT_ROLES_STORAGE_KEY); const parsed = stored ? JSON.parse(stored) : null; return Array.isArray(parsed) && parsed.length ? parsed as RecruitmentRole[] : defaultRoles; } catch { return defaultRoles; }
+function normalizeRole(role: RecruitmentRole): RecruitmentRole {
+  if (role.id !== "role-business-development-manager" && role.slug !== "business-development-manager" && role.title !== "Business Development Manager") return role;
+  const replaceManager = (value: string) => value.replaceAll("Business Development Manager", "Business Development Officer");
+  return { ...role, id: BUSINESS_DEVELOPMENT_OFFICER_ROLE_ID, slug: "business-development-officer", title: "Business Development Officer", shortDescription: replaceManager(role.shortDescription), fullDescription: replaceManager(role.fullDescription) };
 }
 
-export function getRecruitmentRole(slug: string) { return getRecruitmentRoles().find((role) => role.slug === slug); }
-export function getBusinessDevelopmentManagerRole() { return getRecruitmentRoles().find((role) => role.id === BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID) ?? defaultRoles[0]; }
+export function getRecruitmentRoles(): RecruitmentRole[] {
+  if (typeof window === "undefined") return defaultRoles;
+  try { const stored = window.localStorage.getItem(RECRUITMENT_ROLES_STORAGE_KEY); const parsed = stored ? JSON.parse(stored) : null; return Array.isArray(parsed) && parsed.length ? (parsed as RecruitmentRole[]).map(normalizeRole) : defaultRoles; } catch { return defaultRoles; }
+}
+
+export function getRecruitmentRole(slug: string) { const normalizedSlug = slug === "business-development-manager" ? "business-development-officer" : slug; return getRecruitmentRoles().find((role) => role.slug === normalizedSlug); }
+export function getBusinessDevelopmentOfficerRole() { return getRecruitmentRoles().find((role) => role.id === BUSINESS_DEVELOPMENT_OFFICER_ROLE_ID) ?? defaultRoles[0]; }
+/** @deprecated Use getBusinessDevelopmentOfficerRole for visible role copy. */
+export function getBusinessDevelopmentManagerRole() { return getBusinessDevelopmentOfficerRole(); }
 export function createRecruitmentRole(input: RecruitmentRoleInput): RecruitmentRole {
   const now = new Date();
   const uniqueSlug = `${slugify(input.title)}-${now.getTime()}`;

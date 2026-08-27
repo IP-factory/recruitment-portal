@@ -39,7 +39,7 @@ export default function ApplicantCvPlaceholder() {
   };
   const continueToAssessment = () => {
     if (!file) { setError("Upload your CV before continuing."); return; }
-    setLocation("/apply/business-development-manager/assessment");
+    setLocation("/apply/business-development-officer/assessment");
   };
 
   return (
@@ -62,7 +62,7 @@ export default function ApplicantCvPlaceholder() {
           </div>}
           {error ? <p className="mt-3 text-[13px] text-status-error-strong" id="cv-upload-error" role="alert">{error}</p> : <span id="cv-upload-error" />}
           <div className="mt-8 border-t border-border pt-6"><h2 className="text-sm font-semibold text-primary">Before you continue</h2><ul className="mt-4 space-y-3">{["Use your most recent CV", "Make sure your employment history is clear", "Include relevant responsibilities and achievements where applicable"].map((item) => <li className="flex gap-2.5 text-[13px] leading-5 text-muted-foreground" key={item}><Check className="mt-0.5 size-3.5 shrink-0 text-portal-blue" />{item}</li>)}</ul></div>
-          <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between"><FoundationButton className="w-full sm:w-auto" onClick={() => setLocation("/apply/business-development-manager")} variant="secondary">Back</FoundationButton><FoundationButton className="w-full sm:w-auto" onClick={continueToAssessment} size="lg">Continue to assessment</FoundationButton></div>
+          <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between"><FoundationButton className="w-full sm:w-auto" onClick={() => setLocation("/apply/business-development-officer")} variant="secondary">Back</FoundationButton><FoundationButton className="w-full sm:w-auto" onClick={continueToAssessment} size="lg">Continue to assessment</FoundationButton></div>
         </div>
       </section>
     </ApplicationShell>

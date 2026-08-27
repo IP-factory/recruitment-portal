@@ -45,7 +45,7 @@ export default function ApplicantAssessmentPlaceholder() {
             <Info className="mt-0.5 size-[18px] shrink-0" aria-hidden="true" />
             <div><h2 className="text-sm font-semibold" id="assessment-note-title">A note about the assessment</h2><p className="mt-0.5 text-[13px] leading-5 opacity-85">There are no visible scores while completing the assessment. Focus on selecting the response that best represents you.</p></div>
           </section>
-          <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between"><FoundationButton className="w-full sm:w-auto" onClick={() => setLocation("/apply/business-development-manager/cv")} variant="secondary">Back to CV</FoundationButton><FoundationButton className="w-full sm:w-auto" onClick={() => setLocation("/apply/business-development-manager/assessment/questions")} size="lg">Start assessment</FoundationButton></div>
+          <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between"><FoundationButton className="w-full sm:w-auto" onClick={() => setLocation("/apply/business-development-officer/cv")} variant="secondary">Back to CV</FoundationButton><FoundationButton className="w-full sm:w-auto" onClick={() => setLocation("/apply/business-development-officer/assessment/questions")} size="lg">Start assessment</FoundationButton></div>
         </div>
       </section>
     </ApplicationShell>

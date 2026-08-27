@@ -246,3 +246,19 @@ The Business Development Manager workspace renders the focused application heade
 ## Authentication Verification Notes
 
 The `/auth/create-account` route displays the required shared application-context panel, required applicant fields, terms confirmation, disabled primary state, and sign-in alternative. Invalid email input produces the local “Enter a valid email address.” field error after blur. The legacy `/auth` route redirects to `/auth/sign-in`. The sign-in Forgot password link routes to `/auth/forgot-password`, and Back to sign in returns to `/auth/sign-in`. The sign-in Create an account link routes to `/auth/create-account`. Valid email and matching-password states are accepted locally while the action remains disabled until terms are accepted. With terms confirmed, the enabled Create account action displays “Account creation will be connected in the next implementation stage.” and does not create an account or navigate away. The Business Development Manager action from `/apply` routes to `/auth/create-account`.
+
+## Task 23A — Business Development Officer Eligibility
+
+- [x] Align the primary applicant role label and public journey to Business Development Officer.
+- [x] Preserve the four-stage applicant structure: Information, CV, Assessment, and Review.
+- [x] Implement active gates G1 Abuja presence, G2 right to work, G3 relevant experience, G6 outbound work, and G7 verification consent.
+- [x] Require a planned relocation date when G1 relocation is selected.
+- [x] Keep G4 start availability and G5 compensation band visible as Configuration required and inactive.
+- [x] Persist applicant eligibility answers and the deterministic evaluation in browser-local storage.
+- [x] Route incomplete or failed eligibility submissions appropriately, including the terminal eligibility close-out page.
+- [x] Prevent closed applicants from entering CV, Assessment, or Review routes directly.
+- [x] Show eligibility outcome and all seven gate states in Admin Candidate Detail.
+- [x] Show eligibility configuration status in Admin Role Detail.
+- [x] Redirect legacy Business Development Manager application URLs to the Officer journey.
+- [x] Verify the complete eligible path, each gate closure path, relocation-date validation, Admin outcome visibility, and responsive layouts in the browser.
+- [x] Keep the implementation frontend-only with no backend or AI dependency.

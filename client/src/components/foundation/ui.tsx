@@ -209,7 +209,13 @@ const statusClass: Record<string, string> = {
   Available: "status-available",
   Draft: "status-draft",
   Closed: "status-closed",
+  "Closed — Eligibility": "status-closed",
   Archived: "status-archived",
+  Eligible: "status-completed",
+  Failed: "status-error",
+  Flagged: "status-under-review",
+  "Not answered": "status-not-started",
+  "Not assessed": "status-not-started",
   Active: "status-active",
   Inactive: "status-inactive",
 };
