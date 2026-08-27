@@ -262,3 +262,23 @@ The `/auth/create-account` route displays the required shared application-contex
 - [x] Redirect legacy Business Development Manager application URLs to the Officer journey.
 - [x] Verify the complete eligible path, each gate closure path, relocation-date validation, Admin outcome visibility, and responsive layouts in the browser.
 - [x] Keep the implementation frontend-only with no backend or AI dependency.
+
+## Task 23B-1 — Question Engine Configuration Upgrade
+
+- [x] Preserve the existing applicant assessment question projection, navigation, answers, review, completion, and scoring behavior.
+- [x] Expand the Admin question model to support GATE, ORDINAL, MULTI, NUMERIC, SJT, OPEN, and EVIDENCE.
+- [x] Add D1–D8 dimensions plus Gate / Eligibility and Not Applicable options.
+- [x] Add stable references, required state, help text, qWeight, max, time limit, evidence reference, and flag configuration fields.
+- [x] Add type-specific structured configuration for ORDINAL, MULTI, NUMERIC, SJT, OPEN, and EVIDENCE.
+- [x] Add structured cross-check / integrity flag configuration without applying penalties.
+- [x] Update Question Bank filters and list columns for dimension, type, qWeight, status, Used In, and actions.
+- [x] Upgrade Question Detail with common and type-specific read-only configuration.
+- [x] Upgrade Create/Edit Question with conditional type-specific fields and guidance while preserving the two-column Admin pattern.
+- [x] Add frontend validation preventing obviously invalid type-specific configurations from saving.
+- [x] Keep exact Business Development Officer framework question migration deferred to Task 23B-2.
+- [x] Keep applicant rendering, scoring changes, backend, and database migration deferred.
+- [x] Add deterministic unit coverage and verify typecheck, production build, and responsive Admin UX.
+
+## Task 23B-1 Verification Notes
+
+The Admin Question Bank now normalizes the seven formal question types, D1–D8 plus Gate / Eligibility and Not Applicable dimensions, stable references, qWeight, standard maximum, required state, timing, evidence relationship, flag metadata, and nested type-specific configuration. The existing twelve-question bank remains intact; older browser-local records are normalized and missing legacy records are restored without replacing the bank. The Question Bank list exposes the requested Question, Dimension, Type, qWeight, Status, Used In and Action columns, plus Dimension, Type and Status filters. Question Detail renders common metadata and read-only ORDINAL, MULTI, NUMERIC, SJT, OPEN, EVIDENCE and GATE configuration states. Create/Edit keeps the two-column Admin pattern with conditional controls for binary outcomes, ordinal close-application outcomes, multi-select decoys and caps, numeric derived modes and bands, SJT explanations, open rubrics, evidence pairing/multipliers, and collapsed integrity cross-check configuration. Stable-reference uniqueness and type-specific validation block obviously invalid saves. The Assessment Builder now keeps future types visible but prevents assigning them into the current legacy applicant-compatible flow. Applicant rendering and scoring remain unchanged. Browser checks covered the Question Bank list, Question Detail, GATE, NUMERIC and EVIDENCE form states, and assessment compatibility; 13 deterministic tests pass, TypeScript passes, and the production build succeeds with only the existing non-blocking chunk-size advisory.
