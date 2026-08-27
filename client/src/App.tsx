@@ -16,6 +16,9 @@ import AdminPlaceholder from "@/pages/AdminPlaceholder";
 import AdminRoleDetail from "@/pages/AdminRoleDetail";
 import AdminRoleForm from "@/pages/AdminRoleForm";
 import AdminRoles from "@/pages/AdminRoles";
+import AdminQuestionBank from "@/pages/AdminQuestionBank";
+import AdminQuestionDetail from "@/pages/AdminQuestionDetail";
+import AdminQuestionNewPlaceholder from "@/pages/AdminQuestionNewPlaceholder";
 import ApplicantInformation from "@/pages/ApplicantInformation";
 import Auth from "@/pages/Auth";
 import AuthCreateAccount from "@/pages/AuthCreateAccount";
@@ -42,7 +45,9 @@ function Router() {
       <Route component={AdminRoleDetail} path="/admin/roles/:roleSlug" />
       <Route component={AdminRoles} path="/admin/roles" />
       <Route path="/admin/assessments">{() => <AdminPlaceholder title="Assessments" />}</Route>
-      <Route path="/admin/questions">{() => <AdminPlaceholder title="Question Bank" />}</Route>
+      <Route component={AdminQuestionNewPlaceholder} path="/admin/questions/new" />
+      <Route component={AdminQuestionDetail} path="/admin/questions/:questionId" />
+      <Route component={AdminQuestionBank} path="/admin/questions" />
       <Route path="/admin/settings">{() => <AdminPlaceholder title="Settings" />}</Route>
       <Route component={Apply} path="/apply" />
       <Route component={ApplicantInformation} path="/apply/business-development-manager" />
