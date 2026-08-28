@@ -206,3 +206,4 @@ npm run dev
 
 npm run dev:server
 
+ npx pnpm@latest-10 run dev  

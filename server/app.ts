@@ -37,35 +37,11 @@ if (process.env.TRUST_PROXY) {
 // that arrives, a multipart parser with a separate per-route limit is needed.
 app.use(express.json({ limit: "100kb" }));
 
-// ── API routers ───────────────────────────────────────────────────────────────
-
-// Admin authentication / authorization API (Task 24B): session, sign-in,
-// sign-out, and the native Manus OAuth callback.
-app.use(createAdminAuthRouter());
-
-// Recruitment Role / Eligibility / Evaluation Framework API (Task 24C-1):
-// public applicant-safe endpoints plus Admin endpoints guarded by Task 24B.
-app.use(createRecruitmentApiRouter());
-
-// Admin Question Bank API (Task 24C-2): list, detail, create and update,
-// all guarded by Task 24B authorization. No public question endpoints.
-app.use(createQuestionBankApiRouter());
-
-// Admin Assessment API (Task 24C-3): assessment list, detail, create, update,
-// assignment management, and admin preview. All guarded by Task 24B auth.
-app.use(createAssessmentApiRouter());
-
-// Public Applicant Runtime API (Task 24D-1): application creation,
-// server-side eligibility, assessment responses, completion and submission.
-// Uses applicant token, not Admin authorization.
-app.use(createApplicationApiRouter());
-
-// Admin Application & Scoring API (Task 24D-2): real applications list,
-// candidate detail, OPEN review, integrity flags, bonuses, shortlisting,
-// and application status management. Requires Task 24B Admin authorization.
-app.use(createAdminApplicationApiRouter());
-
 // ── Health check ──────────────────────────────────────────────────────────────
+// Registered FIRST, before any router, so that no router-level middleware
+// (including broad `router.use(...)` guards) can ever intercept it. This
+// keeps /api/health/database public and reachable from any upstream proxy
+// or uptime monitor without credentials.
 
 /**
  * GET /api/health/database
@@ -95,5 +71,33 @@ app.get("/api/health/database", async (_req, res) => {
     await connection?.end().catch(() => undefined);
   }
 });
+
+// ── API routers ───────────────────────────────────────────────────────────────
+
+// Admin authentication / authorization API (Task 24B): session, sign-in,
+// sign-out, and the native Manus OAuth callback.
+app.use(createAdminAuthRouter());
+
+// Recruitment Role / Eligibility / Evaluation Framework API (Task 24C-1):
+// public applicant-safe endpoints plus Admin endpoints guarded by Task 24B.
+app.use(createRecruitmentApiRouter());
+
+// Admin Question Bank API (Task 24C-2): list, detail, create and update,
+// all guarded by Task 24B authorization. No public question endpoints.
+app.use(createQuestionBankApiRouter());
+
+// Admin Assessment API (Task 24C-3): assessment list, detail, create, update,
+// assignment management, and admin preview. All guarded by Task 24B auth.
+app.use(createAssessmentApiRouter());
+
+// Public Applicant Runtime API (Task 24D-1): application creation,
+// server-side eligibility, assessment responses, completion and submission.
+// Uses applicant token, not Admin authorization.
+app.use(createApplicationApiRouter());
+
+// Admin Application & Scoring API (Task 24D-2): real applications list,
+// candidate detail, OPEN review, integrity flags, bonuses, shortlisting,
+// and application status management. Requires Task 24B Admin authorization.
+app.use(createAdminApplicationApiRouter());
 
 export default app;

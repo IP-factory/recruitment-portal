@@ -68,6 +68,38 @@ This applies the tracked migrations in order:
 Migrations are additive and idempotent-safe. Never run destructive seed logic
 against existing production data.
 
+### 2a. Verify migrations are recorded
+
+`drizzle-kit migrate` has been observed to exit silently on TiDB when a DDL
+statement fails (e.g. FK parent missing due to statement ordering). After
+migrate completes, confirm every migration is recorded in the tracking table:
+
+```bash
+mysql "$DATABASE_URL" -e "SELECT id, LEFT(hash, 16) AS hash, created_at FROM __drizzle_migrations ORDER BY created_at;"
+```
+
+Expected: 4 rows, one per migration, with SHA-256 hashes matching the local
+`.sql` files (`shasum -a 256 drizzle/migrations/*.sql`). If a migration is
+missing from `__drizzle_migrations` but its tables also do not exist, apply
+the SQL file directly and record the hash manually — the schema is the source
+of truth, not Drizzle's migrate tool:
+
+```sql
+SET FOREIGN_KEY_CHECKS = 0;
+SOURCE drizzle/migrations/0002_task24d1_applicant_runtime.sql;
+SET FOREIGN_KEY_CHECKS = 1;
+INSERT INTO __drizzle_migrations (hash, created_at)
+  VALUES ('<sha256 of the .sql file>', UNIX_TIMESTAMP() * 1000);
+```
+
+After the fix, `GET /api/admin/applications` with a valid admin session must
+return `200 {"ok":true,"applications":[...],"counts":{...}}`. A `503` with
+the browser-safe message "Unable to load applications." almost always means
+a migration is missing; inspect the server logs for the structured
+`[admin-app] list applications failed:` JSON which walks the error cause
+chain and surfaces `code`, `errno`, `sqlState`, and `sqlMessage` (never
+sent to the browser).
+
 ### 3. Provision / rotate the Admin credential
 
 ```bash

@@ -51,6 +51,49 @@ function fail(response: Response, status: number, error: string) {
   response.status(status).json({ ok: false, error });
 }
 
+/**
+ * Server-side-only error logger for Admin Application routes.
+ *
+ * Walks the `error.cause` chain and surfaces Drizzle/MySQL-specific fields
+ * (code, errno, sqlState, sqlMessage) that are required to diagnose schema
+ * drift, FK violations, or missing tables — without ever sending them to
+ * the browser. The browser response is always the safe, restrained message
+ * passed in via `safeMessage`.
+ */
+function logAdminAppError(context: string, error: unknown, safeMessage: string, response: Response) {
+  const entries: Record<string, unknown>[] = [];
+  let cursor: unknown = error;
+  let depth = 0;
+  while (cursor && depth < 5) {
+    if (cursor instanceof Error) {
+      entries.push({
+        depth,
+        name: cursor.name,
+        message: cursor.message,
+        stack: cursor.stack?.split("\n").slice(0, 3).join("\n"),
+      });
+      cursor = (cursor as Error & { cause?: unknown }).cause;
+    } else if (typeof cursor === "object") {
+      const e = cursor as Record<string, unknown>;
+      entries.push({
+        depth,
+        code: e.code,
+        errno: e.errno,
+        sqlState: e.sqlState,
+        sqlMessage: e.sqlMessage,
+        message: e.message,
+      });
+      cursor = e.cause;
+    } else {
+      entries.push({ depth, raw: cursor });
+      break;
+    }
+    depth += 1;
+  }
+  console.error(`[admin-app] ${context} failed:`, JSON.stringify({ safeMessage, chain: entries }, null, 2));
+  fail(response, 503, safeMessage);
+}
+
 function generateId(): string {
   return randomBytes(12).toString("hex");
 }
@@ -78,12 +121,16 @@ async function requireAuthorizedAdmin(request: Request, response: Response, next
 export function createAdminApplicationApiRouter(): Router {
   const router = express.Router();
 
-  // All routes require Admin auth
-  router.use(requireAuthorizedAdmin);
+  // NOTE: Authorization is applied per-route below via `requireAuthorizedAdmin`.
+  // A router-level `router.use(requireAuthorizedAdmin)` is intentionally NOT
+  // used here — Express invokes `router.use(fn)` layers for every request
+  // that enters the router, even when no specific route matches, which would
+  // block unrelated requests (e.g. /api/health/database) traversing the
+  // middleware chain.
 
   // ── GET /api/admin/applications ───────────────────────────────────────────
 
-  router.get("/api/admin/applications", async (request, response) => {
+  router.get("/api/admin/applications", requireAuthorizedAdmin, async (request, response) => {
     try {
       const db = (await import("./db")).getDatabase();
       const allApps = await db
@@ -154,14 +201,13 @@ export function createAdminApplicationApiRouter(): Router {
         counts: { total: summaryApps.length, submitted, pendingReview, shortlisted },
       });
     } catch (error) {
-      console.error("[admin-app] list applications failed:", error instanceof Error ? error.message : String(error));
-      fail(response, 503, "Unable to load applications.");
+      logAdminAppError("list applications", error, "Unable to load applications.", response);
     }
   });
 
   // ── GET /api/admin/applications/:id ───────────────────────────────────────
 
-  router.get("/api/admin/applications/:id", async (request, response) => {
+  router.get("/api/admin/applications/:id", requireAuthorizedAdmin, async (request, response) => {
     const applicationId = request.params.id;
     try {
       const db = (await import("./db")).getDatabase();
@@ -383,28 +429,26 @@ export function createAdminApplicationApiRouter(): Router {
         },
       });
     } catch (error) {
-      console.error("[admin-app] detail failed:", error instanceof Error ? error.message : String(error));
-      fail(response, 503, "Unable to load application detail.");
+      logAdminAppError("application detail", error, "Unable to load application detail.", response);
     }
   });
 
   // ── GET /api/admin/applications/:id/evaluation ────────────────────────────
 
-  router.get("/api/admin/applications/:id/evaluation", async (request, response) => {
+  router.get("/api/admin/applications/:id/evaluation", requireAuthorizedAdmin, async (request, response) => {
     const applicationId = request.params.id;
     try {
       const result = await recalculateAndPersistEvaluation(applicationId);
       if (!result) return fail(response, 404, "Application or assessment not found.");
       response.json({ ok: true, evaluation: result });
     } catch (error) {
-      console.error("[admin-app] evaluation failed:", error instanceof Error ? error.message : String(error));
-      fail(response, 503, "Unable to calculate evaluation.");
+      logAdminAppError("evaluation recalculate", error, "Unable to calculate evaluation.", response);
     }
   });
 
   // ── PUT /api/admin/applications/:id/open-reviews/:questionId ──────────────
 
-  router.put("/api/admin/applications/:id/open-reviews/:questionId", async (request, response) => {
+  router.put("/api/admin/applications/:id/open-reviews/:questionId", requireAuthorizedAdmin, async (request, response) => {
     const applicationId = request.params.id;
     const questionId = request.params.questionId;
     const adminProfileId = (request as unknown as Request & { adminProfileId: string }).adminProfileId;
@@ -452,14 +496,13 @@ export function createAdminApplicationApiRouter(): Router {
       await recalculateAndPersistEvaluation(applicationId);
       response.json({ ok: true });
     } catch (error) {
-      console.error("[admin-app] open review save failed:", error instanceof Error ? error.message : String(error));
-      fail(response, 503, "Unable to save OPEN review.");
+      logAdminAppError("open review save", error, "Unable to save OPEN review.", response);
     }
   });
 
   // ── PUT /api/admin/applications/:id/integrity/:flagId ─────────────────────
 
-  router.put("/api/admin/applications/:id/integrity/:flagId", async (request, response) => {
+  router.put("/api/admin/applications/:id/integrity/:flagId", requireAuthorizedAdmin, async (request, response) => {
     const applicationId = request.params.id;
     const flagId = request.params.flagId;
     const adminProfileId = (request as unknown as Request & { adminProfileId: string }).adminProfileId;
@@ -481,14 +524,13 @@ export function createAdminApplicationApiRouter(): Router {
       await recalculateAndPersistEvaluation(applicationId);
       response.json({ ok: true });
     } catch (error) {
-      console.error("[admin-app] integrity update failed:", error instanceof Error ? error.message : String(error));
-      fail(response, 503, "Unable to update integrity flag.");
+      logAdminAppError("integrity flag update", error, "Unable to update integrity flag.", response);
     }
   });
 
   // ── PUT /api/admin/applications/:id/bonuses/:bonusType ────────────────────
 
-  router.put("/api/admin/applications/:id/bonuses/:bonusType", async (request, response) => {
+  router.put("/api/admin/applications/:id/bonuses/:bonusType", requireAuthorizedAdmin, async (request, response) => {
     const applicationId = request.params.id;
     const bonusType = request.params.bonusType;
     const adminProfileId = (request as unknown as Request & { adminProfileId: string }).adminProfileId;
@@ -524,14 +566,13 @@ export function createAdminApplicationApiRouter(): Router {
       await recalculateAndPersistEvaluation(applicationId);
       response.json({ ok: true });
     } catch (error) {
-      console.error("[admin-app] bonus update failed:", error instanceof Error ? error.message : String(error));
-      fail(response, 503, "Unable to save bonus review.");
+      logAdminAppError("bonus review save", error, "Unable to save bonus review.", response);
     }
   });
 
   // ── PUT /api/admin/applications/:id/shortlist ─────────────────────────────
 
-  router.put("/api/admin/applications/:id/shortlist", async (request, response) => {
+  router.put("/api/admin/applications/:id/shortlist", requireAuthorizedAdmin, async (request, response) => {
     const applicationId = request.params.id;
     const adminProfileId = (request as unknown as Request & { adminProfileId: string }).adminProfileId;
 
@@ -561,14 +602,13 @@ export function createAdminApplicationApiRouter(): Router {
 
       response.json({ ok: true });
     } catch (error) {
-      console.error("[admin-app] shortlist update failed:", error instanceof Error ? error.message : String(error));
-      fail(response, 503, "Unable to update shortlist status.");
+      logAdminAppError("shortlist update", error, "Unable to update shortlist status.", response);
     }
   });
 
   // ── PUT /api/admin/applications/:id/status ────────────────────────────────
 
-  router.put("/api/admin/applications/:id/status", async (request, response) => {
+  router.put("/api/admin/applications/:id/status", requireAuthorizedAdmin, async (request, response) => {
     const applicationId = request.params.id;
 
     const validation = validateApplicationStatusInput(request.body);
@@ -595,8 +635,7 @@ export function createAdminApplicationApiRouter(): Router {
 
       response.json({ ok: true });
     } catch (error) {
-      console.error("[admin-app] status update failed:", error instanceof Error ? error.message : String(error));
-      fail(response, 503, "Unable to update application status.");
+      logAdminAppError("application status update", error, "Unable to update application status.", response);
     }
   });
 
