@@ -13,7 +13,7 @@
  * directory; on local dev, Vite serves the frontend directly.
  */
 import mysql from "mysql2/promise";
-import express from "express";
+import express, { type Request, type Response } from "express";
 import { createAdminAuthRouter } from "./adminAuth";
 import { createAdminApplicationApiRouter } from "./adminApplicationApi";
 import { createApplicationApiRouter } from "./applicationApi";
@@ -52,7 +52,7 @@ app.use(express.json({ limit: "100kb" }));
  *
  * Never exposes credentials, host names, or stack traces in the response.
  */
-app.get("/api/health/database", async (_req, res) => {
+app.get("/api/health/database", async (_req: Request, res: Response) => {
   const url = process.env.DATABASE_URL;
   if (!url) {
     res.status(503).json({ ok: false, database: "unreachable", reason: "DATABASE_URL is not configured" });

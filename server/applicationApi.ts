@@ -91,7 +91,7 @@ export function createApplicationApiRouter(): Router {
 
   // ── Create application ─────────────────────────────────────────────────────
 
-  router.post("/api/public/applications", async (request, response) => {
+  router.post("/api/public/applications", async (request: Request, response: Response) => {
     if (!databaseConfigured()) return fail(response, 503, "Unable to process your application.");
     try {
       const validated = validateCreateApplicationInput(request.body);
@@ -151,7 +151,7 @@ export function createApplicationApiRouter(): Router {
 
   // ── Resume application ─────────────────────────────────────────────────────
 
-  router.get("/api/public/applications/me", requireApplicantToken, async (request, response) => {
+  router.get("/api/public/applications/me", requireApplicantToken, async (request: Request, response: Response) => {
     try {
       const application = (request as Request & { application: typeof applications.$inferSelect }).application;
       const state = await buildApplicationState(application);
@@ -164,7 +164,7 @@ export function createApplicationApiRouter(): Router {
 
   // ── Assessment endpoints ───────────────────────────────────────────────────
 
-  router.get("/api/public/applications/me/assessment", requireApplicantToken, async (request, response) => {
+  router.get("/api/public/applications/me/assessment", requireApplicantToken, async (request: Request, response: Response) => {
     try {
       const application = (request as Request & { application: typeof applications.$inferSelect }).application;
 
@@ -212,7 +212,7 @@ export function createApplicationApiRouter(): Router {
 
   // ── Save assessment response ───────────────────────────────────────────────
 
-  router.put("/api/public/applications/me/assessment/responses/:questionId", requireApplicantToken, async (request, response) => {
+  router.put("/api/public/applications/me/assessment/responses/:questionId", requireApplicantToken, async (request: Request, response: Response) => {
     try {
       const application = (request as Request & { application: typeof applications.$inferSelect }).application;
       const questionId = request.params.questionId;
@@ -250,7 +250,7 @@ export function createApplicationApiRouter(): Router {
 
   // ── Start OPEN question timer ──────────────────────────────────────────────
 
-  router.post("/api/public/applications/me/assessment/responses/:questionId/timer", requireApplicantToken, async (request, response) => {
+  router.post("/api/public/applications/me/assessment/responses/:questionId/timer", requireApplicantToken, async (request: Request, response: Response) => {
     try {
       const application = (request as Request & { application: typeof applications.$inferSelect }).application;
       const questionId = request.params.questionId;
@@ -270,7 +270,7 @@ export function createApplicationApiRouter(): Router {
 
   // ── Complete assessment ────────────────────────────────────────────────────
 
-  router.post("/api/public/applications/me/assessment/complete", requireApplicantToken, async (request, response) => {
+  router.post("/api/public/applications/me/assessment/complete", requireApplicantToken, async (request: Request, response: Response) => {
     try {
       const application = (request as Request & { application: typeof applications.$inferSelect }).application;
 
@@ -300,7 +300,7 @@ export function createApplicationApiRouter(): Router {
 
   // ── Submit application ─────────────────────────────────────────────────────
 
-  router.post("/api/public/applications/me/submit", requireApplicantToken, async (request, response) => {
+  router.post("/api/public/applications/me/submit", requireApplicantToken, async (request: Request, response: Response) => {
     try {
       const application = (request as Request & { application: typeof applications.$inferSelect }).application;
 
@@ -328,7 +328,7 @@ export function createApplicationApiRouter(): Router {
 
   // ── Review data (applicant-safe) ──────────────────────────────────────────
 
-  router.get("/api/public/applications/me/review", requireApplicantToken, async (request, response) => {
+  router.get("/api/public/applications/me/review", requireApplicantToken, async (request: Request, response: Response) => {
     try {
       const application = (request as Request & { application: typeof applications.$inferSelect }).application;
       const state = await buildApplicationState(application);

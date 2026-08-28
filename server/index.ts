@@ -9,7 +9,7 @@
  */
 import "dotenv/config";
 
-import express from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import app from "./app";
@@ -32,11 +32,11 @@ app.use(express.static(staticPath));
 // React client-side-routing catch-all (must remain last).
 // Protected Admin shells are never cacheable so a signed-out session cannot
 // restore usable protected content via the browser Back button.
-app.get("/admin*", (_req, res, next) => {
+app.get("/admin*", (_req: Request, res: Response, next: NextFunction) => {
   res.setHeader("Cache-Control", "no-store");
   next();
 });
-app.get("*", (_req, res) => {
+app.get("*", (_req: Request, res: Response) => {
   res.sendFile(path.join(staticPath, "index.html"));
 });
 

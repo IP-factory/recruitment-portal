@@ -130,7 +130,7 @@ export function createAdminApplicationApiRouter(): Router {
 
   // ── GET /api/admin/applications ───────────────────────────────────────────
 
-  router.get("/api/admin/applications", requireAuthorizedAdmin, async (request, response) => {
+  router.get("/api/admin/applications", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     try {
       const db = (await import("./db")).getDatabase();
       const allApps = await db
@@ -207,7 +207,7 @@ export function createAdminApplicationApiRouter(): Router {
 
   // ── GET /api/admin/applications/:id ───────────────────────────────────────
 
-  router.get("/api/admin/applications/:id", requireAuthorizedAdmin, async (request, response) => {
+  router.get("/api/admin/applications/:id", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     const applicationId = request.params.id;
     try {
       const db = (await import("./db")).getDatabase();
@@ -435,7 +435,7 @@ export function createAdminApplicationApiRouter(): Router {
 
   // ── GET /api/admin/applications/:id/evaluation ────────────────────────────
 
-  router.get("/api/admin/applications/:id/evaluation", requireAuthorizedAdmin, async (request, response) => {
+  router.get("/api/admin/applications/:id/evaluation", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     const applicationId = request.params.id;
     try {
       const result = await recalculateAndPersistEvaluation(applicationId);
@@ -448,7 +448,7 @@ export function createAdminApplicationApiRouter(): Router {
 
   // ── PUT /api/admin/applications/:id/open-reviews/:questionId ──────────────
 
-  router.put("/api/admin/applications/:id/open-reviews/:questionId", requireAuthorizedAdmin, async (request, response) => {
+  router.put("/api/admin/applications/:id/open-reviews/:questionId", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     const applicationId = request.params.id;
     const questionId = request.params.questionId;
     const adminProfileId = (request as unknown as Request & { adminProfileId: string }).adminProfileId;
@@ -502,7 +502,7 @@ export function createAdminApplicationApiRouter(): Router {
 
   // ── PUT /api/admin/applications/:id/integrity/:flagId ─────────────────────
 
-  router.put("/api/admin/applications/:id/integrity/:flagId", requireAuthorizedAdmin, async (request, response) => {
+  router.put("/api/admin/applications/:id/integrity/:flagId", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     const applicationId = request.params.id;
     const flagId = request.params.flagId;
     const adminProfileId = (request as unknown as Request & { adminProfileId: string }).adminProfileId;
@@ -530,7 +530,7 @@ export function createAdminApplicationApiRouter(): Router {
 
   // ── PUT /api/admin/applications/:id/bonuses/:bonusType ────────────────────
 
-  router.put("/api/admin/applications/:id/bonuses/:bonusType", requireAuthorizedAdmin, async (request, response) => {
+  router.put("/api/admin/applications/:id/bonuses/:bonusType", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     const applicationId = request.params.id;
     const bonusType = request.params.bonusType;
     const adminProfileId = (request as unknown as Request & { adminProfileId: string }).adminProfileId;
@@ -572,7 +572,7 @@ export function createAdminApplicationApiRouter(): Router {
 
   // ── PUT /api/admin/applications/:id/shortlist ─────────────────────────────
 
-  router.put("/api/admin/applications/:id/shortlist", requireAuthorizedAdmin, async (request, response) => {
+  router.put("/api/admin/applications/:id/shortlist", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     const applicationId = request.params.id;
     const adminProfileId = (request as unknown as Request & { adminProfileId: string }).adminProfileId;
 
@@ -608,7 +608,7 @@ export function createAdminApplicationApiRouter(): Router {
 
   // ── PUT /api/admin/applications/:id/status ────────────────────────────────
 
-  router.put("/api/admin/applications/:id/status", requireAuthorizedAdmin, async (request, response) => {
+  router.put("/api/admin/applications/:id/status", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     const applicationId = request.params.id;
 
     const validation = validateApplicationStatusInput(request.body);

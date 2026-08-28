@@ -19,7 +19,7 @@
  *   DELETE /api/admin/assessments/:idOrSlug/questions/:questionId
  *   PUT    /api/admin/assessments/:idOrSlug/questions/order
  */
-import express, { type Router } from "express";
+import express, { type Request, type Response, type Router } from "express";
 import { fail, handleRouteError, requireAuthorizedAdmin } from "./recruitmentApi";
 import {
   addAssessmentQuestion,
@@ -43,7 +43,7 @@ export function createAssessmentApiRouter(): Router {
 
   // ── Assessment List ────────────────────────────────────────────────────────
 
-  router.get("/api/admin/assessments", requireAuthorizedAdmin, async (_request, response) => {
+  router.get("/api/admin/assessments", requireAuthorizedAdmin, async (_request: Request, response: Response) => {
     try {
       const payload = await listAssessments();
       response.json({ ok: true, ...payload });
@@ -54,7 +54,7 @@ export function createAssessmentApiRouter(): Router {
 
   // ── Create Assessment ──────────────────────────────────────────────────────
 
-  router.post("/api/admin/assessments", requireAuthorizedAdmin, async (request, response) => {
+  router.post("/api/admin/assessments", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     try {
       const validated = validateAssessmentCreateInput(request.body);
       if ("errors" in validated) return fail(response, 400, validated.errors[0]);
@@ -68,7 +68,7 @@ export function createAssessmentApiRouter(): Router {
 
   // ── Assessment Detail ──────────────────────────────────────────────────────
 
-  router.get("/api/admin/assessments/:idOrSlug", requireAuthorizedAdmin, async (request, response) => {
+  router.get("/api/admin/assessments/:idOrSlug", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     try {
       const assessment = await getAssessment(request.params.idOrSlug ?? "");
       if (!assessment) return fail(response, 404, "Assessment not found.");
@@ -80,7 +80,7 @@ export function createAssessmentApiRouter(): Router {
 
   // ── Update Assessment Metadata ─────────────────────────────────────────────
 
-  router.patch("/api/admin/assessments/:idOrSlug", requireAuthorizedAdmin, async (request, response) => {
+  router.patch("/api/admin/assessments/:idOrSlug", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     try {
       const validated = validateAssessmentUpdateInput(request.body);
       if ("errors" in validated) return fail(response, 400, validated.errors[0]);
@@ -95,7 +95,7 @@ export function createAssessmentApiRouter(): Router {
 
   // ── Admin Preview ──────────────────────────────────────────────────────────
 
-  router.get("/api/admin/assessments/:idOrSlug/preview", requireAuthorizedAdmin, async (request, response) => {
+  router.get("/api/admin/assessments/:idOrSlug/preview", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     try {
       const payload = await getAssessmentPreviewConfiguration(request.params.idOrSlug ?? "");
       if (!payload) return fail(response, 404, "Assessment not found.");
@@ -107,7 +107,7 @@ export function createAssessmentApiRouter(): Router {
 
   // ── Add Question to Assessment ─────────────────────────────────────────────
 
-  router.post("/api/admin/assessments/:idOrSlug/questions", requireAuthorizedAdmin, async (request, response) => {
+  router.post("/api/admin/assessments/:idOrSlug/questions", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     try {
       const assessment = await getAssessmentByIdOrSlug(request.params.idOrSlug ?? "");
       if (!assessment) return fail(response, 404, "Assessment not found.");
@@ -128,7 +128,7 @@ export function createAssessmentApiRouter(): Router {
   router.delete(
     "/api/admin/assessments/:idOrSlug/questions/:questionId",
     requireAuthorizedAdmin,
-    async (request, response) => {
+    async (request: Request, response: Response) => {
       try {
         const assessment = await getAssessmentByIdOrSlug(request.params.idOrSlug ?? "");
         if (!assessment) return fail(response, 404, "Assessment not found.");
@@ -148,7 +148,7 @@ export function createAssessmentApiRouter(): Router {
   router.put(
     "/api/admin/assessments/:idOrSlug/questions/order",
     requireAuthorizedAdmin,
-    async (request, response) => {
+    async (request: Request, response: Response) => {
       try {
         const assessment = await getAssessmentByIdOrSlug(request.params.idOrSlug ?? "");
         if (!assessment) return fail(response, 404, "Assessment not found.");

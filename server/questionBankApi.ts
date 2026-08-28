@@ -8,7 +8,7 @@
  * Error responses keep the restrained `{ ok: false, error }` shape — SQL,
  * connection details and stack traces are logged server-side only.
  */
-import express, { type Router } from "express";
+import express, { type Request, type Response, type Router } from "express";
 import { fail, handleRouteError, requireAuthorizedAdmin } from "./recruitmentApi";
 import { createQuestion, getQuestionDetail, listQuestions, QuestionBankValidationError, updateQuestion } from "./questionBankRepository";
 import { QUESTION_BANK_STATUSES, QUESTION_TYPES, validateQuestionInput, type QuestionListSortKey, type QuestionType } from "../shared/questionBankApi";
@@ -23,7 +23,7 @@ function toPositiveInt(value: unknown, fallback: number): number {
 export function createQuestionBankApiRouter(): Router {
   const router = express.Router();
 
-  router.get("/api/admin/questions", requireAuthorizedAdmin, async (request, response) => {
+  router.get("/api/admin/questions", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     try {
       const query = request.query;
       const type = typeof query.type === "string" && (QUESTION_TYPES as readonly string[]).includes(query.type) ? (query.type as QuestionType) : undefined;
@@ -45,7 +45,7 @@ export function createQuestionBankApiRouter(): Router {
     }
   });
 
-  router.post("/api/admin/questions", requireAuthorizedAdmin, async (request, response) => {
+  router.post("/api/admin/questions", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     try {
       const validated = validateQuestionInput(request.body);
       if ("errors" in validated) return fail(response, 400, validated.errors[0]);
@@ -57,7 +57,7 @@ export function createQuestionBankApiRouter(): Router {
     }
   });
 
-  router.get("/api/admin/questions/:idOrReference", requireAuthorizedAdmin, async (request, response) => {
+  router.get("/api/admin/questions/:idOrReference", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     try {
       const question = await getQuestionDetail(request.params.idOrReference ?? "");
       if (!question) return fail(response, 404, "Unable to load this question.");
@@ -67,7 +67,7 @@ export function createQuestionBankApiRouter(): Router {
     }
   });
 
-  router.patch("/api/admin/questions/:idOrReference", requireAuthorizedAdmin, async (request, response) => {
+  router.patch("/api/admin/questions/:idOrReference", requireAuthorizedAdmin, async (request: Request, response: Response) => {
     try {
       const validated = validateQuestionInput(request.body);
       if ("errors" in validated) return fail(response, 400, validated.errors[0]);
