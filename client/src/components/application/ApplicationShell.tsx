@@ -26,7 +26,7 @@ export function ApplicationSummary({ activeStep, submitted = false }: { activeSt
       <div className="mt-3"><StatusBadge status={submitted ? "Completed" : "In Progress"} /></div>
       {!submitted ? <div className="mt-6 border-t border-border pt-5"><p className="text-sm font-semibold text-primary">Current stage</p><p className="mt-1 text-sm text-muted-foreground">{APPLICATION_STEPS[activeStep]}</p></div> : null}
       <div className="mt-6"><p className="text-sm font-semibold text-primary">Application stages</p><ol className="mt-3 space-y-1.5">{APPLICATION_STEPS.map((stage, index) => <li className={`flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] ${!submitted && index === activeStep ? "bg-portal-blue-soft font-medium text-primary" : index < activeStep || submitted ? "text-primary" : "text-muted-foreground"}`} key={stage}>{index < activeStep || submitted ? <span className="flex size-4 items-center justify-center rounded-full bg-primary text-white"><Check className="size-2.5" /></span> : <span className="text-[11px] font-semibold tracking-[0.08em]">0{index + 1}</span>}{stage}</li>)}</ol></div>
-      <p className="mt-6 border-t border-border pt-4 text-[12px] leading-5 text-muted-foreground">Your information is currently stored on this device while the application experience is being developed.</p>
+      <p className="mt-6 border-t border-border pt-4 text-[12px] leading-5 text-muted-foreground">Your application is persisted securely. You can resume at any time from this device.</p>
     </aside>
   );
 }

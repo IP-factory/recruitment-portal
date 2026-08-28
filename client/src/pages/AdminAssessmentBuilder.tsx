@@ -1,39 +1,557 @@
-/** Quiet Authority Assessment Builder: a two-part Admin assembly workspace where Question Bank owns scores and the assessment owns role assignment and question order. Task 24C-1: assignable roles come from TiDB via the Admin recruitment API. */
+/**
+ * Task 24C-3 — Assessment Builder cut over to TiDB.
+ *
+ * Assigned questions come from assessment_question_assignments via
+ * /api/admin/assessments/:slug. Available questions come from the Question
+ * Bank API. Reorder (up/down) persists to TiDB on Save. Add and Remove
+ * persist immediately via individual API calls.
+ *
+ * No adminAssessmentData.ts or questionBankData.ts used as runtime source.
+ * No localStorage fallback. A controlled error state is shown on API failure.
+ *
+ * Scoring preview boundary (Task 24C-3):
+ * The builder shows each question's reference, prompt, dimension and type
+ * sourced from TiDB. The builder does NOT source scoring configuration from
+ * local compatibility files — scoring display ("configured/not configured")
+ * uses the question status field from the TiDB response.
+ */
 import { AdminShell } from "@/components/admin/AdminShell";
-import { DataErrorState } from "@/components/AsyncStates";
-import { FieldFrame, FoundationButton, FoundationInput, FoundationSelect, FoundationTextarea } from "@/components/foundation/ui";
-import { getAdminAssessment, updateAdminAssessment, type AdminAssessmentInput, type AdminAssessmentStatus } from "@/lib/adminAssessmentData";
-import { useAdminRoles } from "@/hooks/useRecruitmentData";
-import { getQuestionBankQuestions, hasQuestionConfiguration, isApplicantCompatibleQuestion, QUESTION_BANK_COMPETENCIES, type QuestionBankQuestion } from "@/lib/questionBankData";
+import { DataErrorState, DataLoadingState } from "@/components/AsyncStates";
+import { FieldFrame, FoundationButton, FoundationInput, FoundationTextarea } from "@/components/foundation/ui";
+import {
+  addAssessmentQuestion,
+  fetchAssessments,
+  removeAssessmentQuestion,
+  reorderAssessmentQuestions,
+  updateAssessment,
+  type AdminAssessmentDetail,
+  type AdminQuestionListResponse,
+  type AssignedQuestionSummary,
+} from "@/lib/recruitmentApi";
+import { useAdminAssessment, useQuestionBank } from "@/hooks/useRecruitmentData";
 import { AlertTriangle, ArrowLeft, ChevronDown, ChevronUp, Info, Search, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 
-type FormErrors = Partial<Record<keyof AdminAssessmentInput, string>>;
-function valuesFor(slug: string): AdminAssessmentInput | null { const assessment = getAdminAssessment(slug); return assessment ? { name: assessment.name, description: assessment.description, roleId: assessment.roleId, status: assessment.status, questionIds: [...assessment.questionIds] } : null; }
-function ScoringState({ configured }: { configured: boolean }) { return <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-medium ${configured ? "bg-[#e9f6ee] text-status-success-strong" : "bg-[#fff8e8] text-[#765d22]"}`}>{configured ? "Configured" : "Not configured"}</span>; }
-function QuietAction({ label, children, disabled, onClick }: { label: string; children: React.ReactNode; disabled?: boolean; onClick: () => void }) { return <button aria-label={label} className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-portal-surface hover:text-primary disabled:pointer-events-none disabled:opacity-35" disabled={disabled} onClick={onClick} type="button">{children}</button>; }
+function ScoringState({ active }: { active: boolean }) {
+  return (
+    <span
+      className={`inline-flex rounded-md px-2.5 py-1 text-xs font-medium ${active ? "bg-[#e9f6ee] text-status-success-strong" : "bg-[#fff8e8] text-[#765d22]"}`}
+    >
+      {active ? "Active" : "Inactive"}
+    </span>
+  );
+}
+
+function QuietAction({
+  label,
+  children,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  children: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-label={label}
+      className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-portal-surface hover:text-primary disabled:pointer-events-none disabled:opacity-35"
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  );
+}
 
 export default function AdminAssessmentBuilder() {
-  const [, params] = useRoute("/admin/assessments/:assessmentSlug/edit"); const [, setLocation] = useLocation(); const slug = params?.assessmentSlug ?? ""; const storedAssessment = getAdminAssessment(slug); const [values, setValues] = useState<AdminAssessmentInput | null>(() => valuesFor(slug)); const [errors, setErrors] = useState<FormErrors>({}); const [search, setSearch] = useState(""); const [competency, setCompetency] = useState("all");
-  const questionBank = getQuestionBankQuestions(); const rolesState = useAdminRoles(); const roles = rolesState.data ?? [];
-  const selectedQuestions = useMemo(() => !values ? [] : values.questionIds.flatMap((id) => { const question = questionBank.find((item) => item.id === id); return question ? [question] : []; }), [questionBank, values]);
-  const availableQuestions = useMemo(() => { const term = search.trim().toLowerCase(); return questionBank.filter((question) => (!term || question.question.toLowerCase().includes(term) || question.reference.toLowerCase().includes(term) || question.competency.toLowerCase().includes(term)) && (competency === "all" || question.competency === competency)); }, [competency, questionBank, search]);
-  if (!storedAssessment || !values) return <AdminShell title="Assessments"><section className="py-8"><h2 className="text-2xl font-semibold tracking-[-0.03em] text-primary">Assessment not found</h2><p className="mt-2 text-sm text-muted-foreground">The requested assessment could not be found.</p><FoundationButton className="mt-6" onClick={() => setLocation("/admin/assessments")} variant="secondary">Back to Assessments</FoundationButton></section></AdminShell>;
+  const [, params] = useRoute("/admin/assessments/:assessmentSlug/edit");
+  const [, setLocation] = useLocation();
+  const slug = params?.assessmentSlug ?? "";
 
-  const configuredCount = selectedQuestions.filter(hasQuestionConfiguration).length;
-  const setValue = <Key extends keyof AdminAssessmentInput>(key: Key, value: AdminAssessmentInput[Key]) => { setValues((current) => current ? { ...current, [key]: value } : current); setErrors((current) => ({ ...current, [key]: undefined })); };
-  const moveQuestion = (index: number, direction: -1 | 1) => { const target = index + direction; if (target < 0 || target >= values.questionIds.length) return; const ids = [...values.questionIds]; [ids[index], ids[target]] = [ids[target], ids[index]]; setValue("questionIds", ids); };
-  const removeQuestion = (id: string) => setValue("questionIds", values.questionIds.filter((questionId) => questionId !== id));
-  const addQuestion = (id: string) => { if (!values.questionIds.includes(id)) setValue("questionIds", [...values.questionIds, id]); };
-  const validate = () => { const next: FormErrors = {}; if (!values.name.trim()) next.name = "Enter an assessment name."; if (!values.roleId) next.roleId = "Select an assigned role."; if (!values.status) next.status = "Select an assessment status."; setErrors(next); return !Object.keys(next).length; };
-  const save = (event: React.FormEvent) => { event.preventDefault(); if (!validate()) return; const updated = updateAdminAssessment(slug, { ...values, name: values.name.trim(), description: values.description.trim() }); if (updated) setLocation(`/admin/assessments/${updated.slug}`); };
-  return <AdminShell title="Assessments"><button className="inline-flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary" onClick={() => setLocation(`/admin/assessments/${slug}`)} type="button"><ArrowLeft className="size-4" />Back to Assessment</button><section className="mt-5"><p className="text-[12px] font-medium text-muted-foreground">Assessment configuration</p><h2 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-primary">Edit assessment</h2><p className="mt-2 max-w-2xl text-[15px] leading-6 text-muted-foreground">Set the assessment context, then assemble the questions in the order applicants will receive them.</p></section>
-    <form noValidate onSubmit={save}>{rolesState.status === "error" ? <div className="mt-6"><DataErrorState message={rolesState.error ?? "Unable to load recruitment roles."} onRetry={rolesState.reload} /></div> : null}<section className="mt-6 rounded-xl border border-border bg-white p-5 shadow-none sm:p-6"><div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h3 className="text-lg font-semibold tracking-[-0.02em] text-primary">Assessment settings</h3><p className="mt-1 text-[13px] leading-5 text-muted-foreground">Core information and role assignment are stored locally in this browser.</p></div><p className="text-[13px] text-muted-foreground">{selectedQuestions.length} selected questions</p></div><div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(220px,0.75fr)_minmax(180px,0.55fr)]"><FieldFrame error={errors.name} label="Assessment name" required><FoundationInput error={Boolean(errors.name)} onChange={(event) => setValue("name", event.target.value)} value={values.name} /></FieldFrame><FieldFrame error={errors.roleId} label="Assigned role" required><FoundationSelect onChange={(event) => setValue("roleId", event.target.value)} value={values.roleId}>{rolesState.status === "loading" ? <option value={values.roleId}>Loading roles…</option> : roles.map((role) => <option key={role.id} value={role.id}>{role.title}</option>)}</FoundationSelect></FieldFrame><FieldFrame error={errors.status} label="Assessment status" required><FoundationSelect onChange={(event) => setValue("status", event.target.value as AdminAssessmentStatus)} value={values.status}><option value="Active">Active</option><option value="Inactive">Inactive</option></FoundationSelect></FieldFrame></div><div className="mt-5"><FieldFrame label="Description"><FoundationTextarea className="min-h-24" onChange={(event) => setValue("description", event.target.value)} value={values.description} /></FieldFrame></div></section>
-      {selectedQuestions.length > configuredCount ? <section className="mt-5 flex gap-3 rounded-xl border border-[#eadfbd] bg-[#fffaf0] px-4 py-4"><AlertTriangle className="mt-0.5 size-[18px] shrink-0 text-[#765d22]" /><div><p className="text-sm font-semibold text-primary">Scoring configuration required</p><p className="mt-1 text-[13px] leading-6 text-[#765d22]">This assessment contains questions without scoring configuration. Candidate scoring will remain unavailable until configuration is complete.</p></div></section> : null}
-      <section className="mt-6 grid gap-6 xl:grid-cols-2"><article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6"><div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h3 className="text-lg font-semibold tracking-[-0.02em] text-primary">Assessment Questions</h3><p className="mt-1 text-[13px] leading-5 text-muted-foreground">Order determines the applicant experience.</p></div><p className="text-[13px] text-muted-foreground">{configuredCount} of {selectedQuestions.length} configured</p></div>{selectedQuestions.length ? <ol className="mt-5 divide-y divide-border border-t border-border">{selectedQuestions.map((question, index) => { const configured = hasQuestionConfiguration(question); return <li className="py-4" key={question.id}><div className="flex gap-3"><span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-portal-surface text-[12px] font-semibold text-primary">{String(index + 1).padStart(2, "0")}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-2"><span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{question.reference}</span><ScoringState configured={configured} /></div><p className="mt-2 text-sm font-medium leading-6 text-primary">{question.question}</p><p className="mt-2 text-[13px] text-muted-foreground">{question.competency}</p>{!configured ? <button className="mt-2 text-[12px] font-medium text-portal-blue hover:text-primary hover:underline" onClick={() => setLocation(`/admin/questions/${question.id}/edit`)} type="button">Configure scoring</button> : null}</div><div className="flex shrink-0 items-start gap-0.5"><QuietAction disabled={index === 0} label={`Move ${question.reference} up`} onClick={() => moveQuestion(index, -1)}><ChevronUp className="size-4" /></QuietAction><QuietAction disabled={index === selectedQuestions.length - 1} label={`Move ${question.reference} down`} onClick={() => moveQuestion(index, 1)}><ChevronDown className="size-4" /></QuietAction><QuietAction label={`Remove ${question.reference}`} onClick={() => removeQuestion(question.id)}><Trash2 className="size-4" /></QuietAction></div></div></li>; })}</ol> : <div className="mt-5 rounded-lg border border-dashed border-portal-border-strong bg-portal-surface px-5 py-9 text-center"><h4 className="text-base font-semibold text-primary">No questions added</h4><p className="mt-2 text-sm leading-6 text-muted-foreground">Add questions from the Question Bank to build this assessment.</p></div>}</article>
-        <article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6"><div><h3 className="text-lg font-semibold tracking-[-0.02em] text-primary">Question Bank</h3><p className="mt-1 text-[13px] leading-5 text-muted-foreground">Add legacy applicant-compatible questions to this assessment. Other configured types remain available for future workflows.</p></div><div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_190px]"><div className="relative"><label className="sr-only" htmlFor="assessment-question-search">Search questions</label><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><FoundationInput className="pl-10" id="assessment-question-search" onChange={(event) => setSearch(event.target.value)} placeholder="Search questions" value={search} /></div><div><label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="assessment-competency-filter">Competency</label><FoundationSelect id="assessment-competency-filter" onChange={(event) => setCompetency(event.target.value)} value={competency}><option value="all">All competencies</option>{QUESTION_BANK_COMPETENCIES.map((item) => <option key={item} value={item}>{item}</option>)}</FoundationSelect></div></div>{availableQuestions.length ? <div className="mt-5 divide-y divide-border border-t border-border">{availableQuestions.map((question) => { const added = values.questionIds.includes(question.id); const compatible = isApplicantCompatibleQuestion(question); const configured = hasQuestionConfiguration(question); return <article className="flex gap-3 py-4" key={question.id}><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-2"><span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{question.reference}</span><ScoringState configured={configured} /></div><p className="mt-2 line-clamp-2 text-sm font-medium leading-5 text-primary" title={question.question}>{question.question}</p><p className="mt-2 text-[13px] text-muted-foreground">{question.competency} · {question.type}</p>{!configured && compatible ? <button className="mt-2 text-[12px] font-medium text-portal-blue hover:text-primary hover:underline" onClick={() => setLocation(`/admin/questions/${question.id}/edit`)} type="button">Configure scoring</button> : null}{!compatible ? <p className="mt-2 text-[12px] text-muted-foreground">Reserved for a future applicant workflow.</p> : null}</div><FoundationButton disabled={added || !compatible} onClick={() => addQuestion(question.id)} size="sm" variant={added ? "secondary" : compatible ? "tertiary" : "secondary"}>{added ? "Added" : compatible ? "Add" : "Applicant only"}</FoundationButton></article>; })}</div> : <div className="py-14 text-center"><h4 className="text-base font-semibold text-primary">No questions found</h4><p className="mt-2 text-sm text-muted-foreground">Try changing your search or competency filter.</p></div>}</article></section>
-      <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between"><FoundationButton onClick={() => setLocation(`/admin/assessments/${slug}`)} variant="secondary">Cancel</FoundationButton><FoundationButton type="submit">Save changes</FoundationButton></div>
-    </form><aside className="mt-6 flex gap-3 rounded-xl border border-border bg-white p-4"><span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-portal-blue-soft text-portal-blue"><Info className="size-4" /></span><div><h3 className="text-sm font-semibold text-primary">Scoring stays in Question Bank</h3><p className="mt-1 text-[13px] leading-6 text-muted-foreground">This workspace only shows whether each question is configured. Score values can be managed from the relevant Question Bank question.</p></div></aside>
-  </AdminShell>;
+  // ── Server data ───────────────────────────────────────────────────────────
+  const assessmentState = useAdminAssessment(slug || undefined);
+  const questionBankState = useQuestionBank({ pageSize: 50, status: "Active" });
+
+  // ── Local working state (reorder only — mutations applied immediately) ────
+  // The working order is a local copy of assignment IDs, reflecting any
+  // pending reorder before the Save action writes to TiDB.
+  const [workingOrder, setWorkingOrder] = useState<string[] | null>(null);
+  const [nameValue, setNameValue] = useState<string | null>(null);
+  const [descriptionValue, setDescriptionValue] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [dimensionFilter, setDimensionFilter] = useState("all");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // Sync local state from server when it first loads.
+  const assessment = assessmentState.data;
+  const serverAssignments = assessment?.assignments ?? [];
+
+  const effectiveOrder: string[] = workingOrder ?? serverAssignments.map((a) => a.questionId);
+  const effectiveName = nameValue ?? assessment?.name ?? "";
+  const effectiveDescription = descriptionValue ?? assessment?.description ?? "";
+
+  // Build ordered assignment objects from the working order.
+  const assignmentMap = useMemo(
+    () => new Map(serverAssignments.map((a) => [a.questionId, a])),
+    [serverAssignments],
+  );
+  const orderedAssignments: AssignedQuestionSummary[] = useMemo(
+    () => effectiveOrder.flatMap((id) => { const a = assignmentMap.get(id); return a ? [a] : []; }),
+    [effectiveOrder, assignmentMap],
+  );
+
+  const hasReorderChanges =
+    workingOrder !== null &&
+    JSON.stringify(workingOrder) !== JSON.stringify(serverAssignments.map((a) => a.questionId));
+  const hasMetaChanges =
+    (nameValue !== null && nameValue !== assessment?.name) ||
+    (descriptionValue !== null && descriptionValue !== assessment?.description);
+  const hasUnsavedChanges = hasReorderChanges || hasMetaChanges;
+
+  // Available questions: all active questions not already assigned.
+  const assignedIds = new Set(effectiveOrder);
+  const allBankItems = questionBankState.data?.items ?? [];
+  const dimensions = questionBankState.data?.dimensions ?? [];
+  const filteredQuestions = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return allBankItems.filter((q) => {
+      const matchesSearch =
+        !term ||
+        q.prompt.toLowerCase().includes(term) ||
+        q.reference.toLowerCase().includes(term) ||
+        (q.dimension?.name ?? "").toLowerCase().includes(term);
+      const matchesDimension =
+        dimensionFilter === "all" || q.dimension?.reference === dimensionFilter;
+      return matchesSearch && matchesDimension;
+    });
+  }, [allBankItems, search, dimensionFilter]);
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  const moveQuestion = useCallback(
+    (index: number, direction: -1 | 1) => {
+      const target = index + direction;
+      if (target < 0 || target >= effectiveOrder.length) return;
+      const next = [...effectiveOrder];
+      [next[index], next[target]] = [next[target], next[index]];
+      setWorkingOrder(next);
+    },
+    [effectiveOrder],
+  );
+
+  const handleRemove = useCallback(
+    async (questionId: string) => {
+      if (!assessment) return;
+      setActionError(null);
+      try {
+        const updated = await removeAssessmentQuestion(assessment.slug, questionId);
+        // Update working order to reflect server state.
+        setWorkingOrder(updated.map((a) => a.questionId));
+        // Trigger a re-fetch to get fresh server data.
+        assessmentState.reload();
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : "Unable to remove this question.");
+      }
+    },
+    [assessment, assessmentState],
+  );
+
+  const handleAdd = useCallback(
+    async (questionId: string) => {
+      if (!assessment) return;
+      setActionError(null);
+      try {
+        const updated = await addAssessmentQuestion(assessment.slug, questionId);
+        setWorkingOrder(updated.map((a) => a.questionId));
+        assessmentState.reload();
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : "Unable to add this question.");
+      }
+    },
+    [assessment, assessmentState],
+  );
+
+  const handleSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!assessment) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      // Persist metadata update if name/description changed.
+      if (hasMetaChanges) {
+        await updateAssessment(assessment.slug, {
+          name: effectiveName.trim() || assessment.name,
+          description: effectiveDescription.trim(),
+        });
+      }
+      // Persist reorder if order changed.
+      if (hasReorderChanges && workingOrder) {
+        await reorderAssessmentQuestions(assessment.slug, workingOrder);
+      }
+      setWorkingOrder(null);
+      setNameValue(null);
+      setDescriptionValue(null);
+      setLocation(`/admin/assessments/${assessment.slug}`);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Unable to update the assessment.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Render states ─────────────────────────────────────────────────────────
+
+  if (assessmentState.status === "loading") {
+    return (
+      <AdminShell title="Assessments">
+        <div className="py-16">
+          <DataLoadingState label="Loading assessment" />
+        </div>
+      </AdminShell>
+    );
+  }
+
+  if (assessmentState.status === "error") {
+    return (
+      <AdminShell title="Assessments">
+        <button
+          className="inline-flex items-center gap-2 text-[13px] font-medium text-muted-foreground hover:text-primary"
+          onClick={() => setLocation("/admin/assessments")}
+          type="button"
+        >
+          <ArrowLeft className="size-4" />Back to Assessments
+        </button>
+        <div className="mt-8">
+          <DataErrorState
+            message={assessmentState.error ?? "Unable to load this assessment."}
+            onRetry={assessmentState.reload}
+          />
+        </div>
+      </AdminShell>
+    );
+  }
+
+  if (!assessment) {
+    return (
+      <AdminShell title="Assessments">
+        <button
+          className="inline-flex items-center gap-2 text-[13px] font-medium text-muted-foreground hover:text-primary"
+          onClick={() => setLocation("/admin/assessments")}
+          type="button"
+        >
+          <ArrowLeft className="size-4" />Back to Assessments
+        </button>
+        <section className="py-8">
+          <h2 className="text-2xl font-semibold tracking-[-0.03em] text-primary">Assessment not found</h2>
+          <p className="mt-2 text-sm text-muted-foreground">The requested assessment could not be found.</p>
+          <FoundationButton className="mt-6" onClick={() => setLocation("/admin/assessments")} variant="secondary">
+            Back to Assessments
+          </FoundationButton>
+        </section>
+      </AdminShell>
+    );
+  }
+
+  const isDraft = assessment.status === "Draft";
+
+  return (
+    <AdminShell title="Assessments">
+      <button
+        className="inline-flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"
+        onClick={() => setLocation(`/admin/assessments/${slug}`)}
+        type="button"
+      >
+        <ArrowLeft className="size-4" />Back to Assessment
+      </button>
+
+      <section className="mt-5">
+        <p className="text-[12px] font-medium text-muted-foreground">Assessment configuration</p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-primary">Edit assessment</h2>
+        <p className="mt-2 max-w-2xl text-[15px] leading-6 text-muted-foreground">
+          Set the assessment context, then assemble the questions in the order applicants will receive them.
+        </p>
+      </section>
+
+      {actionError && (
+        <div className="mt-4 rounded-lg border border-status-error-strong/20 bg-red-50 px-4 py-3">
+          <p className="text-sm font-medium text-status-error-strong">{actionError}</p>
+        </div>
+      )}
+
+      <form noValidate onSubmit={handleSave}>
+        <section className="mt-6 rounded-xl border border-border bg-white p-5 shadow-none sm:p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold tracking-[-0.02em] text-primary">Assessment settings</h3>
+              <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
+                Core information and role assignment for this assessment.
+              </p>
+            </div>
+            <p className="text-[13px] text-muted-foreground">{orderedAssignments.length} assigned questions</p>
+          </div>
+          <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(220px,0.75fr)]">
+            <FieldFrame label="Assessment name" required>
+              <FoundationInput
+                onChange={(e) => setNameValue(e.target.value)}
+                value={effectiveName}
+              />
+            </FieldFrame>
+            <FieldFrame label="Assigned role">
+              <p className="h-10 flex items-center text-sm font-medium text-primary px-3">
+                {assessment.role.title}
+              </p>
+            </FieldFrame>
+          </div>
+          <div className="mt-5">
+            <FieldFrame label="Description">
+              <FoundationTextarea
+                className="min-h-24"
+                onChange={(e) => setDescriptionValue(e.target.value)}
+                value={effectiveDescription}
+              />
+            </FieldFrame>
+          </div>
+
+          {/* Activation is blocked in this phase */}
+          {isDraft && (
+            <div className="mt-5 flex gap-3 rounded-lg border border-[#d9e5f0] bg-[#f3f8fc] px-4 py-3">
+              <Info className="mt-0.5 size-4 shrink-0 text-portal-blue" />
+              <p className="text-[13px] leading-6 text-primary">
+                <span className="font-semibold">Assessment status: Draft.</span> Activation will be enabled
+                when the assessment is ready for applicant use.
+              </p>
+            </div>
+          )}
+        </section>
+
+        {hasUnsavedChanges && (
+          <section className="mt-4 flex gap-3 rounded-xl border border-[#eadfbd] bg-[#fffaf0] px-4 py-4">
+            <AlertTriangle className="mt-0.5 size-[18px] shrink-0 text-[#765d22]" />
+            <div>
+              <p className="text-sm font-semibold text-primary">Unsaved changes</p>
+              <p className="mt-1 text-[13px] leading-6 text-[#765d22]">
+                You have unsaved changes to the question order or assessment details. Save to persist them.
+              </p>
+            </div>
+          </section>
+        )}
+
+        {saveError && (
+          <div className="mt-4 rounded-lg border border-status-error-strong/20 bg-red-50 px-4 py-3">
+            <p className="text-sm font-medium text-status-error-strong">{saveError}</p>
+          </div>
+        )}
+
+        <section className="mt-6 grid gap-6 xl:grid-cols-2">
+          {/* Left panel: assigned questions */}
+          <article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold tracking-[-0.02em] text-primary">Assessment Questions</h3>
+                <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
+                  Order determines the applicant experience.
+                </p>
+              </div>
+              <p className="text-[13px] text-muted-foreground">{orderedAssignments.length} assigned</p>
+            </div>
+            {orderedAssignments.length > 0 ? (
+              <ol className="mt-5 divide-y divide-border border-t border-border">
+                {orderedAssignments.map((assignment, index) => (
+                  <li className="py-4" key={assignment.assignmentId}>
+                    <div className="flex gap-3">
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-portal-surface text-[12px] font-semibold text-primary">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+                          <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                            {assignment.reference}
+                          </span>
+                          <span className="text-[12px] text-muted-foreground">{assignment.type}</span>
+                          {assignment.status === "Inactive" && (
+                            <span className="inline-flex rounded-md bg-[#fff8e8] px-2 py-0.5 text-[11px] font-medium text-[#765d22]">
+                              Inactive — warning
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-2 text-sm font-medium leading-6 text-primary">{assignment.prompt}</p>
+                        <p className="mt-1 text-[13px] text-muted-foreground">
+                          {assignment.dimension
+                            ? `${assignment.dimension.reference} · ${assignment.dimension.name}`
+                            : "No dimension"}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-start gap-0.5">
+                        <QuietAction
+                          disabled={index === 0}
+                          label={`Move ${assignment.reference} up`}
+                          onClick={() => moveQuestion(index, -1)}
+                        >
+                          <ChevronUp className="size-4" />
+                        </QuietAction>
+                        <QuietAction
+                          disabled={index === orderedAssignments.length - 1}
+                          label={`Move ${assignment.reference} down`}
+                          onClick={() => moveQuestion(index, 1)}
+                        >
+                          <ChevronDown className="size-4" />
+                        </QuietAction>
+                        <QuietAction
+                          label={`Remove ${assignment.reference}`}
+                          onClick={() => handleRemove(assignment.questionId)}
+                        >
+                          <Trash2 className="size-4" />
+                        </QuietAction>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div className="mt-5 rounded-lg border border-dashed border-portal-border-strong bg-portal-surface px-5 py-9 text-center">
+                <h4 className="text-base font-semibold text-primary">No questions added</h4>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Add questions from the Question Bank to build this assessment.
+                </p>
+              </div>
+            )}
+          </article>
+
+          {/* Right panel: question bank picker */}
+          <article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6">
+            <div>
+              <h3 className="text-lg font-semibold tracking-[-0.02em] text-primary">Question Bank</h3>
+              <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
+                Add Active questions to this assessment.
+              </p>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_190px]">
+              <div className="relative">
+                <label className="sr-only" htmlFor="builder-question-search">
+                  Search questions
+                </label>
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <FoundationInput
+                  className="pl-10"
+                  id="builder-question-search"
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search questions"
+                  value={search}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="builder-dimension-filter">
+                  Dimension
+                </label>
+                <select
+                  className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm text-primary"
+                  id="builder-dimension-filter"
+                  onChange={(e) => setDimensionFilter(e.target.value)}
+                  value={dimensionFilter}
+                >
+                  <option value="all">All dimensions</option>
+                  {dimensions.map((d) => (
+                    <option key={d.reference} value={d.reference}>
+                      {d.reference} · {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {questionBankState.status === "loading" && (
+              <div className="mt-5 py-8 text-center text-[13px] text-muted-foreground">Loading questions…</div>
+            )}
+
+            {questionBankState.status === "error" && (
+              <div className="mt-5">
+                <DataErrorState
+                  message={questionBankState.error ?? "Unable to load questions."}
+                  onRetry={questionBankState.reload}
+                />
+              </div>
+            )}
+
+            {questionBankState.status === "ready" && (
+              <>
+                {filteredQuestions.length > 0 ? (
+                  <div className="mt-5 divide-y divide-border border-t border-border">
+                    {filteredQuestions.map((question) => {
+                      const added = assignedIds.has(question.id);
+                      return (
+                        <article className="flex gap-3 py-4" key={question.id}>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+                              <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                                {question.reference}
+                              </span>
+                              <span className="text-[12px] text-muted-foreground">{question.type}</span>
+                            </div>
+                            <p
+                              className="mt-2 line-clamp-2 text-sm font-medium leading-5 text-primary"
+                              title={question.prompt}
+                            >
+                              {question.prompt}
+                            </p>
+                            <p className="mt-1 text-[13px] text-muted-foreground">
+                              {question.dimension
+                                ? `${question.dimension.reference} · ${question.dimension.name}`
+                                : "No dimension"}
+                            </p>
+                          </div>
+                          <FoundationButton
+                            disabled={added}
+                            onClick={() => !added && handleAdd(question.id)}
+                            size="sm"
+                            variant={added ? "secondary" : "tertiary"}
+                          >
+                            {added ? "Added" : "Add"}
+                          </FoundationButton>
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-14 text-center">
+                    <h4 className="text-base font-semibold text-primary">No questions found</h4>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Try changing your search or dimension filter.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </article>
+        </section>
+
+        <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <FoundationButton onClick={() => setLocation(`/admin/assessments/${slug}`)} variant="secondary">
+            Cancel
+          </FoundationButton>
+          <FoundationButton disabled={saving} type="submit">
+            {saving ? "Saving…" : "Save changes"}
+          </FoundationButton>
+        </div>
+      </form>
+
+      <aside className="mt-6 flex gap-3 rounded-xl border border-border bg-white p-4">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-portal-blue-soft text-portal-blue">
+          <Info className="size-4" />
+        </span>
+        <div>
+          <h3 className="text-sm font-semibold text-primary">Scoring stays in Question Bank</h3>
+          <p className="mt-1 text-[13px] leading-6 text-muted-foreground">
+            This workspace controls which questions are assigned and in what order. Score values are
+            managed from the Question Bank.
+          </p>
+        </div>
+      </aside>
+    </AdminShell>
+  );
 }

@@ -1,4 +1,17 @@
-/** Quiet Authority assessment data: frontend-only role assignment and question ordering; scores remain in Question Bank. Task 24C-1: the assigned roles themselves live in TiDB and are rendered from the recruitment API. */
+/** Quiet Authority assessment data: frontend-only role assignment and question ordering; scores remain in Question Bank. Task 24C-1: the assigned roles themselves live in TiDB and are rendered from the recruitment API.
+ *
+ * LEGACY (Task 24C-3):
+ * This file is NO LONGER the runtime source for:
+ *   - Assessment List      → /api/admin/assessments (TiDB)
+ *   - Assessment Detail    → /api/admin/assessments/:slug (TiDB)
+ *   - Assessment Builder   → /api/admin/assessments/:slug (TiDB)
+ *   - Assignment Order     → assessment_question_assignments.display_order (TiDB)
+ *   - Admin Preview        → /api/admin/assessments/:slug/preview (TiDB)
+ *
+ * Remaining runtime uses after Task 24C-3: NONE for Admin configuration.
+ * Constants are kept below for any test or legacy compatibility reference
+ * but should not be imported in production Admin pages.
+ */
 import { BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID, BUSINESS_DEVELOPMENT_OFFICER_ROLE_ID } from "@/lib/recruitmentRoleReferences";
 import { FRAMEWORK_QUESTIONS, FRAMEWORK_DRAFT_ORDER } from "@/lib/frameworkQuestionData";
 import { getQuestionBankQuestions, hasQuestionConfiguration, type QuestionBankQuestion } from "@/lib/questionBankData";

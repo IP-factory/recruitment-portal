@@ -75,7 +75,7 @@ function Router() {
       <Route component={Apply} path="/apply" />
       <Route component={ApplicantInformation} path="/apply/business-development-officer" />
       <Route component={ApplicantEligibilityCloseout} path="/apply/business-development-officer/eligibility" />
-      <Route path="/apply/business-development-officer/cv">{() => <ApplicantEligibilityGuard><ApplicantCvPlaceholder /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/business-development-officer/cv">{() => <ApplicantEligibilityGuard><Redirect to="/apply/business-development-officer/assessment" /></ApplicantEligibilityGuard>}</Route>
       <Route path="/apply/business-development-officer/assessment">{() => <ApplicantEligibilityGuard><ApplicantAssessmentPlaceholder /></ApplicantEligibilityGuard>}</Route>
       <Route path="/apply/business-development-officer/assessment/questions">{() => <ApplicantEligibilityGuard><ApplicantAssessmentQuestionsPlaceholder /></ApplicantEligibilityGuard>}</Route>
       <Route path="/apply/business-development-officer/assessment/complete">{() => <ApplicantEligibilityGuard><ApplicantAssessmentComplete /></ApplicantEligibilityGuard>}</Route>

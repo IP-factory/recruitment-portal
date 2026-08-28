@@ -1,7 +1,7 @@
 import mysql from "mysql2/promise";
 import { drizzle, type MySql2Database } from "drizzle-orm/mysql2";
 import { and, asc, eq } from "drizzle-orm";
-import { assessmentDimensions, assessmentQuestionAssignments, assessmentQuestions, assessments, eligibilityGates, questionOptions, recruitmentRoles, screeningConfigurations } from "../drizzle/schema";
+import { assessmentDimensions, assessmentQuestionAssignments, assessmentQuestions, assessments, eligibilityGates, recruitmentRoles, screeningConfigurations } from "../drizzle/schema";
 
 let database: MySql2Database | null = null;
 
@@ -28,30 +28,35 @@ export async function getRecruitmentRoleConfiguration(slug: string) {
 }
 
 /**
- * TODO (Assessment database-integration phase):
+ * RETIRED (Task 24C-3):
  *
- * This function currently fetches `questionOptions` only for
- * `assignments[0].question.id` and returns them as `firstQuestionOptions`.
+ * `getAssessmentConfiguration()` with its `firstQuestionOptions` limitation
+ * has been replaced by `getAssessmentPreviewConfiguration()` in
+ * `server/assessmentRepository.ts`. That function loads the full Admin detail
+ * for ALL assigned questions (options, numericConfig, openConfig, etc.) via
+ * `getQuestionDetail()`, not just the first question's options.
  *
- * The Business Development Officer Assessment v2 contains 14 questions, so
- * this is INCORRECT for any consumer that needs options across the full
- * assessment. When the Assessment v2 API is built, this must be replaced with
- * a query that fetches options for ALL assigned questions (e.g. via a WHERE
- * questionId IN (...assignedQuestionIds) query), and the property must be
- * renamed from `firstQuestionOptions` to `questionOptions` (keyed by
- * questionId) so callers cannot accidentally treat the first question's options
- * as representative of the whole assessment.
+ * This stub is kept as a named export so any legacy import resolves without
+ * a compile error during the transition; callers should be updated to use
+ * the new repository function directly.
  *
- * Do not rely on `firstQuestionOptions` in any application code.
+ * @deprecated Use `getAssessmentPreviewConfiguration()` from assessmentRepository.ts
  */
 export async function getAssessmentConfiguration(slug: string) {
-  const db = getDatabase();
-  const assessment = (await db.select().from(assessments).where(eq(assessments.slug, slug)).limit(1))[0];
-  if (!assessment) return null;
-  const assignments = await db.select({ assignment: assessmentQuestionAssignments, question: assessmentQuestions }).from(assessmentQuestionAssignments).innerJoin(assessmentQuestions, eq(assessmentQuestionAssignments.questionId, assessmentQuestions.id)).where(eq(assessmentQuestionAssignments.assessmentId, assessment.id)).orderBy(asc(assessmentQuestionAssignments.displayOrder));
-  // NOTE: Only fetches options for the first question — see TODO above.
-  const options = assignments.length ? await db.select().from(questionOptions).where(eq(questionOptions.questionId, assignments[0].question.id)) : [];
-  return { assessment, assignments, firstQuestionOptions: options };
+  // Import lazily to avoid a circular dependency at module-load time.
+  const { getAssessmentPreviewConfiguration } = await import("./assessmentRepository");
+  const preview = await getAssessmentPreviewConfiguration(slug);
+  if (!preview) return null;
+  // Return a shape compatible enough for any remaining legacy consumer while
+  // clearly marking that firstQuestionOptions is gone.
+  return {
+    assessment: preview,
+    assignments: preview.assignments.map((a) => ({
+      assignment: { id: a.assignmentId, assessmentId: preview.id, questionId: a.question.id, displayOrder: a.displayOrder, createdAt: new Date() },
+      question: a.question,
+    })),
+    // firstQuestionOptions is intentionally absent. Do not re-introduce it.
+  };
 }
 
 export async function getActiveAssessmentForRole(roleId: string) {

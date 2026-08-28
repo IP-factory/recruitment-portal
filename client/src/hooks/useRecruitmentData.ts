@@ -10,11 +10,17 @@ import {
   fetchAdminEligibility,
   fetchAdminRole,
   fetchAdminRoles,
+  fetchAssessment,
+  fetchAssessmentPreview,
+  fetchAssessments,
   fetchEvaluationFramework,
   fetchOpenRoles,
   fetchPublicEligibility,
   fetchQuestion,
   fetchQuestions,
+  type AdminAssessmentDetail,
+  type AdminAssessmentListResponse,
+  type AdminAssessmentPreviewPayload,
   type AdminEligibilityGate,
   type AdminQuestionDetail,
   type AdminQuestionListResponse,
@@ -117,4 +123,40 @@ export function useQuestionDetail(idOrReference: string | undefined) {
       throw error;
     }
   }, [idOrReference]);
+}
+
+// ── Admin Assessments (Task 24C-3) ────────────────────────────────────────────
+
+export function useAdminAssessments() {
+  return useAsyncData<AdminAssessmentListResponse>(() => fetchAssessments());
+}
+
+export function useAdminAssessment(idOrSlug: string | undefined) {
+  return useAsyncData<AdminAssessmentDetail | null>(
+    async () => {
+      if (!idOrSlug) return null;
+      try {
+        return await fetchAssessment(idOrSlug);
+      } catch (error) {
+        if (error instanceof Error && (error as Error & { status?: number }).status === 404) return null;
+        throw error;
+      }
+    },
+    [idOrSlug],
+  );
+}
+
+export function useAdminAssessmentPreview(idOrSlug: string | undefined) {
+  return useAsyncData<AdminAssessmentPreviewPayload | null>(
+    async () => {
+      if (!idOrSlug) return null;
+      try {
+        return await fetchAssessmentPreview(idOrSlug);
+      } catch (error) {
+        if (error instanceof Error && (error as Error & { status?: number }).status === 404) return null;
+        throw error;
+      }
+    },
+    [idOrSlug],
+  );
 }

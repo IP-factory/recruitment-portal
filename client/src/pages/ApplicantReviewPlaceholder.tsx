@@ -1,64 +1,203 @@
 /**
- * Quiet Authority review and submit: a frontend-only case-file review of applicant, CV, and assessment data prior to local prototype completion.
+ * Task 24D-1 — review page with real persisted data.
+ *
+ * Loads applicant information, eligibility summary, and assessment responses
+ * from TiDB. No scores, no internal IDs, no CV section for MVP.
  */
 import { ApplicationShell } from "@/components/application/ApplicationShell";
 import { FoundationButton, StatusBadge } from "@/components/foundation/ui";
-import { getApplicantBusinessDevelopmentAssessmentQuestions, loadAssessmentResponseState, type AssessmentResponseState } from "@/lib/assessmentData";
-import { emptyApplicantInformation, loadApplicantInformation, loadCvFileMetadata, type ApplicantInformation, type CvFileMetadata } from "@/lib/applicationData";
-import { getApplicationReadiness, loadApplicationSubmissionState, saveApplicationSubmissionState, type ApplicationReadiness } from "@/lib/submissionData";
-import { AlertTriangle, Check, CheckCircle2, FileText, Info } from "lucide-react";
+import { fetchReviewData, submitApplication, ApplicationApiError } from "@/lib/applicationApi";
+import { AlertTriangle, Check, CheckCircle2, Info, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
-function valueOrNotProvided(value: string) { return value.trim() || "Not provided"; }
+function valueOrNotProvided(value: string | undefined | null) { return value?.trim() || "Not provided"; }
 
-function ReviewCard({ title, actionLabel, onAction, children, incomplete = false, completed = false }: { title: string; actionLabel?: string; onAction?: () => void; children: React.ReactNode; incomplete?: boolean; completed?: boolean }) {
-  return <section className={`rounded-xl border bg-white p-6 shadow-none sm:p-7 ${incomplete ? "border-[#eadfbd]" : "border-border"}`}><div className="flex items-start justify-between gap-4 border-b border-border pb-4"><div><h2 className="text-lg font-semibold tracking-[-0.02em] text-primary">{title}</h2>{incomplete ? <p className="mt-1 text-[13px] text-[#765d22]">This section needs attention before submission.</p> : null}</div>{completed ? <StatusBadge status="Completed" /> : actionLabel && onAction ? <button className="text-sm font-medium text-portal-blue hover:text-primary hover:underline" onClick={onAction} type="button">{actionLabel}</button> : null}</div>{children}</section>;
+function ReviewCard({ title, actionLabel, onAction, children, completed = false }: { title: string; actionLabel?: string; onAction?: () => void; children: React.ReactNode; completed?: boolean }) {
+  return (
+    <section className="rounded-xl border border-border bg-white p-6 shadow-none sm:p-7">
+      <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
+        <h2 className="text-lg font-semibold tracking-[-0.02em] text-primary">{title}</h2>
+        {completed ? <StatusBadge status="Completed" /> : actionLabel && onAction ? <button className="text-sm font-medium text-portal-blue hover:text-primary hover:underline" onClick={onAction} type="button">{actionLabel}</button> : null}
+      </div>
+      {children}
+    </section>
+  );
 }
 
-function DefinitionItem({ label, value }: { label: string; value: string }) { return <div><dt className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</dt><dd className="mt-1 text-sm leading-6 text-foreground">{value}</dd></div>; }
+function DefinitionItem({ label, value }: { label: string; value: string }) {
+  return <div><dt className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</dt><dd className="mt-1 text-sm leading-6 text-foreground">{value}</dd></div>;
+}
+
+interface ReviewData {
+  applicant: {
+    fullName: string;
+    email: string;
+    phone: string;
+    city: string;
+    recentRole: string;
+    recentEmployer: string;
+    totalExperience: string;
+    relevantExperience: string;
+    linkedinUrl: string;
+  };
+  eligibility: {
+    gates: Array<{ gateReference: string; outcome: string }>;
+    eligible: boolean;
+  };
+  assessmentResponses: Record<string, string>;
+  submittedAt: string | null;
+}
 
 export default function ApplicantReviewPlaceholder() {
   const [, setLocation] = useLocation();
-  const [applicant, setApplicant] = useState<ApplicantInformation>(emptyApplicantInformation);
-  const [cvFile, setCvFile] = useState<CvFileMetadata | null>(null);
-  const [assessment, setAssessment] = useState<AssessmentResponseState>({ answers: {}, currentQuestionIndex: 0 });
-  const [questions, setQuestions] = useState(() => getApplicantBusinessDevelopmentAssessmentQuestions());
-  const [readiness, setReadiness] = useState<ApplicationReadiness>({ applicantInformationComplete: false, cvComplete: false, assessmentComplete: false, ready: false });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reviewData, setReviewData] = useState<ReviewData | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [declarationOne, setDeclarationOne] = useState(false);
   const [declarationTwo, setDeclarationTwo] = useState(false);
   const [attempted, setAttempted] = useState(false);
-  const refreshData = () => { setApplicant(loadApplicantInformation()); setCvFile(loadCvFileMetadata()); setQuestions(getApplicantBusinessDevelopmentAssessmentQuestions()); setAssessment(loadAssessmentResponseState()); setReadiness(getApplicationReadiness()); setSubmitted(loadApplicationSubmissionState().submitted); };
-  useEffect(() => { refreshData(); }, []);
-  const submit = () => { setAttempted(true); const latestReadiness = getApplicationReadiness(); setReadiness(latestReadiness); if (!latestReadiness.ready || !declarationOne || !declarationTwo) return; saveApplicationSubmissionState({ submitted: true }); setSubmitted(true); setLocation("/apply/business-development-officer/submitted"); };
-  const assessedCount = questions.filter((question) => assessment.answers[question.id]).length;
+
+  useEffect(() => {
+    fetchReviewData()
+      .then((data) => {
+        setReviewData(data);
+        if (data.submittedAt) setSubmitted(true);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (err instanceof ApplicationApiError && (err.status === 401 || err.status === 403)) {
+          setLocation("/apply/business-development-officer");
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Unable to load your application for review.");
+        setLoading(false);
+      });
+  }, [setLocation]);
+
+  const handleSubmit = async () => {
+    setAttempted(true);
+    if (!declarationOne || !declarationTwo) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await submitApplication();
+      setSubmitted(true);
+      setLocation("/apply/business-development-officer/submitted");
+    } catch (err) {
+      setError(err instanceof ApplicationApiError ? err.message : "Unable to submit your application.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="flex items-center gap-2 py-12 text-muted-foreground"><Loader2 className="size-5 animate-spin" />Loading your review...</div></section></ApplicationShell>;
+  }
+
+  if (error && !reviewData) {
+    return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="text-status-error-strong">{error}</p></div></section></ApplicationShell>;
+  }
+
+  const applicant = reviewData?.applicant;
+  const assessmentResponses = reviewData?.assessmentResponses ?? {};
+  const responseEntries = Object.entries(assessmentResponses);
 
   return (
-    <ApplicationShell activeStep={3} showSummary submitted={submitted}>
+    <ApplicationShell activeStep={2} showSummary submitted={submitted}>
       <section>
-        <p className="section-kicker">Step 4 of 4</p>
+        <p className="section-kicker">Step 3 of 3</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">{submitted ? "Completed application" : "Review your application"}</h1>
-        <p className="mt-3 max-w-2xl text-[15px] leading-7 text-muted-foreground">{submitted ? "This application has been completed in the current frontend prototype." : "Check the information below before submitting your application for the Business Development Officer role."}</p>
-        {submitted ? <div className="alert-success mt-6 flex gap-3 rounded-lg border px-4 py-3.5"><CheckCircle2 className="mt-0.5 size-[18px] shrink-0" /><div><p className="text-sm font-semibold">Application completed</p><p className="mt-0.5 text-[13px] leading-5 opacity-85">This application has been completed in the current frontend prototype.</p></div></div> : !readiness.ready ? <div className="alert-warning mt-6 flex gap-3 rounded-lg border px-4 py-3.5"><AlertTriangle className="mt-0.5 size-[18px] shrink-0" /><div><p className="text-sm font-semibold">Your application is not ready to submit.</p><p className="mt-0.5 text-[13px] leading-5 opacity-85">Review the sections highlighted below.</p></div></div> : <div className="alert-info mt-6 flex gap-3 rounded-lg border px-4 py-3.5"><Info className="mt-0.5 size-[18px] shrink-0" /><p className="text-[13px] leading-5 opacity-85">You can return to any section to make changes before submitting.</p></div>}
+        <p className="mt-3 max-w-2xl text-[15px] leading-7 text-muted-foreground">{submitted ? "This application has been submitted." : "Check the information below before submitting your application for the Business Development Officer role."}</p>
+        {submitted ? (
+          <div className="alert-success mt-6 flex gap-3 rounded-lg border px-4 py-3.5"><CheckCircle2 className="mt-0.5 size-[18px] shrink-0" /><div><p className="text-sm font-semibold">Application submitted</p><p className="mt-0.5 text-[13px] leading-5 opacity-85">Your application has been submitted successfully.</p></div></div>
+        ) : (
+          <div className="alert-info mt-6 flex gap-3 rounded-lg border px-4 py-3.5"><Info className="mt-0.5 size-[18px] shrink-0" /><p className="text-[13px] leading-5 opacity-85">You can return to any section to make changes before submitting.</p></div>
+        )}
 
         <div className="mt-8 space-y-5">
-          <ReviewCard actionLabel="Edit" completed={submitted} incomplete={!readiness.applicantInformationComplete} onAction={() => setLocation("/apply/business-development-officer")} title="Applicant information">
-            <dl className="mt-5 grid gap-x-8 gap-y-5 sm:grid-cols-2"><DefinitionItem label="Full name" value={valueOrNotProvided(applicant.fullName)} /><DefinitionItem label="Email address" value={valueOrNotProvided(applicant.email)} /><DefinitionItem label="Phone number" value={valueOrNotProvided(applicant.phoneNumber)} /><DefinitionItem label="Current city / location" value={valueOrNotProvided(applicant.location)} /><DefinitionItem label="Current or most recent job title" value={valueOrNotProvided(applicant.jobTitle)} /><DefinitionItem label="Current or most recent employer" value={valueOrNotProvided(applicant.employer)} /><DefinitionItem label="Total professional experience" value={valueOrNotProvided(applicant.totalExperience)} /><DefinitionItem label="Business Development experience" value={valueOrNotProvided(applicant.businessDevelopmentExperience)} /><DefinitionItem label="LinkedIn profile" value={valueOrNotProvided(applicant.linkedInProfile)} /></dl>
-            {!submitted && !readiness.applicantInformationComplete ? <FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer")} size="sm" variant="secondary">Complete information</FoundationButton> : null}
+          {/* Applicant Information */}
+          <ReviewCard actionLabel="Edit" completed={submitted} onAction={() => setLocation("/apply/business-development-officer")} title="Applicant information">
+            {applicant ? (
+              <dl className="mt-5 grid gap-x-8 gap-y-5 sm:grid-cols-2">
+                <DefinitionItem label="Full name" value={valueOrNotProvided(applicant.fullName)} />
+                <DefinitionItem label="Email address" value={valueOrNotProvided(applicant.email)} />
+                <DefinitionItem label="Phone number" value={valueOrNotProvided(applicant.phone)} />
+                <DefinitionItem label="Current city / location" value={valueOrNotProvided(applicant.city)} />
+                <DefinitionItem label="Current or most recent job title" value={valueOrNotProvided(applicant.recentRole)} />
+                <DefinitionItem label="Current or most recent employer" value={valueOrNotProvided(applicant.recentEmployer)} />
+                <DefinitionItem label="Total professional experience" value={valueOrNotProvided(applicant.totalExperience)} />
+                <DefinitionItem label="Business Development experience" value={valueOrNotProvided(applicant.relevantExperience)} />
+                <DefinitionItem label="LinkedIn profile" value={valueOrNotProvided(applicant.linkedinUrl)} />
+              </dl>
+            ) : null}
           </ReviewCard>
-          <ReviewCard actionLabel="Edit" completed={submitted} incomplete={!readiness.cvComplete} onAction={() => setLocation("/apply/business-development-officer/cv")} title="CV">
-            {cvFile ? <div className="mt-5 flex items-start gap-3 rounded-lg bg-portal-surface px-4 py-4"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white text-primary"><FileText className="size-4" /></div><div className="min-w-0"><p className="truncate text-sm font-semibold text-primary">{cvFile.name}</p><p className="mt-1 text-[13px] text-muted-foreground">{cvFile.type} · {cvFile.size < 1024 * 1024 ? `${Math.max(1, Math.round(cvFile.size / 1024))} KB` : `${(cvFile.size / (1024 * 1024)).toFixed(1)} MB`}</p><p className="mt-2 text-[12px] font-medium text-portal-blue">Selected for this application</p></div></div> : <div className="mt-5 text-sm text-muted-foreground">No CV selected.</div>}
-            {!submitted && !readiness.cvComplete ? <FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer/cv")} size="sm" variant="secondary">Select CV</FoundationButton> : null}
+
+          {/* Eligibility Summary */}
+          <ReviewCard title="Eligibility" completed={submitted}>
+            {reviewData?.eligibility ? (
+              <div className="mt-5">
+                <p className={`text-sm font-semibold ${reviewData.eligibility.eligible ? "text-primary" : "text-status-error-strong"}`}>
+                  {reviewData.eligibility.eligible ? "Eligibility passed" : "Eligibility closed"}
+                </p>
+                <div className="mt-3 space-y-2">
+                  {reviewData.eligibility.gates.filter((g) => g.outcome !== "Configuration required").map((gate) => (
+                    <div className="flex items-center gap-2 text-sm" key={gate.gateReference}>
+                      <span className={`inline-flex size-5 items-center justify-center rounded-full ${gate.outcome === "Passed" ? "bg-green-100 text-green-700" : gate.outcome === "Flagged" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"}`}>
+                        {gate.outcome === "Passed" ? <Check className="size-3" /> : gate.outcome === "Failed" ? "✗" : "!"}
+                      </span>
+                      <span className="text-primary">{gate.gateReference}: {gate.outcome}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </ReviewCard>
-          <ReviewCard actionLabel="Review responses" completed={submitted} incomplete={!readiness.assessmentComplete} onAction={() => setLocation("/apply/business-development-officer/assessment/questions")} title="Assessment">
-            <div className="mt-5"><p className="text-sm font-semibold text-primary">Business Development Assessment</p><p className="mt-1 text-[13px] text-muted-foreground">{assessedCount} of {questions.length} questions answered</p></div>
-            <div className="mt-5 divide-y divide-border border-y border-border">{questions.map((question, index) => { const option = question.options.find((entry) => entry.id === assessment.answers[question.id]); return <div className="py-5" key={question.id}><p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-portal-blue">{String(index + 1).padStart(2, "0")} · {question.category}</p><p className="mt-2 text-sm font-medium leading-6 text-primary">{question.question}</p><p className="mt-3 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Your response</p><p className="mt-1 text-sm leading-6 text-foreground">{option?.text ?? "Not provided"}</p></div>; })}</div>
-            {!submitted && !readiness.assessmentComplete ? <FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer/assessment/questions")} size="sm" variant="secondary">Complete assessment</FoundationButton> : null}
+
+          {/* Assessment Responses */}
+          <ReviewCard actionLabel="Review responses" completed={submitted} onAction={() => setLocation("/apply/business-development-officer/assessment/questions")} title="Assessment">
+            <div className="mt-5">
+              <p className="text-sm font-semibold text-primary">Business Development Assessment</p>
+              <p className="mt-1 text-[13px] text-muted-foreground">{responseEntries.length} responses recorded</p>
+            </div>
+            {responseEntries.length > 0 ? (
+              <div className="mt-5 divide-y divide-border border-y border-border">
+                {responseEntries.map(([questionId, responseText], index) => (
+                  <div className="py-5" key={questionId}>
+                    <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-portal-blue">{String(index + 1).padStart(2, "0")}</p>
+                    <p className="mt-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Your response</p>
+                    <p className="mt-1 text-sm leading-6 text-foreground">{responseText || "Not provided"}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </ReviewCard>
         </div>
 
-        {!submitted ? <section className="mt-5 rounded-xl border border-border bg-white p-6 shadow-none sm:p-7"><h2 className="text-lg font-semibold tracking-[-0.02em] text-primary">Declaration</h2><p className="mt-2 text-[13px] leading-5 text-muted-foreground">Please confirm the following before submitting your application.</p><div className="mt-6 space-y-4"><label className="flex items-start gap-3 text-sm leading-6 text-foreground"><input checked={declarationOne} className="mt-1 size-4 rounded border-input accent-primary" onChange={(event) => setDeclarationOne(event.target.checked)} type="checkbox" />I confirm that the information provided in this application is accurate to the best of my knowledge.</label><label className="flex items-start gap-3 text-sm leading-6 text-foreground"><input checked={declarationTwo} className="mt-1 size-4 rounded border-input accent-primary" onChange={(event) => setDeclarationTwo(event.target.checked)} type="checkbox" />I understand that my application information, CV and assessment responses will be reviewed as part of the recruitment process.</label></div>{attempted && (!declarationOne || !declarationTwo) ? <p className="mt-4 text-[13px] text-status-error-strong">Confirm both declarations before submitting.</p> : null}<div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between"><FoundationButton className="w-full sm:w-auto" onClick={() => setLocation("/apply/business-development-officer/assessment/complete")} variant="secondary">Back to assessment</FoundationButton><FoundationButton className="w-full sm:w-auto" disabled={!readiness.ready || !declarationOne || !declarationTwo} onClick={submit} size="lg">Submit application</FoundationButton></div></section> : null}
+        {!submitted ? (
+          <section className="mt-5 rounded-xl border border-border bg-white p-6 shadow-none sm:p-7">
+            <h2 className="text-lg font-semibold tracking-[-0.02em] text-primary">Declaration</h2>
+            <p className="mt-2 text-[13px] leading-5 text-muted-foreground">Please confirm the following before submitting your application.</p>
+            <div className="mt-6 space-y-4">
+              <label className="flex items-start gap-3 text-sm leading-6 text-foreground">
+                <input checked={declarationOne} className="mt-1 size-4 rounded border-input accent-primary" onChange={(event) => setDeclarationOne(event.target.checked)} type="checkbox" />
+                I confirm that the information provided in this application is accurate to the best of my knowledge.
+              </label>
+              <label className="flex items-start gap-3 text-sm leading-6 text-foreground">
+                <input checked={declarationTwo} className="mt-1 size-4 rounded border-input accent-primary" onChange={(event) => setDeclarationTwo(event.target.checked)} type="checkbox" />
+                I understand that my application information and assessment responses will be reviewed as part of the recruitment process.
+              </label>
+            </div>
+            {error ? <p className="mt-4 text-[13px] text-status-error-strong">{error}</p> : null}
+            {attempted && (!declarationOne || !declarationTwo) ? <p className="mt-4 text-[13px] text-status-error-strong">Confirm both declarations before submitting.</p> : null}
+            <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
+              <FoundationButton className="w-full sm:w-auto" onClick={() => setLocation("/apply/business-development-officer/assessment/complete")} variant="secondary">Back to assessment</FoundationButton>
+              <FoundationButton className="w-full sm:w-auto" disabled={submitting || !declarationOne || !declarationTwo} onClick={handleSubmit} size="lg">{submitting ? "Submitting..." : "Submit application"}</FoundationButton>
+            </div>
+          </section>
+        ) : null}
       </section>
     </ApplicationShell>
   );

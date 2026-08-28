@@ -1,48 +1,432 @@
 /**
- * Quiet Authority assessment questions: one focused question at a time, using the Admin-assigned score-free question list with locally retained responses.
+ * Task 24D-1 — real assessment questions page with database persistence.
+ *
+ * Loads applicant-safe questions from TiDB, saves responses to the server
+ * on each answer, supports one-at-a-time navigation, OPEN timers, and
+ * refresh/resume.
  */
 import { ApplicationShell } from "@/components/application/ApplicationShell";
-import { FoundationButton } from "@/components/foundation/ui";
-import { emptyAssessmentResponseState, getApplicantBusinessDevelopmentAssessmentQuestions, loadAssessmentResponseState, saveAssessmentResponseState, type AssessmentResponseState } from "@/lib/assessmentData";
-import { Check } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { FoundationButton, FoundationInput } from "@/components/foundation/ui";
+import {
+  fetchLiveAssessment,
+  saveAssessmentResponse,
+  startOpenTimer,
+  completeAssessment,
+  ApplicationApiError,
+  type ApplicantSafeQuestion,
+  type SaveAssessmentResponseInput,
+} from "@/lib/applicationApi";
+import { Check, Loader2, AlertCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
+
+// ── Response state ─────────────────────────────────────────────────────────
+
+type ResponseState = Record<string, unknown>;
 
 export default function ApplicantAssessmentQuestionsPlaceholder() {
   const [, setLocation] = useLocation();
-  const [assessment, setAssessment] = useState<AssessmentResponseState>(emptyAssessmentResponseState);
-  const [questions, setQuestions] = useState(() => getApplicantBusinessDevelopmentAssessmentQuestions());
-  const [hydrated, setHydrated] = useState(false);
+  const [questions, setQuestions] = useState<ApplicantSafeQuestion[]>([]);
+  const [responses, setResponses] = useState<ResponseState>({});
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState("");
-  useEffect(() => { setQuestions(getApplicantBusinessDevelopmentAssessmentQuestions()); setAssessment(loadAssessmentResponseState()); setHydrated(true); }, []);
-  useEffect(() => { if (hydrated) saveAssessmentResponseState(assessment); }, [assessment, hydrated]);
+  const [timerRemaining, setTimerRemaining] = useState<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const questionIndex = assessment.currentQuestionIndex;
-  const currentQuestion = questions[questionIndex];
-  const answeredIndexes = useMemo(() => questions.map((question, index) => assessment.answers[question.id] ? index : null).filter((index): index is number => index !== null), [assessment.answers, questions]);
-  if (!currentQuestion) return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="section-kicker">Assessment</p><h1 className="mt-3 text-2xl font-semibold tracking-[-0.025em] text-primary">Assessment questions are not available</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">There are no questions assigned to this assessment at present. Please return to your application and try again later.</p><FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer")} variant="secondary">Return to application</FoundationButton></div></section></ApplicationShell>;
+  // Load assessment from database
+  useEffect(() => {
+    fetchLiveAssessment()
+      .then((data) => {
+        if (data.completed) {
+          setLocation("/apply/business-development-officer/review");
+          return;
+        }
+        setQuestions(data.questions);
+        // Initialize responses from existing progress if available
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (err instanceof ApplicationApiError && (err.status === 401 || err.status === 403)) {
+          setLocation("/apply/business-development-officer");
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Unable to load your assessment.");
+        setLoading(false);
+      });
+  }, [setLocation]);
 
-  const selectedOptionId = assessment.answers[currentQuestion.id];
-  const progressPercent = ((questionIndex + 1) / questions.length) * 100;
-  const selectAnswer = (optionId: string) => { setAssessment((current) => ({ ...current, answers: { ...current.answers, [currentQuestion.id]: optionId } })); setValidationError(""); };
-  const moveTo = (index: number) => { setAssessment((current) => ({ ...current, currentQuestionIndex: index })); setValidationError(""); };
-  const nextQuestion = () => {
-    if (!selectedOptionId) { setValidationError("Select an answer before continuing."); return; }
-    if (questionIndex === questions.length - 1) { saveAssessmentResponseState(assessment); setLocation("/apply/business-development-officer/assessment/complete"); return; }
-    moveTo(questionIndex + 1);
+  const question = questions[currentIndex];
+  const totalQuestions = questions.length;
+
+  // ── OPEN timer management ──────────────────────────────────────────────────
+
+  const startTimerForQuestion = useCallback(async (q: ApplicantSafeQuestion) => {
+    if (q.type !== "OPEN" || !q.timeLimitSec) { setTimerRemaining(null); return; }
+    if (q.timerStartedAt) {
+      const elapsed = Math.floor((Date.now() - new Date(q.timerStartedAt).getTime()) / 1000);
+      const remaining = Math.max(0, q.timeLimitSec - elapsed);
+      setTimerRemaining(remaining);
+    } else {
+      try {
+        const result = await startOpenTimer(q.id);
+        if (result.timerStartedAt) {
+          setTimerRemaining(q.timeLimitSec);
+        }
+      } catch { /* ignore timer start failure */ }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (!question || question.type !== "OPEN" || !question.timeLimitSec) return;
+
+    startTimerForQuestion(question);
+    timerRef.current = setInterval(() => {
+      setTimerRemaining((prev) => {
+        if (prev === null || prev <= 0) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [question, startTimerForQuestion]);
+
+  // ── Response handling ──────────────────────────────────────────────────────
+
+  const persistResponse = async (questionId: string, input: SaveAssessmentResponseInput) => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const result = await saveAssessmentResponse(questionId, input);
+      if (result.closed) {
+        setLocation("/apply/business-development-officer/eligibility");
+        return;
+      }
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Unable to save your response. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  return <ApplicationShell activeStep={2}>
+  const selectOption = (optionId: string) => {
+    if (!question) return;
+    setValidationError("");
+    const newResponses = { ...responses, [question.id]: optionId };
+    setResponses(newResponses);
+    persistResponse(question.id, { responseType: question.type as "ORDINAL" | "MULTI" | "SJT" | "EVIDENCE", responsePayload: optionId });
+  };
+
+  const selectMultiOptions = (optionId: string) => {
+    if (!question) return;
+    setValidationError("");
+    const current = Array.isArray(responses[question.id]) ? (responses[question.id] as string[]) : [];
+    const updated = current.includes(optionId) ? current.filter((id) => id !== optionId) : [...current, optionId];
+    const newResponses = { ...responses, [question.id]: updated };
+    setResponses(newResponses);
+    persistResponse(question.id, { responseType: "MULTI", responsePayload: updated });
+  };
+
+  const saveNumericResponse = (values: Record<string, string>) => {
+    if (!question) return;
+    setValidationError("");
+    const newResponses = { ...responses, [question.id]: values };
+    setResponses(newResponses);
+    persistResponse(question.id, { responseType: "NUMERIC", responsePayload: values });
+  };
+
+  const saveOpenResponse = (text: string) => {
+    if (!question || question.type !== "OPEN") return;
+    if (question.maximumWords) {
+      const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+      if (wordCount > question.maximumWords) {
+        setValidationError(`Response exceeds the ${question.maximumWords}-word limit.`);
+        return;
+      }
+    }
+    setValidationError("");
+    const newResponses = { ...responses, [question.id]: text };
+    setResponses(newResponses);
+    persistResponse(question.id, { responseType: "OPEN", responsePayload: text });
+  };
+
+  // ── Navigation ─────────────────────────────────────────────────────────────
+
+  const moveTo = (index: number) => { setCurrentIndex(index); setValidationError(""); };
+
+  const nextQuestion = async () => {
+    if (!question) return;
+    const currentResponse = responses[question.id];
+    const hasResponse = currentResponse !== undefined && currentResponse !== null && currentResponse !== "" && !(Array.isArray(currentResponse) && currentResponse.length === 0);
+    if (!hasResponse) { setValidationError("Please provide an answer before continuing."); return; }
+
+    if (currentIndex === totalQuestions - 1) {
+      // Complete the assessment
+      setCompleting(true);
+      try {
+        await completeAssessment();
+        setLocation("/apply/business-development-officer/assessment/complete");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to complete your assessment.");
+      } finally {
+        setCompleting(false);
+      }
+      return;
+    }
+    moveTo(currentIndex + 1);
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return <ApplicationShell activeStep={1}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="flex items-center gap-2 py-12 text-muted-foreground"><Loader2 className="size-5 animate-spin" />Loading your assessment...</div></section></ApplicationShell>;
+  }
+
+  if (error) {
+    return <ApplicationShell activeStep={1}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><div className="flex items-center gap-2 text-status-error-strong"><AlertCircle className="size-5" /><p>{error}</p></div><FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer/assessment")} variant="secondary">Back to assessment</FoundationButton></div></section></ApplicationShell>;
+  }
+
+  if (!question) {
+    return <ApplicationShell activeStep={1}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="section-kicker">Assessment</p><h1 className="mt-3 text-2xl font-semibold tracking-[-0.025em] text-primary">Assessment questions are not available</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">There are no questions assigned to this assessment at present.</p><FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer")} variant="secondary">Return to application</FoundationButton></div></section></ApplicationShell>;
+  }
+
+  const progressPercent = ((currentIndex + 1) / totalQuestions) * 100;
+  const timerExpired = question.type === "OPEN" && question.timeLimitSec && timerRemaining !== null && timerRemaining <= 0;
+
+  return <ApplicationShell activeStep={1}>
     <section className="mx-auto max-w-[800px] py-3 sm:py-6">
-      <div className="flex items-center justify-between gap-4 border-b border-border pb-4"><p className="text-sm font-semibold text-primary">Business Development Assessment</p><p className="shrink-0 text-sm font-medium text-muted-foreground">Question {questionIndex + 1} of {questions.length}</p></div>
-      <div aria-label={`Question ${questionIndex + 1} of ${questions.length}`} aria-valuemax={questions.length} aria-valuemin={1} aria-valuenow={questionIndex + 1} className="mt-4 h-1 overflow-hidden rounded-full bg-border" role="progressbar"><div className="h-full bg-primary transition-[width] duration-200" style={{ width: `${progressPercent}%` }} /></div>
+      <div className="flex items-center justify-between gap-4 border-b border-border pb-4">
+        <p className="text-sm font-semibold text-primary">Business Development Assessment</p>
+        <p className="shrink-0 text-sm font-medium text-muted-foreground">Question {currentIndex + 1} of {totalQuestions}</p>
+      </div>
+      <div aria-label={`Question ${currentIndex + 1} of ${totalQuestions}`} aria-valuemax={totalQuestions} aria-valuemin={1} aria-valuenow={currentIndex + 1} className="mt-4 h-1 overflow-hidden rounded-full bg-border" role="progressbar">
+        <div className="h-full bg-primary transition-[width] duration-200" style={{ width: `${progressPercent}%` }} />
+      </div>
+
       <article className="mt-7 rounded-xl border border-border bg-white p-6 shadow-none sm:p-8">
-        <p className="section-kicker">{currentQuestion.category}</p><h1 className="mt-4 text-xl font-semibold leading-8 tracking-[-0.025em] text-primary sm:text-2xl">{currentQuestion.question}</h1>
-        <div aria-label="Answer options" className="mt-7 space-y-3" role="radiogroup">{currentQuestion.options.map((option) => { const selected = selectedOptionId === option.id; return <button aria-checked={selected} className={`flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-blue/30 ${selected ? "border-primary bg-portal-blue-soft" : "border-input bg-white hover:border-portal-blue"}`} key={option.id} onClick={() => selectAnswer(option.id)} role="radio" type="button"><span className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${selected ? "border-primary bg-primary text-white" : "border-border text-muted-foreground"}`}>{selected ? <Check className="size-3.5" /> : option.label}</span><span className="min-w-0 text-sm leading-6 text-foreground">{option.text}</span></button>; })}</div>
+        <p className="section-kicker">{question.type}</p>
+        <h1 className="mt-4 text-xl font-semibold leading-8 tracking-[-0.025em] text-primary sm:text-2xl">{question.prompt}</h1>
+
+        {/* Timer for OPEN questions */}
+        {question.type === "OPEN" && question.timeLimitSec && timerRemaining !== null && (
+          <div className={`mt-4 inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium ${timerRemaining <= 30 ? "bg-status-error-soft text-status-error-strong" : "bg-portal-blue-soft text-primary"}`}>
+            Time remaining: {Math.floor(timerRemaining / 60)}:{String(timerRemaining % 60).padStart(2, "0")}
+          </div>
+        )}
+
+        {/* Question type renderers */}
+        {(question.type === "ORDINAL" || question.type === "SJT" || question.type === "EVIDENCE") && (
+          <QuestionOptionsRenderer
+            question={question}
+            selectedId={typeof responses[question.id] === "string" ? (responses[question.id] as string) : undefined}
+            onSelect={selectOption}
+            disabled={saving || timerExpired === true}
+          />
+        )}
+
+        {question.type === "MULTI" && (
+          <QuestionMultiRenderer
+            question={question}
+            selectedIds={Array.isArray(responses[question.id]) ? (responses[question.id] as string[]) : []}
+            onToggle={selectMultiOptions}
+            disabled={saving || timerExpired === true}
+          />
+        )}
+
+        {question.type === "NUMERIC" && (
+          <QuestionNumericRenderer
+            question={question}
+            values={(responses[question.id] as Record<string, string>) ?? {}}
+            onSave={saveNumericResponse}
+            disabled={saving || timerExpired === true}
+          />
+        )}
+
+        {question.type === "OPEN" && (
+          <QuestionOpenRenderer
+            question={question}
+            value={typeof responses[question.id] === "string" ? (responses[question.id] as string) : ""}
+            onSave={saveOpenResponse}
+            disabled={saving || timerExpired === true}
+            pasteAllowed={question.pasteAllowed}
+          />
+        )}
+
+        {saveError ? <p className="mt-4 text-[13px] text-status-error-strong" role="alert">{saveError}</p> : null}
         {validationError ? <p className="mt-4 text-[13px] text-status-error-strong" role="alert">{validationError}</p> : null}
-        <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between"><div>{questionIndex > 0 ? <FoundationButton className="w-full sm:w-auto" onClick={() => moveTo(questionIndex - 1)} variant="secondary">Previous</FoundationButton> : null}</div><FoundationButton className="w-full sm:w-auto" disabled={!hydrated} onClick={nextQuestion} size="lg">{questionIndex === questions.length - 1 ? "Complete assessment" : "Next"}</FoundationButton></div>
+
+        <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>{currentIndex > 0 ? <FoundationButton className="w-full sm:w-auto" onClick={() => moveTo(currentIndex - 1)} variant="secondary">Previous</FoundationButton> : null}</div>
+          <FoundationButton className="w-full sm:w-auto" disabled={saving || completing} onClick={nextQuestion} size="lg">
+            {completing ? "Completing..." : currentIndex === totalQuestions - 1 ? "Complete assessment" : "Next"}
+          </FoundationButton>
+        </div>
       </article>
-      <nav aria-label="Assessment question navigator" className="mt-6 flex items-center justify-center gap-2">{questions.map((question, index) => { const answered = Boolean(assessment.answers[question.id]); const current = index === questionIndex; const allowed = index <= questionIndex || answered || answeredIndexes.includes(index); return <button aria-current={current ? "step" : undefined} aria-label={`Question ${index + 1}${answered ? ", answered" : ""}${!allowed ? ", unavailable" : ""}`} className={`flex size-8 items-center justify-center rounded-full border text-[12px] font-semibold transition-colors ${current ? "border-primary bg-primary text-white" : answered ? "border-portal-blue bg-portal-blue-soft text-primary" : "border-border bg-white text-muted-foreground"} disabled:cursor-not-allowed disabled:opacity-70`} disabled={!allowed} key={question.id} onClick={() => moveTo(index)} type="button">{answered && !current ? <Check className="size-3.5" /> : index + 1}</button>; })}</nav>
+
+      {/* Question navigator */}
+      <nav aria-label="Assessment question navigator" className="mt-6 flex items-center justify-center gap-2">
+        {questions.map((q, index) => {
+          const answered = responses[q.id] !== undefined && responses[q.id] !== null && responses[q.id] !== "" && !(Array.isArray(responses[q.id]) && (responses[q.id] as unknown[]).length === 0);
+          const current = index === currentIndex;
+          return (
+            <button
+              aria-current={current ? "step" : undefined}
+              aria-label={`Question ${index + 1}${answered ? ", answered" : ""}`}
+              className={`flex size-8 items-center justify-center rounded-full border text-[12px] font-semibold transition-colors ${current ? "border-primary bg-primary text-white" : answered ? "border-portal-blue bg-portal-blue-soft text-primary" : "border-border bg-white text-muted-foreground"}`}
+              key={q.id}
+              onClick={() => moveTo(index)}
+              type="button"
+            >
+              {answered && !current ? <Check className="size-3.5" /> : index + 1}
+            </button>
+          );
+        })}
+      </nav>
     </section>
   </ApplicationShell>;
+}
+
+// ── Question type renderers ──────────────────────────────────────────────────
+
+function QuestionOptionsRenderer({ question, selectedId, onSelect, disabled }: {
+  question: Extract<ApplicantSafeQuestion, { type: "ORDINAL" | "SJT" | "EVIDENCE" }>;
+  selectedId: string | undefined;
+  onSelect: (id: string) => void;
+  disabled: boolean;
+}) {
+  const labels = "ABCDEFGHIJKLMNOP";
+  return (
+    <div aria-label="Answer options" className="mt-7 space-y-3" role="radiogroup">
+      {question.options.map((option, i) => {
+        const selected = selectedId === option.id;
+        return (
+          <button
+            aria-checked={selected}
+            className={`flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-blue/30 ${selected ? "border-primary bg-portal-blue-soft" : "border-input bg-white hover:border-portal-blue"} ${disabled ? "opacity-60" : ""}`}
+            disabled={disabled}
+            key={option.id}
+            onClick={() => onSelect(option.id)}
+            role="radio"
+            type="button"
+          >
+            <span className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${selected ? "border-primary bg-primary text-white" : "border-border text-muted-foreground"}`}>{selected ? <Check className="size-3.5" /> : labels[i] ?? i + 1}</span>
+            <span className="min-w-0 text-sm leading-6 text-foreground">{option.text}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function QuestionMultiRenderer({ question, selectedIds, onToggle, disabled }: {
+  question: Extract<ApplicantSafeQuestion, { type: "MULTI" }>;
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+  disabled: boolean;
+}) {
+  const labels = "ABCDEFGHIJKLMNOP";
+  return (
+    <div aria-label="Select all that apply" className="mt-7 space-y-3">
+      <p className="text-[13px] text-muted-foreground">Select all that apply</p>
+      {question.options.map((option, i) => {
+        const selected = selectedIds.includes(option.id);
+        return (
+          <button
+            aria-pressed={selected}
+            className={`flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-blue/30 ${selected ? "border-primary bg-portal-blue-soft" : "border-input bg-white hover:border-portal-blue"} ${disabled ? "opacity-60" : ""}`}
+            disabled={disabled}
+            key={option.id}
+            onClick={() => onToggle(option.id)}
+            type="button"
+          >
+            <span className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold ${selected ? "border-primary bg-primary text-white" : "border-border text-muted-foreground"}`}>{selected ? <Check className="size-3.5" /> : labels[i] ?? i + 1}</span>
+            <span className="min-w-0 text-sm leading-6 text-foreground">{option.text}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function QuestionNumericRenderer({ question, values, onSave, disabled }: {
+  question: Extract<ApplicantSafeQuestion, { type: "NUMERIC" }>;
+  values: Record<string, string>;
+  onSave: (values: Record<string, string>) => void;
+  disabled: boolean;
+}) {
+  const [localValues, setLocalValues] = useState<Record<string, string>>(values);
+  useEffect(() => { setLocalValues(values); }, [values]);
+
+  return (
+    <div className="mt-7 space-y-4">
+      {question.inputLabels.map((label) => (
+        <div key={label}>
+          <label className="mb-1.5 block text-sm font-medium text-primary">{label}</label>
+          <FoundationInput
+            disabled={disabled}
+            onChange={(e) => {
+              const updated = { ...localValues, [label]: e.target.value };
+              setLocalValues(updated);
+            }}
+            onBlur={() => onSave(localValues)}
+            placeholder={`Enter ${label.toLowerCase()}`}
+            type="number"
+            value={localValues[label] ?? ""}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function QuestionOpenRenderer({ question, value, onSave, disabled, pasteAllowed }: {
+  question: Extract<ApplicantSafeQuestion, { type: "OPEN" }>;
+  value: string;
+  onSave: (text: string) => void;
+  disabled: boolean;
+  pasteAllowed: boolean;
+}) {
+  const [localValue, setLocalValue] = useState(value);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { setLocalValue(value); }, [value]);
+
+  const wordCount = localValue.trim().split(/\s+/).filter(Boolean).length;
+  const maxWords = question.maximumWords;
+
+  const handleChange = (text: string) => {
+    setLocalValue(text);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => onSave(text), 800);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (!pasteAllowed) e.preventDefault();
+  };
+
+  return (
+    <div className="mt-7">
+      <textarea
+        className={`w-full rounded-lg border border-input bg-white px-4 py-3 text-sm leading-6 text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-blue/30 ${disabled ? "opacity-60" : ""}`}
+        disabled={disabled}
+        onChange={(e) => handleChange(e.target.value)}
+        onPaste={handlePaste}
+        placeholder="Type your response here..."
+        rows={6}
+        value={localValue}
+      />
+      {maxWords ? (
+        <p className={`mt-2 text-[12px] ${wordCount > maxWords ? "text-status-error-strong" : "text-muted-foreground"}`}>
+          {wordCount} / {maxWords} words {maxWords && wordCount > maxWords ? "(exceeded)" : ""}
+        </p>
+      ) : null}
+    </div>
+  );
 }

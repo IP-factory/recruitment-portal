@@ -8,6 +8,8 @@ import mysql from "mysql2/promise";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createAdminAuthRouter } from "./adminAuth";
+import { createApplicationApiRouter } from "./applicationApi";
+import { createAssessmentApiRouter } from "./assessmentApi";
 import { createQuestionBankApiRouter } from "./questionBankApi";
 import { createRecruitmentApiRouter } from "./recruitmentApi";
 
@@ -32,6 +34,15 @@ async function startServer() {
   // Admin Question Bank API (Task 24C-2): list, detail, create and update,
   // all guarded by Task 24B authorization. No public question endpoints.
   app.use(createQuestionBankApiRouter());
+
+  // Admin Assessment API (Task 24C-3): assessment list, detail, create, update,
+  // assignment management, and admin preview. All guarded by Task 24B auth.
+  app.use(createAssessmentApiRouter());
+
+  // Public Applicant Runtime API (Task 24D-1): application creation,
+  // server-side eligibility, assessment responses, completion and submission.
+  // Uses applicant token, not Admin authorization.
+  app.use(createApplicationApiRouter());
 
   // ── 2. API routes (must come before the static / catch-all) ──────────────
 

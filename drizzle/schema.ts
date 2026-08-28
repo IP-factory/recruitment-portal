@@ -88,6 +88,78 @@ export const dimensionFloorRules = mysqlTable("dimension_floor_rules", {
   id: varchar("id", { length: 96 }).primaryKey(), screeningConfigurationId: varchar("screening_configuration_id", { length: 96 }).notNull().references(() => screeningConfigurations.id, { onDelete: "cascade" }), dimensionId: varchar("dimension_id", { length: 64 }).notNull().references(() => assessmentDimensions.id, { onDelete: "cascade" }), minimumFloor: int("minimum_floor").notNull(), maximumAppliedBand: mysqlEnum("maximum_applied_band", ["A", "B", "C", "D"]).notNull(), description: text("description").notNull(),
 }, (table) => ({ configDimensionUnique: uniqueIndex("dimension_floor_config_dimension_unique").on(table.screeningConfigurationId, table.dimensionId) }));
 
+// ── Task 24D-1: Applicant runtime persistence ────────────────────────────────
+
+export const applications = mysqlTable("applications", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  roleId: varchar("role_id", { length: 64 }).notNull().references(() => recruitmentRoles.id, { onDelete: "cascade" }),
+  assessmentId: varchar("assessment_id", { length: 96 }),
+  fullName: varchar("full_name", { length: 180 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  phone: varchar("phone", { length: 64 }).notNull(),
+  city: varchar("city", { length: 160 }).notNull(),
+  recentRole: varchar("recent_role", { length: 180 }).notNull(),
+  recentEmployer: varchar("recent_employer", { length: 180 }),
+  totalExperience: varchar("total_experience", { length: 64 }).notNull(),
+  relevantExperience: varchar("relevant_experience", { length: 64 }).notNull(),
+  linkedinUrl: varchar("linkedin_url", { length: 512 }),
+  eligibilityStatus: mysqlEnum("eligibility_status", ["Pending", "Eligible", "Closed"]).notNull(),
+  applicationStatus: mysqlEnum("application_status", ["In Progress", "Eligibility Closed", "Assessment In Progress", "Assessment Complete", "Submitted", "Shortlisted", "Hold", "Closed"]).notNull(),
+  currentStep: varchar("current_step", { length: 64 }).notNull(),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  submittedAt: timestamp("submitted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  applicantTokenHash: varchar("applicant_token_hash", { length: 128 }).notNull(),
+}, (table) => ({
+  roleEmailIndex: index("applications_role_email_idx").on(table.roleId, table.email),
+  tokenHashIndex: index("applications_token_hash_idx").on(table.applicantTokenHash),
+}));
+
+export const applicationEligibilityResponses = mysqlTable("application_eligibility_responses", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
+  gateId: varchar("gate_id", { length: 16 }).notNull(),
+  gateReference: varchar("gate_reference", { length: 16 }).notNull(),
+  responseValue: text("response_value").notNull(),
+  outcome: varchar("outcome", { length: 64 }).notNull(),
+  internalFlag: varchar("internal_flag", { length: 64 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  applicationGateUnique: uniqueIndex("eligibility_responses_app_gate_unique").on(table.applicationId, table.gateId),
+  applicationIndex: index("eligibility_responses_app_idx").on(table.applicationId),
+}));
+
+export const assessmentAttempts = mysqlTable("assessment_attempts", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
+  assessmentId: varchar("assessment_id", { length: 96 }).notNull().references(() => assessments.id, { onDelete: "cascade" }),
+  status: mysqlEnum("status", ["Not Started", "In Progress", "Complete"]).notNull(),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  applicationAssessmentIndex: index("attempts_app_assessment_idx").on(table.applicationId, table.assessmentId),
+}));
+
+export const assessmentResponses = mysqlTable("assessment_responses", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  attemptId: varchar("attempt_id", { length: 64 }).notNull().references(() => assessmentAttempts.id, { onDelete: "cascade" }),
+  questionId: varchar("question_id", { length: 96 }).notNull().references(() => assessmentQuestions.id, { onDelete: "cascade" }),
+  responseType: varchar("response_type", { length: 64 }).notNull(),
+  responsePayload: text("response_payload").notNull(),
+  startedAt: timestamp("started_at"),
+  answeredAt: timestamp("answered_at"),
+  elapsedSeconds: int("elapsed_seconds"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  attemptQuestionUnique: uniqueIndex("responses_attempt_question_unique").on(table.attemptId, table.questionId),
+  attemptIndex: index("responses_attempt_idx").on(table.attemptId),
+}));
+
 export type RecruitmentRole = typeof recruitmentRoles.$inferSelect;
 export type AssessmentDimension = typeof assessmentDimensions.$inferSelect;
 export type AssessmentQuestion = typeof assessmentQuestions.$inferSelect;
@@ -95,3 +167,7 @@ export type Assessment = typeof assessments.$inferSelect;
 export type AuthUser = typeof users.$inferSelect;
 export type AdminProfile = typeof adminProfiles.$inferSelect;
 export type AuthSession = typeof authSessions.$inferSelect;
+export type Application = typeof applications.$inferSelect;
+export type ApplicationEligibilityResponse = typeof applicationEligibilityResponses.$inferSelect;
+export type AssessmentAttempt = typeof assessmentAttempts.$inferSelect;
+export type AssessmentResponse = typeof assessmentResponses.$inferSelect;

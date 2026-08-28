@@ -1,13 +1,19 @@
 /**
- * Quiet Authority applicant information step: contact, professional and role-eligibility details remain in one four-stage application step.
+ * Task 24D-1 — applicant information step with real server-side persistence.
+ *
+ * On submit, creates a database-backed application via POST /api/public/applications.
+ * Server evaluates eligibility server-side and returns the application token.
+ * On success, stores the token in localStorage and navigates to the next step.
  */
 import { ApplicationShell } from "@/components/application/ApplicationShell";
 import { RoleEligibilitySection } from "@/components/application/RoleEligibilitySection";
 import { DataErrorState } from "@/components/AsyncStates";
 import { FieldFrame, FoundationButton, FoundationInput, FoundationSelect } from "@/components/foundation/ui";
 import { usePublicEligibility } from "@/hooks/useRecruitmentData";
-import { BUSINESS_DEVELOPMENT_OFFICER_ROUTE, evaluateApplicantEligibility, emptyApplicantEligibilityAnswers, type ApplicantEligibilityAnswers, type ApplicantEligibilityGateConfiguration } from "@/lib/eligibilityData";
-import { type ApplicantInformation, emptyApplicantInformation, loadApplicantEligibilityAnswers, loadApplicantInformation, saveApplicantEligibilityAnswers, saveApplicantEligibilityEvaluation, saveApplicantInformation } from "@/lib/applicationData";
+import { BUSINESS_DEVELOPMENT_OFFICER_ROUTE, type ApplicantEligibilityAnswers, emptyApplicantEligibilityAnswers } from "@/lib/eligibilityData";
+import { createApplication, saveApplicantSession, loadApplicantSession, fetchApplication, ApplicationApiError, clearApplicantSession } from "@/lib/applicationApi";
+import type { CreateApplicationInput } from "@shared/applicationApi";
+import { emptyApplicantInformation, type ApplicantInformation } from "@/lib/applicationData";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
@@ -33,42 +39,123 @@ export default function ApplicantInformation() {
   const [eligibility, setEligibility] = useState<ApplicantEligibilityAnswers>(emptyApplicantEligibilityAnswers);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [hydrated, setHydrated] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const errors = useMemo(() => getErrors(data), [data]);
   const formValid = Object.values(errors).every((error) => !error);
-  // Task 24C-1: gate configuration (G3 minimum years) comes from TiDB via the
-  // public eligibility endpoint — never from a hard-coded local value.
+
+  // Gate configuration from TiDB
   const gateConfiguration = usePublicEligibility(BUSINESS_DEVELOPMENT_OFFICER_ROUTE);
-  const eligibilityConfiguration = useMemo<ApplicantEligibilityGateConfiguration | null>(() => {
+  const eligibilityConfiguration = useMemo(() => {
     if (gateConfiguration.status !== "ready" || !gateConfiguration.data) return null;
     const experienceGate = gateConfiguration.data.gates.find((gate) => gate.gateType === "experience");
     return typeof experienceGate?.minimumYears === "number" ? { minimumYears: experienceGate.minimumYears } : null;
   }, [gateConfiguration.status, gateConfiguration.data]);
   const configurationUnavailable = gateConfiguration.status === "error" || (gateConfiguration.status === "ready" && !eligibilityConfiguration);
 
-  useEffect(() => { setData(loadApplicantInformation()); setEligibility(loadApplicantEligibilityAnswers()); setHydrated(true); }, []);
-  useEffect(() => { if (hydrated) { saveApplicantInformation(data); saveApplicantEligibilityAnswers(eligibility); } }, [data, eligibility, hydrated]);
+  // Load persisted local form state for UX convenience
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem("recruitment-portal:bdm:applicant-information");
+      if (stored) setData({ ...emptyApplicantInformation, ...JSON.parse(stored) });
+      const eligStored = window.localStorage.getItem("recruitment-portal:bdm:eligibility-answers");
+      if (eligStored) setEligibility({ ...emptyApplicantEligibilityAnswers, ...JSON.parse(eligStored) });
+    } catch { /* ignore */ }
+    setHydrated(true);
+  }, []);
+
+  // Check for existing application session and resume
+  useEffect(() => {
+    const session = loadApplicantSession();
+    if (session) {
+      fetchApplication()
+        .then((state) => {
+          if (state.eligibilityStatus === "Closed") {
+            setLocation("/apply/business-development-officer/eligibility");
+          } else if (state.applicationStatus === "Submitted") {
+            setLocation("/apply/business-development-officer/submitted");
+          } else if (state.applicationStatus === "Assessment Complete") {
+            setLocation("/apply/business-development-officer/review");
+          } else {
+            setLocation("/apply/business-development-officer/assessment");
+          }
+        })
+        .catch((err) => {
+          if (err instanceof ApplicationApiError && (err.status === 401 || err.status === 403)) {
+            // Invalid token, clear session
+            clearApplicantSession();
+          }
+        });
+    }
+  }, [setLocation]);
+
   const updateField = <Key extends keyof ApplicantInformation>(field: Key, value: ApplicantInformation[Key]) => setData((current) => ({ ...current, [field]: value }));
   const updateEligibility = <Key extends keyof ApplicantEligibilityAnswers>(field: Key, value: ApplicantEligibilityAnswers[Key]) => setEligibility((current) => ({ ...current, [field]: value }));
   const markTouched = (field: string) => setTouched((current) => ({ ...current, [field]: true }));
   const errorFor = (field: keyof typeof errors) => touched[field] ? errors[field] : undefined;
-  const continueToCv = () => {
+
+  const continueToAssessment = async () => {
     setTouched({ fullName: true, email: true, phoneNumber: true, location: true, jobTitle: true, totalExperience: true, businessDevelopmentExperience: true, abujaAvailability: true, plannedRelocationDate: true, rightToWork: true, outboundWork: true, verificationConsent: true });
     if (!formValid || !eligibilityConfiguration) return;
-    const evaluation = evaluateApplicantEligibility(eligibility, data.businessDevelopmentExperience, eligibilityConfiguration);
-    if (evaluation.incomplete) return;
-    saveApplicantInformation(data);
-    saveApplicantEligibilityAnswers(eligibility);
-    saveApplicantEligibilityEvaluation(evaluation);
-    if (evaluation.outcome === "Closed — Eligibility") setLocation("/apply/business-development-officer/eligibility");
-    else setLocation("/apply/business-development-officer/cv");
+    if (!eligibility.abujaAvailability || !eligibility.rightToWork || !eligibility.outboundWork || !eligibility.verificationConsent) return;
+    if (eligibility.abujaAvailability === "relocate" && !eligibility.plannedRelocationDate) return;
+
+    setSubmitting(true);
+    setError(null);
+
+    const input: CreateApplicationInput = {
+      roleSlug: "business-development-officer",
+      fullName: data.fullName.trim(),
+      email: data.email.trim(),
+      phone: data.phoneNumber.trim(),
+      city: data.location.trim(),
+      recentRole: data.jobTitle.trim(),
+      recentEmployer: data.employer.trim(),
+      totalExperience: data.totalExperience,
+      relevantExperience: data.businessDevelopmentExperience,
+      linkedinUrl: data.linkedInProfile.trim(),
+      eligibility: {
+        abujaAvailability: eligibility.abujaAvailability as "abuja" | "relocate" | "not-relocate",
+        plannedRelocationDate: eligibility.plannedRelocationDate || "",
+        rightToWork: eligibility.rightToWork as "yes" | "no",
+        outboundWork: eligibility.outboundWork as "yes" | "no",
+        verificationConsent: eligibility.verificationConsent as "yes" | "no",
+      },
+    };
+
+    try {
+      const result = await createApplication(input);
+      saveApplicantSession(result.applicationId, result.applicantToken);
+
+      // Save local form state as backup (for UX only, not source of truth)
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("recruitment-portal:bdm:applicant-information", JSON.stringify(data));
+        window.localStorage.setItem("recruitment-portal:bdm:eligibility-answers", JSON.stringify(eligibility));
+      }
+
+      if (result.nextStep === "eligibility-closed") {
+        setLocation("/apply/business-development-officer/eligibility");
+      } else {
+        setLocation("/apply/business-development-officer/assessment");
+      }
+    } catch (err) {
+      if (err instanceof ApplicationApiError) {
+        setError(err.message);
+      } else {
+        setError("Unable to create your application. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return <ApplicationShell activeStep={0} showSummary>
     <section>
-      <p className="section-kicker">Step 1 of 4</p>
+      <p className="section-kicker">Step 1 of 3</p>
       <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">Tell us about yourself</h1>
       <p className="mt-3 max-w-2xl text-[15px] leading-7 text-muted-foreground">Provide the basic contact and professional information we need to begin your application.</p>
-      <form className="mt-8 rounded-xl border border-border bg-white p-7 shadow-none sm:p-8" onSubmit={(event) => { event.preventDefault(); continueToCv(); }} noValidate>
+      <form className="mt-8 rounded-xl border border-border bg-white p-7 shadow-none sm:p-8" onSubmit={(event) => { event.preventDefault(); continueToAssessment(); }} noValidate>
         <section aria-labelledby="contact-information-title">
           <h2 className="text-lg font-semibold tracking-[-0.02em] text-primary" id="contact-information-title">Contact information</h2>
           <p className="mt-2 text-[13px] leading-5 text-muted-foreground">Tell us how we can identify and contact you during the recruitment process.</p>
@@ -91,10 +178,11 @@ export default function ApplicantInformation() {
           </div>
         </section>
         <RoleEligibilitySection answers={eligibility} onBlur={markTouched} onChange={updateEligibility} touched={touched} />
+        {error ? <div className="mt-6 rounded-lg border border-status-error-strong bg-status-error-soft px-4 py-3 text-sm text-status-error-strong">{error}</div> : null}
         {configurationUnavailable ? (
           <div className="mt-9 border-t border-border pt-6"><DataErrorState message={gateConfiguration.error ?? "The role eligibility configuration could not be loaded."} onRetry={gateConfiguration.reload} /></div>
         ) : (
-          <div className="mt-9 flex justify-end border-t border-border pt-6"><FoundationButton className="w-full sm:w-auto" disabled={!hydrated || gateConfiguration.status === "loading" || !eligibilityConfiguration} size="lg" type="submit">Continue to CV</FoundationButton></div>
+          <div className="mt-9 flex justify-end border-t border-border pt-6"><FoundationButton className="w-full sm:w-auto" disabled={!hydrated || submitting || gateConfiguration.status === "loading" || !eligibilityConfiguration} size="lg" type="submit">{submitting ? "Submitting..." : "Continue to Assessment"}</FoundationButton></div>
         )}
       </form>
     </section>

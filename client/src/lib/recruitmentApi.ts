@@ -183,3 +183,103 @@ export async function updateQuestion(idOrReference: string, input: QuestionUpdat
   });
   return payload.question;
 }
+
+// ── Admin Assessments (Task 24C-3) ────────────────────────────────────────────
+
+import type {
+  AdminAssessmentDetail,
+  AdminAssessmentListItem,
+  AdminAssessmentListResponse,
+  AdminAssessmentPreviewPayload,
+  AssessmentCreateInput,
+  AssessmentRoleSummary,
+  AssessmentStatus,
+  AssessmentUpdateInput,
+  AssignedQuestionFull,
+  AssignedQuestionSummary,
+} from "@shared/assessmentApi";
+
+export type {
+  AdminAssessmentDetail,
+  AdminAssessmentListItem,
+  AdminAssessmentListResponse,
+  AdminAssessmentPreviewPayload,
+  AssessmentCreateInput,
+  AssessmentRoleSummary,
+  AssessmentStatus,
+  AssessmentUpdateInput,
+  AssignedQuestionFull,
+  AssignedQuestionSummary,
+} from "@shared/assessmentApi";
+
+export { ASSESSMENT_STATUSES } from "@shared/assessmentApi";
+
+export async function fetchAssessments(): Promise<AdminAssessmentListResponse> {
+  return request<AdminAssessmentListResponse>("/api/admin/assessments");
+}
+
+export async function fetchAssessment(idOrSlug: string): Promise<AdminAssessmentDetail> {
+  const payload = await request<{ assessment: AdminAssessmentDetail }>(
+    `/api/admin/assessments/${encodeURIComponent(idOrSlug)}`,
+  );
+  return payload.assessment;
+}
+
+export async function createAssessment(input: AssessmentCreateInput): Promise<AdminAssessmentDetail> {
+  const payload = await request<{ assessment: AdminAssessmentDetail }>(
+    "/api/admin/assessments",
+    jsonBody(input),
+  );
+  return payload.assessment;
+}
+
+export async function updateAssessment(
+  idOrSlug: string,
+  input: AssessmentUpdateInput,
+): Promise<AdminAssessmentDetail> {
+  const payload = await request<{ assessment: AdminAssessmentDetail }>(
+    `/api/admin/assessments/${encodeURIComponent(idOrSlug)}`,
+    { ...jsonBody(input), method: "PATCH" },
+  );
+  return payload.assessment;
+}
+
+export async function fetchAssessmentPreview(idOrSlug: string): Promise<AdminAssessmentPreviewPayload> {
+  const payload = await request<{ preview: AdminAssessmentPreviewPayload }>(
+    `/api/admin/assessments/${encodeURIComponent(idOrSlug)}/preview`,
+  );
+  return payload.preview;
+}
+
+export async function addAssessmentQuestion(
+  idOrSlug: string,
+  questionId: string,
+): Promise<AssignedQuestionSummary[]> {
+  const payload = await request<{ assignments: AssignedQuestionSummary[] }>(
+    `/api/admin/assessments/${encodeURIComponent(idOrSlug)}/questions`,
+    jsonBody({ questionId }),
+  );
+  return payload.assignments;
+}
+
+export async function removeAssessmentQuestion(
+  idOrSlug: string,
+  questionId: string,
+): Promise<AssignedQuestionSummary[]> {
+  const payload = await request<{ assignments: AssignedQuestionSummary[] }>(
+    `/api/admin/assessments/${encodeURIComponent(idOrSlug)}/questions/${encodeURIComponent(questionId)}`,
+    { method: "DELETE" },
+  );
+  return payload.assignments;
+}
+
+export async function reorderAssessmentQuestions(
+  idOrSlug: string,
+  orderedQuestionIds: string[],
+): Promise<AssignedQuestionSummary[]> {
+  const payload = await request<{ assignments: AssignedQuestionSummary[] }>(
+    `/api/admin/assessments/${encodeURIComponent(idOrSlug)}/questions/order`,
+    { ...jsonBody({ orderedQuestionIds }), method: "PUT" },
+  );
+  return payload.assignments;
+}

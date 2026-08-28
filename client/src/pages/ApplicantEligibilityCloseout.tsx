@@ -1,3 +1,10 @@
+/**
+ * Task 24D-1 — eligibility closeout page.
+ *
+ * Shown when the server-side eligibility evaluation determines that the
+ * applicant does not meet one or more mandatory eligibility gates.
+ * The closeout state is persisted in TiDB.
+ */
 import { ApplicationShell } from "@/components/application/ApplicationShell";
 import { FoundationButton } from "@/components/foundation/ui";
 import { Link } from "wouter";
