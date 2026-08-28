@@ -154,7 +154,7 @@ const suite = describe.skipIf(!databaseUrl);
 
 suite("Task 24C-2 Question Bank API against TiDB", () => {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: "100kb" }));
   app.use(createQuestionBankApiRouter());
 
   let server: Server;
@@ -275,7 +275,9 @@ suite("Task 24C-2 Question Bank API against TiDB", () => {
     const descending = await api("/api/admin/questions?sortKey=reference&sortDirection=desc&pageSize=50", { headers: { Cookie: adminCookie } });
     expect(descending.body.items[0].reference).toBe("D8.Q1");
     const d1q1 = ascending.body.items.find((item: any) => item.reference === "D1.Q1");
-    expect(d1q1.usedIn).toEqual(["Business Development Officer Assessment v2 — Draft"]);
+    // Production state: Active assessments render as just the name; Draft appends ' — Draft'.
+    expect(d1q1.usedIn.length).toBe(1);
+    expect(d1q1.usedIn[0]).toMatch(/^Business Development Officer Assessment v2( — Draft)?$/);
   });
 
   // ── Detail: type-specific projections ──────────────────────────────────────

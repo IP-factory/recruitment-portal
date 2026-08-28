@@ -1,19 +1,57 @@
 /**
- * Quiet Authority Admin Overview: shared frontend-only application records rendered as a calm operational dashboard.
+ * Task 24D-2 — Admin Dashboard with real TiDB counts.
+ *
+ * Dashboard application counts now come from the real applications API
+ * instead of mock data.
  */
 import { AdminShell } from "@/components/admin/AdminShell";
-import { FoundationButton, StatusBadge } from "@/components/foundation/ui";
-import { adminMockData, getAdminApplications } from "@/lib/adminMockData";
-import { getShortlistedCount } from "@/lib/screeningData";
-import { useState } from "react";
+import { StatusBadge } from "@/components/foundation/ui";
+import { fetchAdminApplications, type AdminApplicationSummary } from "@/lib/adminApplicationApi";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
-  const [recentApplications] = useState(() => getAdminApplications().slice(0, 5));
-  const [shortlistedCount] = useState(() => getShortlistedCount());
-  const { metrics, activeRole } = adminMockData;
-  const dashboardMetrics = metrics.map((metric) => metric.label === "Shortlisted" ? { ...metric, value: String(shortlistedCount), detail: shortlistedCount ? "Manual shortlist selections" : "Shortlisting not started" } : metric);
-  const roleStatusSummary = activeRole.statusSummary.map((item) => item.label === "Shortlisted" ? { ...item, value: String(shortlistedCount) } : item);
-  return <AdminShell title="Dashboard"><section><p className="text-[12px] font-medium text-muted-foreground">Recruitment overview</p><h2 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-primary">Dashboard</h2><p className="mt-2 text-[15px] leading-6 text-muted-foreground">A summary of current recruitment activity and applications.</p></section><section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{dashboardMetrics.map((metric) => <article className="rounded-xl border border-border bg-white p-5 shadow-none" key={metric.label}><p className="text-[13px] font-medium text-muted-foreground">{metric.label}</p><p className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-primary">{metric.value}</p><p className="mt-2 text-[12px] leading-5 text-muted-foreground">{metric.detail}</p></article>)}</section><section className="mt-7 grid gap-6 lg:grid-cols-[minmax(0,65fr)_minmax(280px,35fr)]"><article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6"><div className="flex items-start justify-between gap-4 border-b border-border pb-5"><div><h3 className="text-lg font-semibold tracking-[-0.02em] text-primary">Recent applications</h3><p className="mt-1 text-[13px] text-muted-foreground">Latest activity for the Business Development Officer role.</p></div><button className="shrink-0 text-[13px] font-medium text-portal-blue hover:text-primary hover:underline" onClick={() => setLocation("/admin/applications")} type="button">View all applications</button></div><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead className="border-b border-border text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"><tr><th className="px-3 py-3">Candidate</th><th className="px-3 py-3">Role</th><th className="px-3 py-3">Assessment</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Date</th></tr></thead><tbody className="divide-y divide-border">{recentApplications.map((application) => <tr key={application.id}><td className="px-3 py-4 text-sm font-medium text-primary">{application.candidateName}</td><td className="px-3 py-4 text-[13px] text-muted-foreground">{application.role}</td><td className="px-3 py-4"><StatusBadge status={application.assessmentStatus} /></td><td className="px-3 py-4"><StatusBadge status={application.applicationStatus} /></td><td className="whitespace-nowrap px-3 py-4 text-[13px] text-muted-foreground">{application.appliedDateLabel}</td></tr>)}</tbody></table></div></article><article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6"><h3 className="text-lg font-semibold tracking-[-0.02em] text-primary">Active role</h3><div className="mt-5"><p className="text-base font-semibold text-primary">{activeRole.title}</p><div className="mt-2"><StatusBadge status={activeRole.status} /></div></div><dl className="mt-6 space-y-3 border-y border-border py-5"><div className="flex items-center justify-between gap-4"><dt className="text-sm text-muted-foreground">Applications</dt><dd className="text-sm font-semibold text-primary">{activeRole.applications}</dd></div><div className="flex items-center justify-between gap-4"><dt className="text-sm text-muted-foreground">Completed</dt><dd className="text-sm font-semibold text-primary">{activeRole.completed}</dd></div><div className="flex items-center justify-between gap-4"><dt className="text-sm text-muted-foreground">In Progress</dt><dd className="text-sm font-semibold text-primary">{activeRole.inProgress}</dd></div><div className="flex items-start justify-between gap-4"><dt className="text-sm text-muted-foreground">Assessment</dt><dd className="max-w-[180px] text-right text-sm font-semibold text-primary">{activeRole.assessment}</dd></div></dl><FoundationButton className="mt-5 w-full" onClick={() => setLocation("/admin/roles")} variant="secondary">View role</FoundationButton><div className="mt-6 border-t border-border pt-5"><h4 className="text-sm font-semibold text-primary">Application status</h4><dl className="mt-4 space-y-3">{roleStatusSummary.map((item) => <div className="flex items-center justify-between" key={item.label}><dt className="text-sm text-muted-foreground">{item.label}</dt><dd className="text-sm font-semibold text-primary">{item.value}</dd></div>)}</dl></div></article></section></AdminShell>;
+  const [applications, setApplications] = useState<AdminApplicationSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAdminApplications()
+      .then((d) => { if (!cancelled) setApplications(d.applications); })
+      .catch(() => { /* graceful degradation — show empty */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const totalApplications = applications.length;
+  const submitted = applications.filter((a) => a.applicationStatus !== "In Progress" && a.applicationStatus !== "Eligibility Closed").length;
+  const pendingReview = applications.filter((a) => a.evaluationStatus === "Pending OPEN Review" || a.evaluationStatus === "Pending Assessment").length;
+  const shortlisted = applications.filter((a) => a.shortlisted).length;
+  const recentApplications = [...applications].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
+
+  const metrics = [
+    { label: "Total Applications", value: String(totalApplications), detail: "All applications" },
+    { label: "Submitted", value: String(submitted), detail: "Ready for review" },
+    { label: "Pending Review", value: String(pendingReview), detail: "Awaiting scoring" },
+    { label: "Shortlisted", value: String(shortlisted), detail: shortlisted ? "Manual shortlist selections" : "Shortlisting not started" },
+  ];
+
+  return <AdminShell title="Dashboard">
+    <section><p className="text-[12px] font-medium text-muted-foreground">Recruitment overview</p><h2 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-primary">Dashboard</h2><p className="mt-2 text-[15px] leading-6 text-muted-foreground">A summary of current recruitment activity and real applications.</p></section>
+
+    <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {metrics.map((m) => <article className="rounded-xl border border-border bg-white p-5 shadow-none" key={m.label}><p className="text-[13px] font-medium text-muted-foreground">{m.label}</p><p className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-primary">{loading ? "—" : m.value}</p><p className="mt-2 text-[12px] leading-5 text-muted-foreground">{m.detail}</p></article>)}
+    </section>
+
+    <section className="mt-7">
+      <article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6">
+        <div className="flex items-start justify-between gap-4 border-b border-border pb-5">
+          <div><h3 className="text-lg font-semibold tracking-[-0.02em] text-primary">Recent applications</h3><p className="mt-1 text-[13px] text-muted-foreground">Latest real applications from TiDB.</p></div>
+          <button className="shrink-0 text-[13px] font-medium text-portal-blue hover:text-primary hover:underline" onClick={() => setLocation("/admin/applications")} type="button">View all applications</button>
+        </div>
+        {recentApplications.length > 0 ? <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead className="border-b border-border text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"><tr><th className="px-3 py-3">Candidate</th><th className="px-3 py-3">Role</th><th className="px-3 py-3">Final Score</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Date</th></tr></thead><tbody className="divide-y divide-border">{recentApplications.map((app) => <tr key={app.id}><td className="px-3 py-4 text-sm font-medium text-primary">{app.fullName}</td><td className="px-3 py-4 text-[13px] text-muted-foreground">{app.roleTitle}</td><td className="px-3 py-4 text-[13px] text-muted-foreground">{app.finalScore !== null ? app.finalScore.toFixed(1) : "Pending"}</td><td className="px-3 py-4"><StatusBadge status={app.applicationStatus} /></td><td className="whitespace-nowrap px-3 py-4 text-[13px] text-muted-foreground">{new Date(app.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td></tr>)}</tbody></table></div> : <p className="mt-6 py-8 text-center text-sm text-muted-foreground">{loading ? "Loading…" : "No applications yet."}</p>}
+      </article>
+    </section>
+  </AdminShell>;
 }

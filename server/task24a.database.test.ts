@@ -18,9 +18,12 @@ suite("Task 24A native database foundation", () => {
       (SELECT COUNT(*) FROM assessment_dimensions WHERE role_id='role-business-development-officer') AS dimensions,
       (SELECT COALESCE(SUM(weight),0) FROM assessment_dimensions WHERE role_id='role-business-development-officer') AS weight_total,
       (SELECT COUNT(*) FROM assessment_questions) AS questions,
-      (SELECT COUNT(*) FROM assessments WHERE slug='business-development-officer-assessment-v2' AND status='Draft' AND version=2) AS draft_assessments,
+      (SELECT COUNT(*) FROM assessments WHERE slug='business-development-officer-assessment-v2' AND version=2) AS bdo_v2_assessments,
+      (SELECT status FROM assessments WHERE slug='business-development-officer-assessment-v2' AND version=2 LIMIT 1) AS bdo_v2_status,
       (SELECT COUNT(*) FROM assessment_question_assignments WHERE assessment_id='assessment-business-development-officer-v2') AS assignments`);
-    expect(rows[0]).toMatchObject({ roles: 1, gates: 7, dimensions: 8, weight_total: "100", questions: 14, draft_assessments: 1, assignments: 14 });
+    expect(rows[0]).toMatchObject({ roles: 1, gates: 7, dimensions: 8, weight_total: "100", questions: 14, bdo_v2_assessments: 1, assignments: 14 });
+    // Production state: BDO v2 must be Active (post-activation). Draft is tolerated only before the activation script has been run.
+    expect(["Active", "Draft"]).toContain(rows[0].bdo_v2_status);
   });
 
   it("preserves supported type counts and v2 relationships", async () => {

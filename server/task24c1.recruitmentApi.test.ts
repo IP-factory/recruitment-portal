@@ -123,7 +123,7 @@ const suite = describe.skipIf(!databaseUrl);
 
 suite("Task 24C-1 recruitment API against TiDB", () => {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: "100kb" }));
   app.use(createRecruitmentApiRouter());
 
   let server: Server;

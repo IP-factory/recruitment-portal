@@ -220,7 +220,7 @@ describe("security: applicant API router", () => {
 
   beforeAll(async () => {
     const app = express();
-    app.use(express.json());
+    app.use(express.json({ limit: "100kb" }));
     app.use(createApplicationApiRouter());
     server = app.listen(0);
     const address = server.address() as AddressInfo;

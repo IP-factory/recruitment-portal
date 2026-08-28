@@ -160,6 +160,104 @@ export const assessmentResponses = mysqlTable("assessment_responses", {
   attemptIndex: index("responses_attempt_idx").on(table.attemptId),
 }));
 
+// ── Task 24D-2: Scoring, review and Admin evaluation persistence ──────────────
+
+export const openResponseReviews = mysqlTable("open_response_reviews", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
+  attemptId: varchar("attempt_id", { length: 64 }).notNull().references(() => assessmentAttempts.id, { onDelete: "cascade" }),
+  responseId: varchar("response_id", { length: 64 }).notNull().references(() => assessmentResponses.id, { onDelete: "cascade" }),
+  questionId: varchar("question_id", { length: 96 }).notNull().references(() => assessmentQuestions.id, { onDelete: "cascade" }),
+  adminProfileId: varchar("admin_profile_id", { length: 64 }).references(() => adminProfiles.id, { onDelete: "set null" }),
+  rawScore: int("raw_score").notNull(),
+  reviewNote: text("review_note"),
+  reviewedAt: timestamp("reviewed_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  responseQuestionUnique: uniqueIndex("open_reviews_response_question_unique").on(table.responseId, table.questionId),
+  applicationIndex: index("open_reviews_app_idx").on(table.applicationId),
+}));
+
+export const applicationIntegrityFlags = mysqlTable("application_integrity_flags", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
+  sourceQuestionId: varchar("source_question_id", { length: 96 }).notNull(),
+  comparisonQuestionId: varchar("comparison_question_id", { length: 96 }),
+  ruleId: varchar("rule_id", { length: 96 }),
+  description: text("description").notNull(),
+  source: varchar("source", { length: 96 }).notNull(),
+  status: mysqlEnum("status", ["Clear", "Flagged", "Confirmed", "Dismissed"]).notNull(),
+  confirmedBy: varchar("confirmed_by", { length: 64 }).references(() => adminProfiles.id, { onDelete: "set null" }),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  applicationIndex: index("integrity_flags_app_idx").on(table.applicationId),
+}));
+
+export const applicationBonusReviews = mysqlTable("application_bonus_reviews", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
+  bonusType: varchar("bonus_type", { length: 80 }).notNull(),
+  points: int("points").notNull(),
+  confirmed: tinyint("confirmed").default(0).notNull(),
+  adminProfileId: varchar("admin_profile_id", { length: 64 }).references(() => adminProfiles.id, { onDelete: "set null" }),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  applicationBonusUnique: uniqueIndex("bonus_reviews_app_type_unique").on(table.applicationId, table.bonusType),
+  applicationIndex: index("bonus_reviews_app_idx").on(table.applicationId),
+}));
+
+export const applicationEvaluations = mysqlTable("application_evaluations", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
+  attemptId: varchar("attempt_id", { length: 64 }).notNull().references(() => assessmentAttempts.id, { onDelete: "cascade" }),
+  baseAssessmentScore: decimal("base_assessment_score", { precision: 6, scale: 3 }),
+  verificationMultiplier: decimal("verification_multiplier", { precision: 3, scale: 2 }),
+  integrityPenalty: int("integrity_penalty"),
+  bonus: int("bonus"),
+  finalScreeningScore: decimal("final_screening_score", { precision: 6, scale: 3 }),
+  rawBand: mysqlEnum("raw_band", ["A", "B", "C", "D"]),
+  appliedBand: mysqlEnum("applied_band", ["A", "B", "C", "D"]),
+  floorMissed: varchar("floor_missed", { length: 120 }),
+  manualReviewRequired: tinyint("manual_review_required").default(0).notNull(),
+  evaluationStatus: mysqlEnum("evaluation_status", ["Pending Assessment", "Pending OPEN Review", "Scored", "Manual Review Required"]).notNull(),
+  calculatedAt: timestamp("calculated_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  applicationUnique: uniqueIndex("evaluations_app_unique").on(table.applicationId),
+}));
+
+export const applicationDimensionScores = mysqlTable("application_dimension_scores", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
+  dimensionId: varchar("dimension_id", { length: 64 }).notNull(),
+  dimensionReference: varchar("dimension_reference", { length: 16 }).notNull(),
+  normalizedScore: decimal("normalized_score", { precision: 6, scale: 3 }).notNull(),
+  weight: int("weight").notNull(),
+  weightedContribution: decimal("weighted_contribution", { precision: 6, scale: 3 }).notNull(),
+  floor: int("floor"),
+  floorStatus: varchar("floor_status", { length: 32 }),
+  calculatedAt: timestamp("calculated_at").defaultNow().notNull(),
+}, (table) => ({
+  applicationDimensionUnique: uniqueIndex("dimension_scores_app_dim_unique").on(table.applicationId, table.dimensionId),
+  applicationIndex: index("dimension_scores_app_idx").on(table.applicationId),
+}));
+
+export const applicationShortlist = mysqlTable("application_shortlist", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
+  shortlisted: tinyint("shortlisted").default(1).notNull(),
+  updatedBy: varchar("updated_by", { length: 64 }).references(() => adminProfiles.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  applicationUnique: uniqueIndex("shortlist_app_unique").on(table.applicationId),
+}));
+
 export type RecruitmentRole = typeof recruitmentRoles.$inferSelect;
 export type AssessmentDimension = typeof assessmentDimensions.$inferSelect;
 export type AssessmentQuestion = typeof assessmentQuestions.$inferSelect;
@@ -171,3 +269,9 @@ export type Application = typeof applications.$inferSelect;
 export type ApplicationEligibilityResponse = typeof applicationEligibilityResponses.$inferSelect;
 export type AssessmentAttempt = typeof assessmentAttempts.$inferSelect;
 export type AssessmentResponse = typeof assessmentResponses.$inferSelect;
+export type OpenResponseReview = typeof openResponseReviews.$inferSelect;
+export type ApplicationIntegrityFlag = typeof applicationIntegrityFlags.$inferSelect;
+export type ApplicationBonusReview = typeof applicationBonusReviews.$inferSelect;
+export type ApplicationEvaluation = typeof applicationEvaluations.$inferSelect;
+export type ApplicationDimensionScore = typeof applicationDimensionScores.$inferSelect;
+export type ApplicationShortlist = typeof applicationShortlist.$inferSelect;
