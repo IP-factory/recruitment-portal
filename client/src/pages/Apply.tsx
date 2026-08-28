@@ -1,16 +1,19 @@
 /**
  * Quiet Authority role selection: a concise, reusable opportunity selector before the focused application workspace begins.
+ * Roles are database-backed (Task 24C-1) — TiDB is the source of truth and
+ * failures surface as a visible error state rather than stale mock defaults.
  */
+import { DataErrorState, DataLoadingState } from "@/components/AsyncStates";
 import { AlignmentMark, PublicFooter, PublicNavigation } from "@/components/foundation/navigation";
 import { FoundationButton, StatusBadge } from "@/components/foundation/ui";
-import { getBusinessDevelopmentOfficerRole, type RecruitmentRole } from "@/lib/adminRoleData";
+import { usePublicRoles } from "@/hooks/useRecruitmentData";
+import type { PublicRecruitmentRole } from "@/lib/recruitmentApi";
 import { BriefcaseBusiness, Check, ChevronRight, Clock3, MapPin } from "lucide-react";
-import { useState } from "react";
 import { useLocation } from "wouter";
 
 const assessments = ["Relevant business development experience", "Commercial and sales judgement", "Client relationship capability", "Approach to business growth opportunities"] as const;
 
-function RoleCard({ role, onApply }: { role: RecruitmentRole; onApply: () => void }) {
+function RoleCard({ role, onApply }: { role: PublicRecruitmentRole; onApply: () => void }) {
   return (
     <article className="rounded-xl border border-border bg-white p-7 shadow-none sm:p-8">
       <div className="grid gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(240px,3fr)] lg:gap-8">
@@ -42,7 +45,8 @@ function RoleCard({ role, onApply }: { role: RecruitmentRole; onApply: () => voi
 
 export default function Apply() {
   const [, setLocation] = useLocation();
-  const [availableRoles] = useState(() => [getBusinessDevelopmentOfficerRole()].filter((role) => role.status === "Open" || role.status === "Closed"));
+  const { status, data, error, reload } = usePublicRoles();
+  const availableRoles = data ?? [];
 
   return (
     <div className="min-h-screen bg-white text-foreground">
@@ -59,7 +63,10 @@ export default function Apply() {
         <section className="portal-container pb-20 pt-14 sm:pb-24 sm:pt-16">
           <div className="mb-6 flex items-center justify-between border-b border-border pb-5"><div><p className="section-kicker">Available role</p><h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-primary">Available role</h2></div></div>
           <div className="space-y-5">
-            {availableRoles.map((role) => <RoleCard key={role.title} onApply={() => setLocation("/apply/business-development-officer")} role={role} />)}
+            {status === "loading" ? <DataLoadingState label="Loading available roles" /> : null}
+            {status === "error" ? <DataErrorState message={error ?? "Unable to load this recruitment role."} onRetry={reload} /> : null}
+            {status === "ready" && !availableRoles.length ? <p className="text-[13px] leading-5 text-muted-foreground">There are no roles open for applications right now.</p> : null}
+            {availableRoles.map((role) => <RoleCard key={role.slug} onApply={() => setLocation(`/apply/${role.slug}`)} role={role} />)}
           </div>
 
           <div className="mt-8 border border-border bg-portal-surface px-6 py-5 sm:px-7">

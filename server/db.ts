@@ -1,17 +1,17 @@
 import mysql from "mysql2/promise";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle, type MySql2Database } from "drizzle-orm/mysql2";
 import { and, asc, eq } from "drizzle-orm";
 import { assessmentDimensions, assessmentQuestionAssignments, assessmentQuestions, assessments, eligibilityGates, questionOptions, recruitmentRoles, screeningConfigurations } from "../drizzle/schema";
 
-let database: any;
+let database: MySql2Database | null = null;
 
-export function getDatabase() {
+export function getDatabase(): MySql2Database {
   if (!database) {
     const url = process.env.DATABASE_URL;
     if (!url) throw new Error("DATABASE_URL is not configured");
     database = drizzle(mysql.createPool(url));
   }
-  return database!;
+  return database;
 }
 
 export async function getRecruitmentRoleConfiguration(slug: string) {
@@ -27,11 +27,29 @@ export async function getRecruitmentRoleConfiguration(slug: string) {
   return { role, gates, dimensions, assessments: assessmentsForRole, screening: screening[0] ?? null };
 }
 
+/**
+ * TODO (Assessment database-integration phase):
+ *
+ * This function currently fetches `questionOptions` only for
+ * `assignments[0].question.id` and returns them as `firstQuestionOptions`.
+ *
+ * The Business Development Officer Assessment v2 contains 14 questions, so
+ * this is INCORRECT for any consumer that needs options across the full
+ * assessment. When the Assessment v2 API is built, this must be replaced with
+ * a query that fetches options for ALL assigned questions (e.g. via a WHERE
+ * questionId IN (...assignedQuestionIds) query), and the property must be
+ * renamed from `firstQuestionOptions` to `questionOptions` (keyed by
+ * questionId) so callers cannot accidentally treat the first question's options
+ * as representative of the whole assessment.
+ *
+ * Do not rely on `firstQuestionOptions` in any application code.
+ */
 export async function getAssessmentConfiguration(slug: string) {
   const db = getDatabase();
   const assessment = (await db.select().from(assessments).where(eq(assessments.slug, slug)).limit(1))[0];
   if (!assessment) return null;
   const assignments = await db.select({ assignment: assessmentQuestionAssignments, question: assessmentQuestions }).from(assessmentQuestionAssignments).innerJoin(assessmentQuestions, eq(assessmentQuestionAssignments.questionId, assessmentQuestions.id)).where(eq(assessmentQuestionAssignments.assessmentId, assessment.id)).orderBy(asc(assessmentQuestionAssignments.displayOrder));
+  // NOTE: Only fetches options for the first question — see TODO above.
   const options = assignments.length ? await db.select().from(questionOptions).where(eq(questionOptions.questionId, assignments[0].question.id)) : [];
   return { assessment, assignments, firstQuestionOptions: options };
 }

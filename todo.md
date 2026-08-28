@@ -388,3 +388,75 @@ The Admin Question Bank now normalizes the seven formal question types, D1–D8 
 - [x] Apply one reviewed native migration through the schema-first workflow and verify tables, foreign keys, seed counts, and key values.
 - [x] Add deterministic database schema/seed verification tests with no fabricated candidate submissions, CV files, or reviews.
 - [x] Run TypeScript, full tests, production build, and frontend regression checks; document Task 24A scope boundaries and checkpoint.
+
+## Task 24B — Replace Demo Admin Login with Real Authentication
+
+- [x] Audit the current demo Admin session, login route, protected route guard, native Manus auth scaffold, and session contracts.
+- [x] Remove demo credentials, plaintext credential comparison, localStorage auth source of truth, and hidden bypasses.
+- [x] Add the native Admin profile authorization table with unique auth_user_id, Admin role, and Active/Inactive status.
+- [x] Add server-side Admin authorization helpers requiring authenticated session, active Admin profile, and permitted role.
+- [x] Add protected Admin auth/session procedure(s) exposing authenticated identity and authorization state without exposing internals.
+- [x] Preserve the existing approved Admin login visual design while removing demo credential copy.
+- [x] Route unauthenticated /admin/* requests to /admin/login with safe return-path support and no loops.
+- [x] Show restrained Access unavailable state for authenticated non-Admin users with sign-out action.
+- [x] Replace demo sign-in behavior with native Manus authentication initiation and native session resolution.
+- [x] Support authorized Admin redirect to /admin and safe return to the originally requested Admin route.
+- [x] Redirect already-authorized Admin users away from /admin/login.
+- [x] Use native logout, clear client auth cache, redirect to /admin/login, and prevent usable protected content after Back navigation.
+- [x] Update Admin top-bar identity to use authenticated session/profile data without hard-coded email copy.
+- [x] Preserve applicant passwordless flow and isolate legacy public auth pages from Admin authentication.
+- [x] Keep recruitment configuration, mock candidates, CV metadata, scoring, Assessment v2 Draft/Inactive state, and all applicant UX unchanged.
+- [x] Add secure provisioning documentation for the initial admin@gmail.com Admin profile without storing or exposing a password.
+- [x] Add deterministic authentication, authorization, route-protection, logout, and applicant-isolation tests.
+- [x] Run TypeScript, full tests, production build, and browser verification for Admin and applicant routes; document and checkpoint Task 24B.
+
+### Task 24B checkpoint (2026-08-28)
+
+- Demo Admin credentials and the localStorage session were removed; Admin access now requires a real server session plus an Active Admin profile.
+- Schema migration `0001_task24b_admin_auth` applied: `users.password_hash`, `admin_profiles` (unique `auth_user_id`, no credential columns), `auth_sessions` (token hashes only).
+- Server auth: salted scrypt hashing, DB-backed revocable sessions in an HttpOnly `app_session_id` cookie, `/api/admin/session`, sign-in/sign-out, and the native Manus OAuth callback; authorization rule = session + profile + Active + Admin role.
+- Initial Admin provisioned: `admin@gmail.com` (user 30001, Active Admin profile). Password supplied by the operator via `ADMIN_PASSWORD` and stored only as a scrypt hash; rotate via the same provisioning script.
+- Verification: tsc clean, 68/68 tests pass (incl. live-DB authorization schema tests), production build succeeds, browser verification passed all six flow checks; details in `task-24b-auth-notes.md`.
+
+## Task 24C-1 — Cut Over Role, Eligibility and Evaluation Framework to the Database
+
+- [x] Audit schema, seed data, and current mock consumers for the three cut-over domains.
+- [x] Add the shared recruitment API contract with server-authoritative role validation and applicant-safe DTO shapes.
+- [x] Add the server repository layer for roles, eligibility gates, and the evaluation framework with public/admin projections.
+- [x] Add public endpoints for the role list, role detail, and eligibility configuration; hide Draft/Archived and never expose weights, floors, bands, multipliers, penalties, bonus config, internal gate IDs, or database IDs.
+- [x] Add Admin endpoints for role CRUD, eligibility, and evaluation framework guarded by the Task 24B authorization (session + Active Admin profile + Admin role).
+- [x] Add the client API module with cookie credentials, restrained JSON error handling, async hooks, and loading/error states — no mock fallback.
+- [x] Cut over /apply, the Applicant Information step (G3 minimum years from gate configuration, not hard-coded), and the Role Eligibility section to the API.
+- [x] Cut over Admin Roles list, Role Detail, Role Form (create/update), and the Evaluation Framework tab to the API while preserving the approved UI.
+- [x] Retire the mock sources for the three domains (adminRoleData.ts deleted) while keeping unmigrated mock domains functional.
+- [x] Add server tests A–J plus evaluation-framework, status-regression, and no-scoring-leak coverage, and deterministic client API tests.
+- [x] Run TypeScript, full tests, production build, and browser verification for public, Admin, and auth flows; document and checkpoint Task 24C-1.
+
+### Task 24C-1 checkpoint (2026-08-28)
+
+- TiDB is now the runtime source of truth for Recruitment Role (read + write), Eligibility configuration (read), and Evaluation Framework (read); `client/src/lib/adminRoleData.ts` was deleted and no `databaseData ?? mockData` fallback exists anywhere.
+- Public endpoints expose applicant-safe shapes only; the public eligibility response carries gate wording plus just the G3 `minimumYears`, and the applicant evaluator consumes it instead of a hard-coded "3".
+- Admin endpoints reuse Task 24B authorization unchanged (401 for anonymous and authenticated non-Admin users); role create/update is validated server-side with unique slug allocation and metadata-only PATCH.
+- Question Bank, Assessment Builder, applications, candidates, CVs, scoring, screening, shortlist, review notes, and OPEN rubric reviews remain frontend-local by design; their stable role references live in `recruitmentRoleReferences.ts`.
+- Verification: tsc clean, 98/98 tests pass (24A + 24B + 24C-1 live-DB suites + client suites), production build succeeds, browser verification passed for /apply through CV step, Admin roles/detail/framework values (22/18/14/12/12/8/8/6, floors 50/40/50, verification 1.00/0.95/0.85, −10 integrity, +5 bonus, bands A/B/C/D), and sign-in/sign-out regression; details in `task-24c1-database-cutover-notes.md`.
+
+## Task 24C-2 — Cut Over Question Bank to the Database
+
+- [x] Audit the DB question schema, seed data, and the current Question Bank UI/mock data sources.
+- [x] Add the shared Question Bank contract: the 7 formal types (GATE/ORDINAL/MULTI/NUMERIC/SJT/OPEN/EVIDENCE), DTOs, and server-authoritative type-aware validation.
+- [x] Add the server repository layer (list/detail/create/update with transactions, type-specific configuration, cross-checks; no SQL in route handlers).
+- [x] Add Admin-only endpoints for questions list (search/type/dimension/status filters, pagination 10/page, sorting, concise rows), detail (type-specific projections + cross-checks from both sides), create (type-aware validation, unique reference, qWeight 1–3 scored / null gate+evidence, max 5), and update (reference locked, type change blocked while used in an assessment, no stale nested config).
+- [x] Add client API functions and hooks (useQuestionBank / useQuestionDetail with 404→not-found handling), restrained errors, no mock fallback.
+- [x] Cut over AdminQuestionBank list, AdminQuestionDetail, and AdminQuestionForm (create + edit with async-gated editor so blank defaults can never be saved over real data) while preserving the approved UI.
+- [x] Retire questionBankData.ts / frameworkQuestionData.ts as Question Bank runtime sources with documented LEGACY boundary headers (kept only for Assessment Builder/Preview, v2 Scoring Preview, scoring files, candidate placeholder — all out of scope).
+- [x] Add server tests (28: validation contract, auth 401s, seeded list 14/type counts/filters/sort/pagination, detail projections D1.Q1/D3.Q1/D2.Q2/D5.Q1/D6.Q1/D2.Q1E, cross-checks, create/update lifecycle, duplicate/invalid/type-change protection) and merged client tests (24C-1 + 24C-2).
+- [x] Run TypeScript, full tests, production build, and browser verification (list/detail/create/edit/auth/24C-1 regression); document and checkpoint Task 24C-2.
+
+### Task 24C-2 checkpoint (2026-08-28)
+
+- TiDB is now the runtime source of truth for the Admin Question Bank: list, detail, create, and edit read/write through `/api/admin/questions` guarded by the Task 24B authorization; there are no public Question Bank endpoints and no mock fallback.
+- Dimensions D1–D8 resolve from the database (no second hard-coded copy); the seeded 14 questions (ORDINAL 3 / MULTI 3 / NUMERIC 2 / SJT 2 / OPEN 3 / EVIDENCE 1) are served with type-specific projections including the D1.Q1 close→G3 option, SJT internal explanations, OPEN rubric ranges, EVIDENCE multipliers 1.00/0.95/0.85 paired to D2.Q1, and cross-checks from both sides.
+- Question references are locked after creation; a question used in an assessment cannot change type; nested configuration is replaced transactionally so no stale config survives an edit.
+- `questionBankData.ts` and `frameworkQuestionData.ts` are retired as Question Bank runtime sources (LEGACY boundary headers document their remaining role for the unmigrated Assessment Builder/Preview, v2 Scoring Preview, scoring files, and candidate placeholder). Task 24C-1 domains are untouched and regression-verified.
+- Verification: tsc clean, 134/134 tests pass across 13 files (including 28 new Question Bank tests), production build succeeds, browser verification 7/7 (auth guard, list/filters/pagination, D1.Q1/D5.Q1/D2.Q1E details, create + edit with locked reference and prefilled values, restrained not-found, 24C-1 regression on /apply and /admin/roles); browser-created test data cleaned up so the seed remains at exactly 14 questions; details in `task-24c2-question-bank-cutover-notes.md`.
+

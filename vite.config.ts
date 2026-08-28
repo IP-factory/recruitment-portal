@@ -233,6 +233,15 @@ export default defineConfig({
       "localhost",
       "127.0.0.1",
     ],
+    // Proxy all /api/* requests to the Express API server so the browser
+    // stays on origin localhost:3000 (preserving HttpOnly session cookies)
+    // while API calls transparently reach Express on localhost:3100.
+    proxy: {
+      "/api": {
+        target: "http://localhost:3100",
+        changeOrigin: true,
+      },
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],

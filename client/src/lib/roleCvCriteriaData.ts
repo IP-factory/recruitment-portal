@@ -1,5 +1,5 @@
 /** Quiet Authority CV criteria data: role-specific browser-local configuration only; no candidate CV evidence or scoring. */
-import { BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID } from "@/lib/adminRoleData";
+import { BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID } from "@/lib/recruitmentRoleReferences";
 
 export type CvCriterionStatus = "Active" | "Inactive";
 export type CvEvidenceCriterion = { id: string; name: string; description: string; weight: number; order: number; status: CvCriterionStatus };

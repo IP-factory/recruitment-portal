@@ -1,5 +1,5 @@
 /** Quiet Authority CV evidence data: explicit frontend demo evidence and Admin-only manual review state; no automatic extraction or score calculation. */
-import { BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID } from "@/lib/adminRoleData";
+import { BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID } from "@/lib/recruitmentRoleReferences";
 import { getRoleCvCriteria, type CvEvidenceCriterion } from "@/lib/roleCvCriteriaData";
 
 export type CvEvidenceItem = { source: string; period?: string; text: string; sectionReference?: string };

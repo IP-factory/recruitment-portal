@@ -1,3 +1,10 @@
+/**
+ * Legacy in-memory framework question set (LEGACY mock source).
+ *
+ * As of Task 24C-2 the Admin Question Bank CRUD reads/writes TiDB and no longer
+ * consumes this module. It remains the input for the v2 Scoring Preview and the
+ * Assessment Builder/Detail (Task 24C-3), which have not yet been cut over.
+ */
 import type { AdminQuestionOption, NumericBand, QuestionBankQuestion, QuestionConfig, RubricAnchor } from "@/lib/questionBankData";
 
 const DRAFT_ASSESSMENT_NAME = "Business Development Officer Assessment v2 — Draft";

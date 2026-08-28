@@ -3,7 +3,8 @@
  */
 import { AlignmentMark } from "@/components/foundation/navigation";
 import { FoundationButton } from "@/components/foundation/ui";
-import { isAdminAuthenticated, signOutAdmin } from "@/lib/adminSession";
+import { useAdminSession } from "@/contexts/AdminAuthContext";
+import { resolveAdminDisplayEmail, resolveAdminDisplayName } from "@/lib/adminSession";
 import { BriefcaseBusiness, ClipboardList, FileText, LayoutDashboard, LibraryBig, ListChecks, LogOut, Menu, Settings, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
@@ -27,20 +28,26 @@ function NavigationList({ location, navigate, close }: { location: string; navig
   return <nav className="space-y-1" aria-label="Admin navigation">{navigation.map((item) => { const Icon = item.icon; return <button className={itemClass(item.href)} key={item.href} onClick={() => { navigate(item.href); close?.(); }} type="button"><Icon className="size-[18px]" />{item.label}</button>; })}<div className="my-4 border-t border-border" /><button className={itemClass("/admin/settings")} onClick={() => { navigate("/admin/settings"); close?.(); }} type="button"><Settings className="size-[18px]" />Settings</button></nav>;
 }
 
-function ProfileBlock({ signOut }: { signOut: () => void }) {
-  return <div className="border-t border-border pt-4"><div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-white">A</span><div className="min-w-0"><p className="text-sm font-semibold text-primary">Administrator</p><p className="truncate text-[12px] text-muted-foreground">admin@gmail.com</p></div></div><button className="mt-4 inline-flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary" onClick={signOut} type="button"><LogOut className="size-3.5" />Sign out</button></div>;
+function ProfileBlock({ name, email, signOut }: { name: string; email: string | null; signOut: () => void }) {
+  const initial = (name || email || "A").trim().charAt(0).toUpperCase() || "A";
+  return <div className="border-t border-border pt-4"><div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-white">{initial}</span><div className="min-w-0"><p className="truncate text-sm font-semibold text-primary">{name}</p>{email && email !== name ? <p className="truncate text-[12px] text-muted-foreground">{email}</p> : null}</div></div><button className="mt-4 inline-flex items-center gap-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary" onClick={signOut} type="button"><LogOut className="size-3.5" />Sign out</button></div>;
 }
 
 export function AdminShell({ title, children }: { title: string; children: ReactNode }) {
+  const { state, signOut } = useAdminSession();
   const [location, setLocation] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [allowed, setAllowed] = useState(false);
-  useEffect(() => { if (!isAdminAuthenticated()) setLocation("/admin/login"); else setAllowed(true); }, [setLocation]);
-  const signOut = () => { signOutAdmin(); setLocation("/admin/login"); };
+  // Defensive secondary check: the route guard already blocks unauthorized
+  // sessions, so the shell never renders protected content while resolving.
+  const allowed = state.status === "authorized";
+  useEffect(() => { if (state.status !== "authorized" && state.status !== "loading") setLocation("/admin/login"); }, [state.status, setLocation]);
+  const handleSignOut = () => { void signOut().then(() => setLocation("/admin/login")); };
+  const displayName = resolveAdminDisplayName(state);
+  const displayEmail = resolveAdminDisplayEmail(state);
   if (!allowed) return null;
   return <div className="min-h-screen bg-portal-surface text-foreground lg:flex">
-    <aside className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-border bg-white p-5 lg:flex"><BrandLockup /><div className="mt-9 flex-1"><NavigationList location={location} navigate={setLocation} /></div><ProfileBlock signOut={signOut} /></aside>
-    {menuOpen ? <><button aria-label="Close navigation drawer" className="fixed inset-0 z-40 bg-primary/20 lg:hidden" onClick={() => setMenuOpen(false)} type="button" /><aside className="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col bg-white p-5 shadow-[8px_0_24px_rgba(16,24,40,0.12)] lg:hidden"><div className="flex items-start justify-between"><BrandLockup /><button aria-label="Close navigation" className="rounded-md p-2 text-muted-foreground hover:bg-portal-surface hover:text-primary" onClick={() => setMenuOpen(false)} type="button"><X className="size-5" /></button></div><div className="mt-9 flex-1"><NavigationList close={() => setMenuOpen(false)} location={location} navigate={setLocation} /></div><ProfileBlock signOut={signOut} /></aside></> : null}
+    <aside className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-border bg-white p-5 lg:flex"><BrandLockup /><div className="mt-9 flex-1"><NavigationList location={location} navigate={setLocation} /></div><ProfileBlock email={displayEmail} name={displayName} signOut={handleSignOut} /></aside>
+    {menuOpen ? <><button aria-label="Close navigation drawer" className="fixed inset-0 z-40 bg-primary/20 lg:hidden" onClick={() => setMenuOpen(false)} type="button" /><aside className="fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col bg-white p-5 shadow-[8px_0_24px_rgba(16,24,40,0.12)] lg:hidden"><div className="flex items-start justify-between"><BrandLockup /><button aria-label="Close navigation" className="rounded-md p-2 text-muted-foreground hover:bg-portal-surface hover:text-primary" onClick={() => setMenuOpen(false)} type="button"><X className="size-5" /></button></div><div className="mt-9 flex-1"><NavigationList close={() => setMenuOpen(false)} location={location} navigate={setLocation} /></div><ProfileBlock email={displayEmail} name={displayName} signOut={handleSignOut} /></aside></> : null}
     <div className="min-w-0 flex-1"><header className="flex h-16 items-center justify-between border-b border-border bg-white px-4 sm:h-[68px] sm:px-6 lg:px-8"><div className="flex items-center gap-3"><button aria-label="Open navigation" className="rounded-md p-2 text-muted-foreground hover:bg-portal-surface hover:text-primary lg:hidden" onClick={() => setMenuOpen(true)} type="button"><Menu className="size-5" /></button><h1 className="text-base font-semibold text-primary">{title}</h1></div><span className="rounded-md bg-portal-blue-soft px-2.5 py-1 text-[12px] font-medium text-primary">Admin</span></header><main className="mx-auto w-full max-w-[1360px] p-4 sm:p-6 lg:p-8">{children}</main></div>
   </div>;
 }

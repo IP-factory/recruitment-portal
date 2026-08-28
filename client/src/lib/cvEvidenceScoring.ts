@@ -1,6 +1,6 @@
 /** Quiet Authority CV Evidence scoring: deterministic Admin-only arithmetic over configured active criteria and explicit manual ratings. */
 import { getCandidateCvEvidenceReviewSummary, type CandidateCriterionEvidence } from "@/lib/candidateCvEvidenceData";
-import { BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID } from "@/lib/adminRoleData";
+import { BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID } from "@/lib/recruitmentRoleReferences";
 import { getRoleCvCriteria, type CvEvidenceCriterion } from "@/lib/roleCvCriteriaData";
 
 export type CvEvidenceScoreUnavailableReason = "incomplete-ratings" | "invalid-total-weight" | "no-active-criteria";

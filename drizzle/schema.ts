@@ -1,8 +1,16 @@
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, tinyint, uniqueIndex, index } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(), openId: varchar("openId", { length: 64 }).notNull().unique(), name: text("name"), email: varchar("email", { length: 320 }), loginMethod: varchar("loginMethod", { length: 64 }), role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(), createdAt: timestamp("createdAt").defaultNow().notNull(), updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(), lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  id: int("id").autoincrement().primaryKey(), openId: varchar("openId", { length: 64 }).notNull().unique(), name: text("name"), email: varchar("email", { length: 320 }), loginMethod: varchar("loginMethod", { length: 64 }), role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(), passwordHash: varchar("password_hash", { length: 255 }), createdAt: timestamp("createdAt").defaultNow().notNull(), updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(), lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
+
+export const adminProfiles = mysqlTable("admin_profiles", {
+  id: varchar("id", { length: 64 }).primaryKey(), authUserId: int("auth_user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }), email: varchar("email", { length: 320 }).notNull(), fullName: text("full_name"), role: mysqlEnum("role", ["Admin"]).notNull(), status: mysqlEnum("status", ["Active", "Inactive"]).notNull(), createdAt: timestamp("created_at").defaultNow().notNull(), updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export const authSessions = mysqlTable("auth_sessions", {
+  id: varchar("id", { length: 64 }).primaryKey(), userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), tokenHash: varchar("token_hash", { length: 128 }).notNull().unique(), expiresAt: timestamp("expires_at").notNull(), createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({ userIndex: index("auth_sessions_user_idx").on(table.userId) }));
 
 export const recruitmentRoles = mysqlTable("recruitment_roles", {
   id: varchar("id", { length: 64 }).primaryKey(), slug: varchar("slug", { length: 120 }).notNull().unique(), title: varchar("title", { length: 180 }).notNull(), department: varchar("department", { length: 160 }).notNull(), location: varchar("location", { length: 160 }).notNull(), employmentType: varchar("employment_type", { length: 80 }).notNull(), shortDescription: text("short_description").notNull(), fullDescription: text("full_description").notNull(), status: mysqlEnum("status", ["Draft", "Open", "Closed", "Archived"]).notNull(), openingDate: varchar("opening_date", { length: 32 }), closingDate: varchar("closing_date", { length: 32 }), createdAt: timestamp("created_at").defaultNow().notNull(), updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
@@ -84,3 +92,6 @@ export type RecruitmentRole = typeof recruitmentRoles.$inferSelect;
 export type AssessmentDimension = typeof assessmentDimensions.$inferSelect;
 export type AssessmentQuestion = typeof assessmentQuestions.$inferSelect;
 export type Assessment = typeof assessments.$inferSelect;
+export type AuthUser = typeof users.$inferSelect;
+export type AdminProfile = typeof adminProfiles.$inferSelect;
+export type AuthSession = typeof authSessions.$inferSelect;

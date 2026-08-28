@@ -3,8 +3,10 @@
  */
 import { ApplicationShell } from "@/components/application/ApplicationShell";
 import { RoleEligibilitySection } from "@/components/application/RoleEligibilitySection";
+import { DataErrorState } from "@/components/AsyncStates";
 import { FieldFrame, FoundationButton, FoundationInput, FoundationSelect } from "@/components/foundation/ui";
-import { evaluateApplicantEligibility, emptyApplicantEligibilityAnswers, type ApplicantEligibilityAnswers } from "@/lib/eligibilityData";
+import { usePublicEligibility } from "@/hooks/useRecruitmentData";
+import { BUSINESS_DEVELOPMENT_OFFICER_ROUTE, evaluateApplicantEligibility, emptyApplicantEligibilityAnswers, type ApplicantEligibilityAnswers, type ApplicantEligibilityGateConfiguration } from "@/lib/eligibilityData";
 import { type ApplicantInformation, emptyApplicantInformation, loadApplicantEligibilityAnswers, loadApplicantInformation, saveApplicantEligibilityAnswers, saveApplicantEligibilityEvaluation, saveApplicantInformation } from "@/lib/applicationData";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -33,6 +35,15 @@ export default function ApplicantInformation() {
   const [hydrated, setHydrated] = useState(false);
   const errors = useMemo(() => getErrors(data), [data]);
   const formValid = Object.values(errors).every((error) => !error);
+  // Task 24C-1: gate configuration (G3 minimum years) comes from TiDB via the
+  // public eligibility endpoint — never from a hard-coded local value.
+  const gateConfiguration = usePublicEligibility(BUSINESS_DEVELOPMENT_OFFICER_ROUTE);
+  const eligibilityConfiguration = useMemo<ApplicantEligibilityGateConfiguration | null>(() => {
+    if (gateConfiguration.status !== "ready" || !gateConfiguration.data) return null;
+    const experienceGate = gateConfiguration.data.gates.find((gate) => gate.gateType === "experience");
+    return typeof experienceGate?.minimumYears === "number" ? { minimumYears: experienceGate.minimumYears } : null;
+  }, [gateConfiguration.status, gateConfiguration.data]);
+  const configurationUnavailable = gateConfiguration.status === "error" || (gateConfiguration.status === "ready" && !eligibilityConfiguration);
 
   useEffect(() => { setData(loadApplicantInformation()); setEligibility(loadApplicantEligibilityAnswers()); setHydrated(true); }, []);
   useEffect(() => { if (hydrated) { saveApplicantInformation(data); saveApplicantEligibilityAnswers(eligibility); } }, [data, eligibility, hydrated]);
@@ -42,8 +53,8 @@ export default function ApplicantInformation() {
   const errorFor = (field: keyof typeof errors) => touched[field] ? errors[field] : undefined;
   const continueToCv = () => {
     setTouched({ fullName: true, email: true, phoneNumber: true, location: true, jobTitle: true, totalExperience: true, businessDevelopmentExperience: true, abujaAvailability: true, plannedRelocationDate: true, rightToWork: true, outboundWork: true, verificationConsent: true });
-    if (!formValid) return;
-    const evaluation = evaluateApplicantEligibility(eligibility, data.businessDevelopmentExperience);
+    if (!formValid || !eligibilityConfiguration) return;
+    const evaluation = evaluateApplicantEligibility(eligibility, data.businessDevelopmentExperience, eligibilityConfiguration);
     if (evaluation.incomplete) return;
     saveApplicantInformation(data);
     saveApplicantEligibilityAnswers(eligibility);
@@ -80,7 +91,11 @@ export default function ApplicantInformation() {
           </div>
         </section>
         <RoleEligibilitySection answers={eligibility} onBlur={markTouched} onChange={updateEligibility} touched={touched} />
-        <div className="mt-9 flex justify-end border-t border-border pt-6"><FoundationButton className="w-full sm:w-auto" disabled={!hydrated} size="lg" type="submit">Continue to CV</FoundationButton></div>
+        {configurationUnavailable ? (
+          <div className="mt-9 border-t border-border pt-6"><DataErrorState message={gateConfiguration.error ?? "The role eligibility configuration could not be loaded."} onRetry={gateConfiguration.reload} /></div>
+        ) : (
+          <div className="mt-9 flex justify-end border-t border-border pt-6"><FoundationButton className="w-full sm:w-auto" disabled={!hydrated || gateConfiguration.status === "loading" || !eligibilityConfiguration} size="lg" type="submit">Continue to CV</FoundationButton></div>
+        )}
       </form>
     </section>
   </ApplicationShell>;

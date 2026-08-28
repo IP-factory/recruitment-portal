@@ -1,5 +1,12 @@
 /**
- * Frontend-only Question Bank contract.
+ * Frontend-only Question Bank contract (LEGACY mock source).
+ *
+ * As of Task 24C-2 the Admin Question Bank CRUD (list, detail, create, edit)
+ * reads/writes TiDB through `recruitmentApi.ts` and NO LONGER consumes this
+ * module. It is retained only for the domains that have not yet been cut over:
+ * the Assessment Builder / Assessment Detail (Task 24C-3), the v2 Scoring
+ * Preview and scoring files, and the candidate placeholder. Do not reintroduce
+ * it as a runtime source for the Question Bank pages.
  *
  * The Admin configuration model is intentionally richer than the applicant
  * assessment projection. Existing applicant questions continue to consume the

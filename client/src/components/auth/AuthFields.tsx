@@ -1,30 +1,68 @@
 /**
- * Quiet Authority auth fields: existing input language with clear, local password visibility and validation feedback.
+ * Auth form field components: email and password inputs wired to the foundation
+ * FieldFrame + FoundationInput primitives.
+ *
+ * These are intentionally minimal — they exist to satisfy the auth page imports
+ * that were present before this file was created. Extend as needed when the
+ * authentication feature is fully implemented.
  */
-import { FoundationInput } from "@/components/foundation/ui";
-import { Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
+import { FieldFrame, FoundationInput } from "@/components/foundation/ui";
 
-export function EmailField({ value, onChange, onBlur, error }: { value: string; onChange: (value: string) => void; onBlur: () => void; error?: string }) {
+interface EmailFieldProps {
+  value: string;
+  onChange: (value: string) => void;
+  onBlur?: () => void;
+  error?: string;
+}
+
+export function EmailField({ value, onChange, onBlur, error }: EmailFieldProps) {
   return (
-    <label className="block space-y-1.5">
-      <span className="block text-sm font-medium text-foreground">Email address</span>
-      <FoundationInput aria-invalid={Boolean(error)} error={Boolean(error)} onBlur={onBlur} onChange={(event) => onChange(event.target.value)} placeholder="you@example.com" type="email" value={value} />
-      {error ? <span className="block text-[13px] text-status-error-strong">{error}</span> : null}
-    </label>
+    <FieldFrame error={error} label="Email address" required>
+      <FoundationInput
+        aria-describedby={error ? "email-error" : undefined}
+        autoComplete="email"
+        error={!!error}
+        onBlur={onBlur}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="you@example.com"
+        type="email"
+        value={value}
+      />
+    </FieldFrame>
   );
 }
 
-export function PasswordField({ label, placeholder, value, onChange, onBlur, helper, error }: { label: string; placeholder: string; value: string; onChange: (value: string) => void; onBlur: () => void; helper?: string; error?: string }) {
-  const [showPassword, setShowPassword] = useState(false);
+interface PasswordFieldProps {
+  value: string;
+  onChange: (value: string) => void;
+  onBlur?: () => void;
+  error?: string;
+  label?: string;
+  placeholder?: string;
+  helper?: string;
+}
+
+export function PasswordField({
+  value,
+  onChange,
+  onBlur,
+  error,
+  label = "Password",
+  placeholder = "Enter your password",
+  helper,
+}: PasswordFieldProps) {
   return (
-    <div className="space-y-1.5">
-      <label className="block text-sm font-medium text-foreground">{label}</label>
-      <div className="relative">
-        <FoundationInput aria-invalid={Boolean(error)} className="pr-11" error={Boolean(error)} onBlur={onBlur} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} type={showPassword ? "text" : "password"} value={value} />
-        <button aria-label={showPassword ? "Hide password" : "Show password"} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-portal-surface hover:text-primary" onClick={() => setShowPassword((visible) => !visible)} type="button">{showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button>
-      </div>
-      {error ? <span className="block text-[13px] text-status-error-strong">{error}</span> : helper ? <span className="block text-[13px] text-muted-foreground">{helper}</span> : null}
-    </div>
+    <FieldFrame error={error} helper={helper} label={label} required>
+      <FoundationInput
+        aria-describedby={error ? "password-error" : undefined}
+        autoComplete="current-password"
+        error={!!error}
+        onBlur={onBlur}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        type="password"
+        value={value}
+      />
+    </FieldFrame>
   );
 }

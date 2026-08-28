@@ -1,6 +1,8 @@
 /** Quiet Authority routes: the internal UI-kit review and a visual-only portal shell. */
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AdminAuthProvider, AdminRouteGuard } from "@/contexts/AdminAuthContext";
+import type { ReactNode } from "react";
 import Apply from "@/pages/Apply";
 import ApplicantCvPlaceholder from "@/pages/ApplicantCvPlaceholder";
 import ApplicantAssessmentPlaceholder from "@/pages/ApplicantAssessmentPlaceholder";
@@ -39,28 +41,37 @@ import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
+/**
+ * Task 24B route/session-level Admin protection: every `/admin/*` route
+ * resolves the real server session before rendering. The login route shares
+ * the session provider but is never guarded.
+ */
+function AdminRoute({ children }: { children: ReactNode }) {
+  return <AdminAuthProvider><AdminRouteGuard>{children}</AdminRouteGuard></AdminAuthProvider>;
+}
+
 function Router() {
   return (
     <Switch>
       <Route component={Home} path="/" />
-      <Route component={AdminLogin} path="/admin/login" />
-      <Route component={AdminDashboard} path="/admin" />
-      <Route component={AdminScreening} path="/admin/screening" />
-      <Route component={AdminCandidatePlaceholder} path="/admin/applications/:candidateId" />
-      <Route component={AdminApplications} path="/admin/applications" />
-      <Route path="/admin/roles/new">{() => <AdminRoleForm />}</Route>
-      <Route path="/admin/roles/:roleSlug/edit">{(params) => <AdminRoleForm roleSlug={params.roleSlug} />}</Route>
-      <Route component={AdminRoleDetail} path="/admin/roles/:roleSlug" />
-      <Route component={AdminRoles} path="/admin/roles" />
-      <Route component={AdminAssessmentBuilder} path="/admin/assessments/:assessmentSlug/edit" />
-      <Route component={AdminAssessmentPreview} path="/admin/assessments/business-development-officer-assessment-v2/preview" />
-      <Route component={AdminAssessmentDetail} path="/admin/assessments/:assessmentSlug" />
-      <Route component={AdminAssessments} path="/admin/assessments" />
-      <Route path="/admin/questions/new">{() => <AdminQuestionForm />}</Route>
-      <Route path="/admin/questions/:questionId/edit">{(params) => <AdminQuestionForm questionId={params.questionId} />}</Route>
-      <Route component={AdminQuestionDetail} path="/admin/questions/:questionId" />
-      <Route component={AdminQuestionBank} path="/admin/questions" />
-      <Route path="/admin/settings">{() => <AdminPlaceholder title="Settings" />}</Route>
+      <Route path="/admin/login">{() => <AdminAuthProvider><AdminLogin /></AdminAuthProvider>}</Route>
+      <Route path="/admin">{() => <AdminRoute><AdminDashboard /></AdminRoute>}</Route>
+      <Route path="/admin/screening">{() => <AdminRoute><AdminScreening /></AdminRoute>}</Route>
+      <Route path="/admin/applications/:candidateId">{() => <AdminRoute><AdminCandidatePlaceholder /></AdminRoute>}</Route>
+      <Route path="/admin/applications">{() => <AdminRoute><AdminApplications /></AdminRoute>}</Route>
+      <Route path="/admin/roles/new">{() => <AdminRoute><AdminRoleForm /></AdminRoute>}</Route>
+      <Route path="/admin/roles/:roleSlug/edit">{(params) => <AdminRoute><AdminRoleForm roleSlug={params.roleSlug} /></AdminRoute>}</Route>
+      <Route path="/admin/roles/:roleSlug">{() => <AdminRoute><AdminRoleDetail /></AdminRoute>}</Route>
+      <Route path="/admin/roles">{() => <AdminRoute><AdminRoles /></AdminRoute>}</Route>
+      <Route path="/admin/assessments/:assessmentSlug/edit">{() => <AdminRoute><AdminAssessmentBuilder /></AdminRoute>}</Route>
+      <Route path="/admin/assessments/business-development-officer-assessment-v2/preview">{() => <AdminRoute><AdminAssessmentPreview /></AdminRoute>}</Route>
+      <Route path="/admin/assessments/:assessmentSlug">{() => <AdminRoute><AdminAssessmentDetail /></AdminRoute>}</Route>
+      <Route path="/admin/assessments">{() => <AdminRoute><AdminAssessments /></AdminRoute>}</Route>
+      <Route path="/admin/questions/new">{() => <AdminRoute><AdminQuestionForm /></AdminRoute>}</Route>
+      <Route path="/admin/questions/:questionId/edit">{(params) => <AdminRoute><AdminQuestionForm questionId={params.questionId} /></AdminRoute>}</Route>
+      <Route path="/admin/questions/:questionId">{() => <AdminRoute><AdminQuestionDetail /></AdminRoute>}</Route>
+      <Route path="/admin/questions">{() => <AdminRoute><AdminQuestionBank /></AdminRoute>}</Route>
+      <Route path="/admin/settings">{() => <AdminRoute><AdminPlaceholder title="Settings" /></AdminRoute>}</Route>
       <Route component={Apply} path="/apply" />
       <Route component={ApplicantInformation} path="/apply/business-development-officer" />
       <Route component={ApplicantEligibilityCloseout} path="/apply/business-development-officer/eligibility" />

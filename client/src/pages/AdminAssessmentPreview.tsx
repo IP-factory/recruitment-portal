@@ -1,7 +1,7 @@
 import { ApplicationShell } from "@/components/application/ApplicationShell";
 import { V2ModifierPanel } from "@/components/admin/V2ModifierPanel";
 import { FoundationButton, FoundationInput, FoundationTextarea } from "@/components/foundation/ui";
-import { isAdminAuthenticated } from "@/lib/adminSession";
+import { useAdminSession } from "@/contexts/AdminAuthContext";
 import { BUSINESS_DEVELOPMENT_OFFICER_V2_ASSESSMENT_SLUG, getAdminAssessment, getAssessmentQuestions, type AdminAssessment } from "@/lib/adminAssessmentData";
 import type { AdminQuestionOption, QuestionBankQuestion } from "@/lib/questionBankData";
 import { ASSESSMENT_V2_PREVIEW_STORAGE_KEY, ASSESSMENT_V2_PREVIEW_TIMERS_KEY, EMPTY_PREVIEW_STATE, countPreviewWords, formatPreviewRemaining, loadPreviewJson, savePreviewJson, trimPreviewWords, type NumericPreviewAnswer, type PreviewAnswer, type PreviewState, type PreviewTimerState } from "@/lib/assessmentPreviewData";
@@ -36,6 +36,7 @@ function SelectRow({ option, selected, onClick, multi = false }: { option: Admin
 }
 
 export default function AdminAssessmentPreview() {
+  const { state } = useAdminSession();
   const [, setLocation] = useLocation();
   const [allowed, setAllowed] = useState(false);
   const [assessment] = useState<AdminAssessment | undefined>(() => getAdminAssessment(BUSINESS_DEVELOPMENT_OFFICER_V2_ASSESSMENT_SLUG));
@@ -49,7 +50,7 @@ export default function AdminAssessmentPreview() {
   const [integrityStatuses, setIntegrityStatuses] = useState<Record<string, V2IntegrityStatus>>(() => loadPreviewJson(ASSESSMENT_V2_PREVIEW_INTEGRITY_STORAGE_KEY, {}));
   const [bonusConfirmed, setBonusConfirmed] = useState<Record<string, boolean>>(() => loadPreviewJson(ASSESSMENT_V2_PREVIEW_BONUS_STORAGE_KEY, {}));
 
-  useEffect(() => { if (!isAdminAuthenticated()) setLocation("/admin/login"); else setAllowed(true); }, [setLocation]);
+  useEffect(() => { if (state.status === "authorized") setAllowed(true); else if (state.status !== "loading") setLocation("/admin/login"); }, [state.status, setLocation]);
   useEffect(() => { savePreviewJson(ASSESSMENT_V2_PREVIEW_STORAGE_KEY, preview); }, [preview]);
   useEffect(() => { savePreviewJson(ASSESSMENT_V2_PREVIEW_TIMERS_KEY, timers); }, [timers]);
   useEffect(() => { savePreviewJson(ASSESSMENT_V2_PREVIEW_RUBRIC_STORAGE_KEY, rubricRatings); }, [rubricRatings]);

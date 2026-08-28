@@ -1,6 +1,12 @@
 /**
  * Business Development Officer eligibility: browser-local, score-free gate outcomes.
- * G4 and G5 stay configuration-required until real role values are supplied.
+ *
+ * Task 24C-1 boundary: the gate *configuration* (e.g. the G3 minimum relevant
+ * experience) now comes from TiDB via the public eligibility endpoint and is
+ * passed into the evaluator — nothing is hard-coded here anymore. The
+ * evaluation itself remains client-side until the application-persistence
+ * phase. The per-application summaries below serve the mock candidate domain
+ * only and are not the applicant gate configuration source.
  */
 import type { AdminApplication } from "@/lib/adminMockData";
 
@@ -127,6 +133,28 @@ export type ApplicantEligibilityAnswers = {
   verificationConsent: "yes" | "no" | "";
 };
 
+/** Database-provided gate configuration consumed by the evaluator. */
+export interface ApplicantEligibilityGateConfiguration {
+  /** G3 minimum relevant experience in years (from the gate configuration). */
+  minimumYears: number;
+}
+
+/** Minimum years represented by each approved experience option. */
+const EXPERIENCE_OPTION_MINIMUM_YEARS: Record<string, number> = {
+  "No direct experience": 0,
+  "Less than 1 year": 0,
+  "1–2 years": 1,
+  "3–5 years": 3,
+  "6–8 years": 6,
+  "9+ years": 9,
+};
+
+/** Does an approved experience option satisfy the configured minimum? */
+export function experienceOptionMeetsMinimumYears(option: string, minimumYears: number): boolean {
+  const represented = EXPERIENCE_OPTION_MINIMUM_YEARS[option];
+  return typeof represented === "number" && represented >= minimumYears;
+}
+
 export const emptyApplicantEligibilityAnswers: ApplicantEligibilityAnswers = {
   abujaAvailability: "",
   plannedRelocationDate: "",
@@ -149,13 +177,13 @@ export type ApplicantEligibilityEvaluation = {
   incomplete: boolean;
 };
 
-export function evaluateApplicantEligibility(answers: ApplicantEligibilityAnswers, relevantExperience: string): ApplicantEligibilityEvaluation {
+export function evaluateApplicantEligibility(answers: ApplicantEligibilityAnswers, relevantExperience: string, configuration: ApplicantEligibilityGateConfiguration): ApplicantEligibilityEvaluation {
   const required = [answers.abujaAvailability, answers.rightToWork, relevantExperience, answers.outboundWork, answers.verificationConsent];
   if (required.some((answer) => !answer) || (answers.abujaAvailability === "relocate" && !answers.plannedRelocationDate)) return { outcome: "Incomplete", gates: [], failedGate: null, incomplete: true };
   const gates: ApplicantEligibilityGateOutcome[] = [
     { gateId: "G1", response: answers.abujaAvailability, status: answers.abujaAvailability === "not-relocate" ? "Failed" : answers.abujaAvailability === "relocate" ? "Flagged" : "Passed", ...(answers.abujaAvailability === "relocate" ? { flagReason: "Relocation commitment" } : {}) },
     { gateId: "G2", response: answers.rightToWork, status: answers.rightToWork === "yes" ? "Passed" : "Failed" },
-    { gateId: "G3", response: relevantExperience, status: ["3–5 years", "6–8 years", "9+ years"].includes(relevantExperience) ? "Passed" : "Failed" },
+    { gateId: "G3", response: relevantExperience, status: experienceOptionMeetsMinimumYears(relevantExperience, configuration.minimumYears) ? "Passed" : "Failed" },
     { gateId: "G6", response: answers.outboundWork, status: answers.outboundWork === "yes" ? "Passed" : "Failed" },
     { gateId: "G7", response: answers.verificationConsent, status: answers.verificationConsent === "yes" ? "Passed" : "Failed" },
   ];

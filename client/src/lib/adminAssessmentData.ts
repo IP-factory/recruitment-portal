@@ -1,5 +1,5 @@
-/** Quiet Authority assessment data: frontend-only role assignment and question ordering; scores remain in Question Bank. */
-import { BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID, BUSINESS_DEVELOPMENT_OFFICER_ROLE_ID, getRecruitmentRoles, type RecruitmentRole } from "@/lib/adminRoleData";
+/** Quiet Authority assessment data: frontend-only role assignment and question ordering; scores remain in Question Bank. Task 24C-1: the assigned roles themselves live in TiDB and are rendered from the recruitment API. */
+import { BUSINESS_DEVELOPMENT_MANAGER_ROLE_ID, BUSINESS_DEVELOPMENT_OFFICER_ROLE_ID } from "@/lib/recruitmentRoleReferences";
 import { FRAMEWORK_QUESTIONS, FRAMEWORK_DRAFT_ORDER } from "@/lib/frameworkQuestionData";
 import { getQuestionBankQuestions, hasQuestionConfiguration, type QuestionBankQuestion } from "@/lib/questionBankData";
 
@@ -25,7 +25,6 @@ function saveAssessments(assessments: AdminAssessment[]) { if (typeof window !==
 export function getAdminAssessments() { const saved = readAssessments(); if (!saved) return cloneDefaults(); const savedSlugs = new Set(saved.map((assessment) => assessment.slug)); return [...saved.map((assessment) => ({ ...assessment, questionIds: [...assessment.questionIds] })), ...defaultAssessments.filter((assessment) => !savedSlugs.has(assessment.slug)).map((assessment) => ({ ...assessment, questionIds: [...assessment.questionIds] }))]; }
 export function getAdminAssessment(slug: string) { return getAdminAssessments().find((assessment) => assessment.slug === slug); }
 export function getBusinessDevelopmentAssessment() { return getAdminAssessment(BUSINESS_DEVELOPMENT_ASSESSMENT_SLUG) ?? cloneDefaults()[0]; }
-export function getAssessmentRole(assessment: AdminAssessment): RecruitmentRole | undefined { return getRecruitmentRoles().find((role) => role.id === assessment.roleId); }
 export function getAssessmentQuestions(assessment: AdminAssessment): QuestionBankQuestion[] { const questions = getQuestionBankQuestions(); return assessment.questionIds.flatMap((id) => { const question = questions.find((item) => item.id === id); return question ? [question] : []; }); }
 export function getAssessmentReadiness(assessment: AdminAssessment) { const questions = getAssessmentQuestions(assessment); const configured = questions.filter(hasQuestionConfiguration).length; return { total: questions.length, configured, incomplete: questions.length - configured, ready: questions.length > 0 && configured === questions.length }; }
 export function getAssessmentSummary() { const assessments = getAdminAssessments(); return { total: assessments.length, active: assessments.filter((assessment) => assessment.status === "Active").length, assignedRoles: new Set(assessments.map((assessment) => assessment.roleId)).size }; }
