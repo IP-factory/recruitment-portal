@@ -46,6 +46,8 @@ export interface ApplicantEligibilityInput {
   abujaAvailability: "abuja" | "relocate" | "not-relocate";
   plannedRelocationDate: string;
   rightToWork: "yes" | "no";
+  startAvailability: "yes" | "no";
+  compensationBand: "yes" | "no";
   outboundWork: "yes" | "no";
   verificationConsent: "yes" | "no";
 }
@@ -182,6 +184,8 @@ export function validateCreateApplicationInput(candidate: unknown): { input: Cre
       errors.push("Enter your planned relocation date.");
     }
     if (!["yes", "no"].includes(elig.rightToWork as string)) errors.push("Select your right to work status.");
+    if (!["yes", "no"].includes(elig.startAvailability as string)) errors.push("Select your start availability.");
+    if (!["yes", "no"].includes(elig.compensationBand as string)) errors.push("Select your compensation band confirmation.");
     if (!["yes", "no"].includes(elig.outboundWork as string)) errors.push("Select your outbound work willingness.");
     if (!["yes", "no"].includes(elig.verificationConsent as string)) errors.push("Select your verification consent.");
   }
@@ -205,6 +209,8 @@ export function validateCreateApplicationInput(candidate: unknown): { input: Cre
         abujaAvailability: elig.abujaAvailability as "abuja" | "relocate" | "not-relocate",
         plannedRelocationDate: typeof elig.plannedRelocationDate === "string" ? (elig.plannedRelocationDate as string).trim() : "",
         rightToWork: elig.rightToWork as "yes" | "no",
+        startAvailability: elig.startAvailability as "yes" | "no",
+        compensationBand: elig.compensationBand as "yes" | "no",
         outboundWork: elig.outboundWork as "yes" | "no",
         verificationConsent: elig.verificationConsent as "yes" | "no",
       },

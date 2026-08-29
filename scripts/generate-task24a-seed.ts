@@ -21,8 +21,8 @@ const gates = [
   ["G1", "Abuja presence", "Which statement best describes your current location and availability to work in Abuja?", "relocation", "Active", { resident: "pass", relocatingBeforeRequiredStart: "pass_with_flag", neither: "close" }],
   ["G2", "Right to work", "Do you have the legal right to work in Nigeria?", "binary", "Active", { requiredAnswer: "yes" }],
   ["G3", "Relevant experience", "Minimum 3 years in a Business Development, corporate sales or account management role.", "experience", "Active", { minimumYears: 3, relevantDomains: ["Business Development", "Corporate sales", "Account management"] }],
-  ["G4", "Start availability", "Available to start within the stated recruitment window.", "availability", "Configuration Required", { configured: false }],
-  ["G5", "Compensation band", "Compensation expectations fall within the published band.", "compensation", "Configuration Required", { configured: false }],
+  ["G4", "Start availability", "Are you available to start by 1 September 2026 or earlier?", "availability", "Active", { requiredAnswer: "yes", latestStartDate: "2026-09-01", description: "Candidates must be available to start no later than 1 September 2026." }],
+  ["G5", "Compensation band", "Is your salary expectation within the range of ₦6,000,000 – ₦9,600,000 gross per annum?", "compensation", "Active", { requiredAnswer: "yes", bandMin: 6000000, bandMax: 9600000, currency: "NGN", description: "Published gross annual salary band ₦6m – ₦9.6m." }],
   ["G6", "Outbound work", "Are you willing to work in an outbound Business Development role that may involve client visits, site tours, evening events and occasional weekend events?", "binary", "Active", { requiredAnswer: "yes" }],
   ["G7", "Verification consent", "Do you consent to reference and employment verification as part of the recruitment process?", "consent", "Active", { requiredAnswer: "yes" }],
 ] as const;
@@ -34,7 +34,11 @@ for (const [questionIndex, question] of FRAMEWORK_QUESTIONS.entries()) {
   insert("assessment_questions", ["id","reference","dimension_id","question_type","prompt","help_text","q_weight","max_score","required","status","time_limit_sec"], [question.id, question.reference, dimensionId, question.type, question.prompt, question.helpText, question.qWeight, question.max, question.required ? 1 : 0, question.status, question.timeLimitSec]);
   insert("question_type_configs", [`id`,`question_id`,`config_type`,`configuration`], [`type-config-${question.id}`, question.id, question.type, json(question.config)]);
   const options = question.config.evidenceConfig?.options ?? question.config.ordinalConfig?.options ?? question.config.multiConfig?.options ?? question.config.sjtConfig?.options ?? question.options;
-  options.forEach((option, optionIndex) => insert("question_options", ["id","question_id","option_text","display_order","raw_score","is_decoy","outcome_type","related_gate_id","internal_explanation","verification_multiplier"], [`${question.id}-option-${optionIndex + 1}`, question.id, option.text, optionIndex + 1, option.rawPoints ?? null, option.decoy ? 1 : 0, option.outcome ?? null, option.relatedGate ? `gate-${option.relatedGate.toLowerCase()}` : null, option.whatThisReveals ?? null, option.verificationMultiplier ?? null]));
+  // Use option.id (the logical key stored by the applicant runtime) as the
+  // question_options primary key. The scoring engine performs
+  // config.options.find(o => o.id === responsePayload) so the DB id must
+  // exactly match the value the client writes to assessmentResponses.
+  options.forEach((option, optionIndex) => insert("question_options", ["id","question_id","option_text","display_order","raw_score","is_decoy","outcome_type","related_gate_id","internal_explanation","verification_multiplier"], [option.id, question.id, option.text, optionIndex + 1, option.rawPoints ?? null, option.decoy ? 1 : 0, option.outcome ?? null, option.relatedGate ? `gate-${option.relatedGate.toLowerCase()}` : null, option.whatThisReveals ?? null, option.verificationMultiplier ?? null]));
   if (question.config.numericConfig) {
     const numericConfig = question.config.numericConfig;
     insert("numeric_question_configs", [`id`,`question_id`,`mode`,`input_definitions`,`derived_calculation_type`], [`numeric-config-${question.id}`, question.id, numericConfig.mode, json(numericConfig.inputs), numericConfig.mode === "calendarYearExperience" ? "calendar_year_to_derived_years" : "two_inputs_to_percentage_attainment"]);

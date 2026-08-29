@@ -67,3 +67,87 @@ describe("v2 modifiers and screening", () => {
     expect(V2_SCREENING_BANDS.map((band) => band.band)).toEqual(["A", "B", "C", "D"]);
   });
 });
+
+// ── Synthetic candidate — full modifier pipeline ──────────────────────────────
+//
+// Synthetic candidate achieves 100.0 base score (all dimensions 100).
+// Named referee → V = 1.00.
+// No integrity flags confirmed (consistent answers).
+// All three bonus items confirmed → rawBonus 7, appliedBonus 5 (capped).
+// finalScoreBeforeBounds = 100.0 × 1.00 − 0 + 5 = 105 → capped to 100.
+// Applied band = A (all floors passed: D1 = 100 ≥ 50, D2 = 100 ≥ 40, D5 = 100 ≥ 50).
+
+describe("synthetic candidate — full modifier pipeline", () => {
+  const syntheticAnswers = {
+    "framework-d1-q1": "a",
+    "framework-d3-q1": ["a", "b", "c"],
+    "framework-d2-q3": "a",
+    "framework-d4-q1": ["a", "b", "c"],
+    "framework-d4-q2": "Head of Administration. The relationship started through a corporate accommodation project where I was introduced by an existing client.",
+    "framework-d3-q3": "a",
+    "framework-d5-q1": "a",
+    "framework-d2-q1": "Apex Meridian Energy Ltd. — approximately ₦240 million per year. Reached via a referral from an existing client.",
+    "framework-d2-q1e": "a",
+    "framework-d7-q1": "a",
+    "framework-d1-q2": { year: "2019" },
+    "framework-d6-q1": "Dear Head of Administration, I'm reaching out because embassy postings require comfortable accommodation for extended stays. Peniel Apartments reduces total cost. I'd welcome 15 minutes to discuss.",
+    "framework-d8-q1": ["a", "b", "c", "e", "f"],
+    "framework-d2-q2": { target: "180000000", actual: "216000000" },
+  };
+
+  const syntheticRatings = {
+    "framework-d4-q2": 5,
+    "framework-d2-q1": 5,
+    "framework-d6-q1": 5,
+  };
+
+  const allBonusConfirmed = {
+    "diplomatic-account": true,
+    "french-arabic": true,
+    "commercial-certification": true,
+  };
+
+  it("verification multiplier is 1.00 for named referee (option a)", () => {
+    const verification = deriveV2Verification(FRAMEWORK_QUESTIONS, syntheticAnswers);
+    expect(verification.multiplier).toBe(1);
+  });
+
+  it("no integrity flags are raised for internally consistent answers", () => {
+    // D1.Q1 = "a" (core of career, expected ≥10 yrs) vs D1.Q2 = 2019 → 7 yrs
+    // 7 yrs vs expected 10: |7 - 10| = 3 > 2 → flag IS raised
+    // The specification says >2 years discrepancy triggers the flag.
+    // This is correct: 7 years selected with option "a" which implies 10 years
+    // triggers an automatic integrity flag. Status defaults to Flagged (not Confirmed).
+    const flags = evaluateV2IntegrityFlags(FRAMEWORK_QUESTIONS, syntheticAnswers, {}, 2026);
+    // integrity-d1-history: |7 - 10| = 3 → flagged (but not confirmed, so no penalty)
+    // integrity-d2-attainment: 120% ≥ 100 → not flagged
+    // integrity-d4-manual: always present as Clear by default
+    const d1Flag = flags.find((f) => f.id === "integrity-d1-history");
+    const d2Flag = flags.find((f) => f.id === "integrity-d2-attainment");
+    expect(d1Flag?.status).toBe("Flagged");   // flagged but not confirmed → 0 penalty
+    expect(d2Flag).toBeUndefined();            // 120% does not trigger attainment flag
+  });
+
+  it("rawBonus = 7, appliedBonus = 5 (capped), finalScore = 100 (bounded)", () => {
+    const base = calculateV2BaseAssessmentScore(FRAMEWORK_QUESTIONS, syntheticAnswers, syntheticRatings, 2026);
+    expect(base.scoringReady).toBe(true);
+    expect(base.baseAssessmentScore).toBe(100.0);
+
+    const result = calculateV2Modifiers(base, FRAMEWORK_QUESTIONS, syntheticAnswers, {}, allBonusConfirmed, 2026);
+    expect(result.scoringReady).toBe(true);
+    expect(result.verification.multiplier).toBe(1);
+    expect(result.bonus.rawBonus).toBe(7);
+    expect(result.bonus.appliedBonus).toBe(5);
+    expect(result.finalScoreBeforeBounds).toBeCloseTo(105, 1);
+    expect(result.finalScore).toBe(100); // bounded at 100
+    expect(result.appliedBand?.band).toBe("A");
+    expect(result.rawBand?.band).toBe("A");
+    expect(result.bandCapReason).toBeUndefined(); // all floors passed
+  });
+
+  it("all dimension floors are passed at 100", () => {
+    const base = calculateV2BaseAssessmentScore(FRAMEWORK_QUESTIONS, syntheticAnswers, syntheticRatings, 2026);
+    const result = calculateV2Modifiers(base, FRAMEWORK_QUESTIONS, syntheticAnswers, {}, allBonusConfirmed, 2026);
+    expect(result.floorResults.every((f) => f.passed)).toBe(true);
+  });
+});

@@ -2004,9 +2004,11 @@ function calculateDimensionScores(questionResults, openScores, dimensions) {
       return {
         dimensionId: dim.id,
         dimensionReference: dim.reference,
-        normalizedScore: 0,
+        normalizedScore: null,
+        // deliberately unresolved
         weight: dim.weight,
-        weightedContribution: 0,
+        weightedContribution: null,
+        // deliberately unresolved
         floor: dim.minimumFloor,
         floorStatus: "Pending"
       };
@@ -2197,6 +2199,23 @@ function calculateFullEvaluation(questionConfigs, responses, openScores, dimensi
     };
   }
   const dimensionResults = calculateDimensionScores(questionScores, openScores, dimensions);
+  const pendingDimensions = dimensionResults.filter((d) => d.floorStatus === "Pending" || d.normalizedScore === null || d.weightedContribution === null);
+  if (pendingDimensions.length > 0) {
+    return {
+      evaluationStatus: "Pending OPEN Review",
+      baseAssessmentScore: null,
+      verificationMultiplier: null,
+      integrityPenalty: 0,
+      bonus: 0,
+      finalScreeningScore: null,
+      rawBand: null,
+      appliedBand: null,
+      floorMissed: null,
+      manualReviewRequired: false,
+      dimensions: dimensionResults,
+      questionScores
+    };
+  }
   const baseAssessmentScore = Number(
     dimensionResults.reduce((sum, dim) => sum + dim.weightedContribution, 0).toFixed(3)
   );
@@ -2933,6 +2952,8 @@ function validateCreateApplicationInput(candidate) {
       errors.push("Enter your planned relocation date.");
     }
     if (!["yes", "no"].includes(elig2.rightToWork)) errors.push("Select your right to work status.");
+    if (!["yes", "no"].includes(elig2.startAvailability)) errors.push("Select your start availability.");
+    if (!["yes", "no"].includes(elig2.compensationBand)) errors.push("Select your compensation band confirmation.");
     if (!["yes", "no"].includes(elig2.outboundWork)) errors.push("Select your outbound work willingness.");
     if (!["yes", "no"].includes(elig2.verificationConsent)) errors.push("Select your verification consent.");
   }
@@ -2954,6 +2975,8 @@ function validateCreateApplicationInput(candidate) {
         abujaAvailability: elig.abujaAvailability,
         plannedRelocationDate: typeof elig.plannedRelocationDate === "string" ? elig.plannedRelocationDate.trim() : "",
         rightToWork: elig.rightToWork,
+        startAvailability: elig.startAvailability,
+        compensationBand: elig.compensationBand,
         outboundWork: elig.outboundWork,
         verificationConsent: elig.verificationConsent
       }
@@ -3042,9 +3065,14 @@ function evaluateEligibilityServerSide(gates, eligibility, relevantExperience) {
         results.push({ gateId: gate.id, gateReference: "G3", response: relevantExperience, outcome: represented >= minimumYears ? "Passed" : "Failed" });
         break;
       }
-      case "G4":
+      case "G4": {
+        const response = eligibility.startAvailability;
+        results.push({ gateId: gate.id, gateReference: "G4", response, outcome: response === "yes" ? "Passed" : "Failed" });
+        break;
+      }
       case "G5": {
-        results.push({ gateId: gate.id, gateReference: gate.reference, response: "", outcome: "Configuration required" });
+        const response = eligibility.compensationBand;
+        results.push({ gateId: gate.id, gateReference: "G5", response, outcome: response === "yes" ? "Passed" : "Failed" });
         break;
       }
       case "G6": {

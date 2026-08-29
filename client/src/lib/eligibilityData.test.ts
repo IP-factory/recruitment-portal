@@ -5,6 +5,8 @@ const eligibleAnswers = {
   ...emptyApplicantEligibilityAnswers,
   abujaAvailability: "abuja" as const,
   rightToWork: "yes" as const,
+  startAvailability: "yes" as const,
+  compensationBand: "yes" as const,
   outboundWork: "yes" as const,
   verificationConsent: "yes" as const,
 };
@@ -16,7 +18,7 @@ describe("Business Development Officer eligibility", () => {
   it("passes all active gates for an eligible applicant", () => {
     const result = evaluateApplicantEligibility(eligibleAnswers, "3–5 years", seededGateConfiguration);
     expect(result).toMatchObject({ outcome: "Eligible", incomplete: false, failedGate: null });
-    expect(result.gates.map((gate) => gate.gateId)).toEqual(["G1", "G2", "G3", "G6", "G7"]);
+    expect(result.gates.map((gate) => gate.gateId)).toEqual(["G1", "G2", "G3", "G4", "G5", "G6", "G7"]);
     expect(result.gates.every((gate) => gate.status === "Passed")).toBe(true);
   });
 
@@ -29,6 +31,8 @@ describe("Business Development Officer eligibility", () => {
     ["G1", { abujaAvailability: "not-relocate" as const }, "3–5 years"],
     ["G2", { rightToWork: "no" as const }, "3–5 years"],
     ["G3", {}, "1–2 years"],
+    ["G4", { startAvailability: "no" as const }, "3–5 years"],
+    ["G5", { compensationBand: "no" as const }, "3–5 years"],
     ["G6", { outboundWork: "no" as const }, "3–5 years"],
     ["G7", { verificationConsent: "no" as const }, "3–5 years"],
   ])("closes the application when %s fails", (gateId, answerOverride, experience) => {
@@ -46,10 +50,10 @@ describe("Business Development Officer eligibility", () => {
     expect(strict.failedGate).toBe("G3");
   });
 
-  it("keeps G4 and G5 visible as configuration required and inactive", () => {
+  it("G4 and G5 are now active and block eligibility when answered No", () => {
     const summary = getEligibilitySummary("unseeded-application");
-    expect(summary.activeGateIds).toEqual(["G1", "G2", "G3", "G6", "G7"]);
-    expect(summary.gates.find((gate) => gate.id === "G4")).toMatchObject({ status: "Configuration required" });
-    expect(summary.gates.find((gate) => gate.id === "G5")).toMatchObject({ status: "Configuration required" });
+    expect(summary.activeGateIds).toEqual(["G1", "G2", "G3", "G4", "G5", "G6", "G7"]);
+    expect(summary.gates.find((gate) => gate.id === "G4")).toMatchObject({ status: "Passed" });
+    expect(summary.gates.find((gate) => gate.id === "G5")).toMatchObject({ status: "Passed" });
   });
 });

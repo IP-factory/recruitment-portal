@@ -36,24 +36,24 @@ export type EligibilitySummary = {
 
 export const ELIGIBILITY_STORAGE_KEY = "recruitment-portal:bd-officer:eligibility";
 export const BUSINESS_DEVELOPMENT_OFFICER_ROUTE = "business-development-officer";
-export const ACTIVE_ELIGIBILITY_GATE_IDS: EligibilityGateId[] = ["G1", "G2", "G3", "G6", "G7"];
+export const ACTIVE_ELIGIBILITY_GATE_IDS: EligibilityGateId[] = ["G1", "G2", "G3", "G4", "G5", "G6", "G7"];
 
 const gateDefinitions: Array<Pick<EligibilityGate, "id" | "title" | "question">> = [
   { id: "G1", title: "Abuja presence", question: "Which statement best describes your current location and availability to work in Abuja?" },
   { id: "G2", title: "Right to work", question: "Do you have the legal right to work in Nigeria?" },
   { id: "G3", title: "Relevant experience", question: "Minimum 3 years in a Business Development, corporate sales or account management role." },
-  { id: "G4", title: "Start availability", question: "Available to start within the stated recruitment window." },
-  { id: "G5", title: "Compensation band", question: "Compensation expectations fall within the published band." },
+  { id: "G4", title: "Start availability", question: "Are you available to start by 1 September 2026 or earlier?" },
+  { id: "G5", title: "Compensation band", question: "Is your salary expectation within the range of ₦6,000,000 – ₦9,600,000 gross per annum?" },
   { id: "G6", title: "Outbound work", question: "Are you willing to work in an outbound Business Development role that may involve client visits, site tours, evening events and occasional weekend events?" },
   { id: "G7", title: "Verification consent", question: "Do you consent to reference and employment verification as part of the recruitment process?" },
 ];
 
 const configurationRequired: Record<EligibilityGateId, Pick<EligibilityGate, "status" | "detail">> = {
-  G4: { status: "Configuration required", detail: "Required start window has not been configured." },
-  G5: { status: "Configuration required", detail: "Compensation band has not been configured." },
   G1: { status: "Passed", detail: "Abuja availability confirmed." },
   G2: { status: "Passed", detail: "Right to work confirmed." },
   G3: { status: "Passed", detail: "Minimum relevant experience confirmed." },
+  G4: { status: "Passed", detail: "Start availability confirmed." },
+  G5: { status: "Passed", detail: "Compensation expectation within band." },
   G6: { status: "Passed", detail: "Outbound work expectation acknowledged." },
   G7: { status: "Passed", detail: "Verification consent recorded." },
 };
@@ -129,6 +129,8 @@ export type ApplicantEligibilityAnswers = {
   abujaAvailability: "abuja" | "relocate" | "not-relocate" | "";
   plannedRelocationDate: string;
   rightToWork: "yes" | "no" | "";
+  startAvailability: "yes" | "no" | "";
+  compensationBand: "yes" | "no" | "";
   outboundWork: "yes" | "no" | "";
   verificationConsent: "yes" | "no" | "";
 };
@@ -159,6 +161,8 @@ export const emptyApplicantEligibilityAnswers: ApplicantEligibilityAnswers = {
   abujaAvailability: "",
   plannedRelocationDate: "",
   rightToWork: "",
+  startAvailability: "",
+  compensationBand: "",
   outboundWork: "",
   verificationConsent: "",
 };
@@ -178,12 +182,14 @@ export type ApplicantEligibilityEvaluation = {
 };
 
 export function evaluateApplicantEligibility(answers: ApplicantEligibilityAnswers, relevantExperience: string, configuration: ApplicantEligibilityGateConfiguration): ApplicantEligibilityEvaluation {
-  const required = [answers.abujaAvailability, answers.rightToWork, relevantExperience, answers.outboundWork, answers.verificationConsent];
+  const required = [answers.abujaAvailability, answers.rightToWork, relevantExperience, answers.startAvailability, answers.compensationBand, answers.outboundWork, answers.verificationConsent];
   if (required.some((answer) => !answer) || (answers.abujaAvailability === "relocate" && !answers.plannedRelocationDate)) return { outcome: "Incomplete", gates: [], failedGate: null, incomplete: true };
   const gates: ApplicantEligibilityGateOutcome[] = [
     { gateId: "G1", response: answers.abujaAvailability, status: answers.abujaAvailability === "not-relocate" ? "Failed" : answers.abujaAvailability === "relocate" ? "Flagged" : "Passed", ...(answers.abujaAvailability === "relocate" ? { flagReason: "Relocation commitment" } : {}) },
     { gateId: "G2", response: answers.rightToWork, status: answers.rightToWork === "yes" ? "Passed" : "Failed" },
     { gateId: "G3", response: relevantExperience, status: experienceOptionMeetsMinimumYears(relevantExperience, configuration.minimumYears) ? "Passed" : "Failed" },
+    { gateId: "G4", response: answers.startAvailability, status: answers.startAvailability === "yes" ? "Passed" : "Failed" },
+    { gateId: "G5", response: answers.compensationBand, status: answers.compensationBand === "yes" ? "Passed" : "Failed" },
     { gateId: "G6", response: answers.outboundWork, status: answers.outboundWork === "yes" ? "Passed" : "Failed" },
     { gateId: "G7", response: answers.verificationConsent, status: answers.verificationConsent === "yes" ? "Passed" : "Failed" },
   ];

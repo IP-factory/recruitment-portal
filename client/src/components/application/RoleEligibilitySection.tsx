@@ -36,6 +36,16 @@ export function RoleEligibilitySection({ answers, touched, onBlur, onChange }: P
         <div className="grid gap-2 sm:grid-cols-2"><Choice checked={answers.rightToWork === "yes"} name="right-to-work" onChange={() => onChange("rightToWork", "yes")} value="Yes">Yes</Choice><Choice checked={answers.rightToWork === "no"} name="right-to-work" onChange={() => onChange("rightToWork", "no")} value="No">No</Choice></div>
       </FieldFrame>
 
+      <FieldFrame error={touched.startAvailability && !answers.startAvailability ? "Select an option." : undefined} label="Start availability" required>
+        <p className="mb-3 text-[13px] leading-5 text-primary">Are you available to start by 1 September 2026 or earlier?</p>
+        <div className="grid gap-2 sm:grid-cols-2"><Choice checked={answers.startAvailability === "yes"} name="start-availability" onChange={() => onChange("startAvailability", "yes")} value="Yes">Yes — I am available to start by 1 September 2026</Choice><Choice checked={answers.startAvailability === "no"} name="start-availability" onChange={() => onChange("startAvailability", "no")} value="No">No — I am not available by that date</Choice></div>
+      </FieldFrame>
+
+      <FieldFrame error={touched.compensationBand && !answers.compensationBand ? "Select an option." : undefined} label="Compensation expectation" required>
+        <p className="mb-3 text-[13px] leading-5 text-primary">Is your gross annual salary expectation within the range of ₦6,000,000 – ₦9,600,000?</p>
+        <div className="grid gap-2 sm:grid-cols-2"><Choice checked={answers.compensationBand === "yes"} name="compensation-band" onChange={() => onChange("compensationBand", "yes")} value="Yes">Yes — within the published band</Choice><Choice checked={answers.compensationBand === "no"} name="compensation-band" onChange={() => onChange("compensationBand", "no")} value="No">No — outside the published band</Choice></div>
+      </FieldFrame>
+
       <FieldFrame error={touched.outboundWork && !answers.outboundWork ? "Select an option." : undefined} label="Outbound work" required>
         <p className="mb-3 text-[13px] leading-5 text-primary">Are you willing to work in an outbound Business Development role that may involve client visits, site tours, evening events and occasional weekend events?</p>
         <div className="grid gap-2 sm:grid-cols-2"><Choice checked={answers.outboundWork === "yes"} name="outbound-work" onChange={() => onChange("outboundWork", "yes")} value="Yes">Yes</Choice><Choice checked={answers.outboundWork === "no"} name="outbound-work" onChange={() => onChange("outboundWork", "no")} value="No">No</Choice></div>
@@ -47,7 +57,6 @@ export function RoleEligibilitySection({ answers, touched, onBlur, onChange }: P
       </FieldFrame>
 
       <div className="border-t border-border pt-5"><p className="text-[13px] leading-5 text-primary">Relevant experience</p><p className="mt-1 text-[12px] leading-5 text-muted-foreground">Your professional experience selection above is used to confirm the minimum relevant experience for this role.</p></div>
-      <p className="border-t border-border pt-4 text-[12px] leading-5 text-muted-foreground">Start availability and compensation details will be confirmed against the role configuration when available.</p>
     </div>
   </section>;
 }

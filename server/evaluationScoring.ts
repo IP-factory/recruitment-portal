@@ -194,12 +194,16 @@ export function calculateDimensionScores(
 
     const allScored = scored.every((q) => typeof q.resolvedRaw === "number" && typeof q.maxScore === "number" && typeof q.qWeight === "number");
     if (!allScored) {
+      // Do NOT return normalizedScore: 0 here — that would silently treat an
+      // unresolved dimension as contributing zero to the base score.
+      // Return weightedContribution: null so calculateFullEvaluation can detect
+      // that this dimension is genuinely pending and must not be summed.
       return {
         dimensionId: dim.id,
         dimensionReference: dim.reference,
-        normalizedScore: 0,
+        normalizedScore: null as unknown as number, // deliberately unresolved
         weight: dim.weight,
-        weightedContribution: 0,
+        weightedContribution: null as unknown as number, // deliberately unresolved
         floor: dim.minimumFloor,
         floorStatus: "Pending",
       };
@@ -463,7 +467,29 @@ export function calculateFullEvaluation(
   // 4. Calculate dimension scores
   const dimensionResults = calculateDimensionScores(questionScores, openScores, dimensions);
 
-  // 5. Calculate Base Assessment Score
+  // 5. Verify all dimensions are fully scored before computing Base Assessment Score.
+  // A pending dimension (unreviewed OPEN, missing option, etc.) must block the
+  // final score — silently treating it as 0 would produce a deterministically
+  // wrong result.
+  const pendingDimensions = dimensionResults.filter((d) => d.floorStatus === "Pending" || d.normalizedScore === null || d.weightedContribution === null);
+  if (pendingDimensions.length > 0) {
+    return {
+      evaluationStatus: "Pending OPEN Review",
+      baseAssessmentScore: null,
+      verificationMultiplier: null,
+      integrityPenalty: 0,
+      bonus: 0,
+      finalScreeningScore: null,
+      rawBand: null,
+      appliedBand: null,
+      floorMissed: null,
+      manualReviewRequired: false,
+      dimensions: dimensionResults,
+      questionScores,
+    };
+  }
+
+  // 5b. Calculate Base Assessment Score — all dimensions are confirmed scored.
   const baseAssessmentScore = Number(
     dimensionResults.reduce((sum, dim) => sum + dim.weightedContribution, 0).toFixed(3),
   );

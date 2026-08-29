@@ -76,6 +76,8 @@ describe("create application input validation", () => {
       abujaAvailability: "abuja",
       plannedRelocationDate: "",
       rightToWork: "yes",
+      startAvailability: "yes",
+      compensationBand: "yes",
       outboundWork: "yes",
       verificationConsent: "yes",
     },
@@ -139,8 +141,8 @@ describe("server-side eligibility evaluation", () => {
     { id: "gate-g1", reference: "G1", gateType: "location", status: "Active", configuration: "{}" },
     { id: "gate-g2", reference: "G2", gateType: "right_to_work", status: "Active", configuration: "{}" },
     { id: "gate-g3", reference: "G3", gateType: "experience", status: "Active", configuration: JSON.stringify({ minimumYears: 3 }) },
-    { id: "gate-g4", reference: "G4", gateType: "start_availability", status: "Configuration Required", configuration: "{}" },
-    { id: "gate-g5", reference: "G5", gateType: "compensation", status: "Configuration Required", configuration: "{}" },
+    { id: "gate-g4", reference: "G4", gateType: "availability", status: "Active", configuration: JSON.stringify({ requiredAnswer: "yes", latestStartDate: "2026-09-01" }) },
+    { id: "gate-g5", reference: "G5", gateType: "compensation", status: "Active", configuration: JSON.stringify({ requiredAnswer: "yes", bandMin: 6000000, bandMax: 9600000, currency: "NGN" }) },
     { id: "gate-g6", reference: "G6", gateType: "outbound", status: "Active", configuration: "{}" },
     { id: "gate-g7", reference: "G7", gateType: "verification", status: "Active", configuration: "{}" },
   ];
@@ -149,6 +151,8 @@ describe("server-side eligibility evaluation", () => {
     abujaAvailability: "abuja",
     plannedRelocationDate: "",
     rightToWork: "yes",
+    startAvailability: "yes",
+    compensationBand: "yes",
     outboundWork: "yes",
     verificationConsent: "yes",
   };
@@ -189,16 +193,28 @@ describe("server-side eligibility evaluation", () => {
     expect(result.gates.find((g) => g.gateReference === "G3")?.outcome).toBe("Passed");
   });
 
-  it("G4 does not block", () => {
+  it("G4 yes passes", () => {
     const result = evaluateEligibilityServerSide(gates, baseEligibility, "3–5 years");
     expect(result.eligible).toBe(true);
-    expect(result.gates.find((g) => g.gateReference === "G4")?.outcome).toBe("Configuration required");
+    expect(result.gates.find((g) => g.gateReference === "G4")?.outcome).toBe("Passed");
   });
 
-  it("G5 does not block", () => {
+  it("G4 no closes", () => {
+    const result = evaluateEligibilityServerSide(gates, { ...baseEligibility, startAvailability: "no" }, "3–5 years");
+    expect(result.eligible).toBe(false);
+    expect(result.gates.find((g) => g.gateReference === "G4")?.outcome).toBe("Failed");
+  });
+
+  it("G5 yes passes", () => {
     const result = evaluateEligibilityServerSide(gates, baseEligibility, "3–5 years");
     expect(result.eligible).toBe(true);
-    expect(result.gates.find((g) => g.gateReference === "G5")?.outcome).toBe("Configuration required");
+    expect(result.gates.find((g) => g.gateReference === "G5")?.outcome).toBe("Passed");
+  });
+
+  it("G5 no closes", () => {
+    const result = evaluateEligibilityServerSide(gates, { ...baseEligibility, compensationBand: "no" }, "3–5 years");
+    expect(result.eligible).toBe(false);
+    expect(result.gates.find((g) => g.gateReference === "G5")?.outcome).toBe("Failed");
   });
 
   it("G6 no closes", () => {

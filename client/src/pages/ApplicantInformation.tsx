@@ -96,9 +96,9 @@ export default function ApplicantInformation() {
   const errorFor = (field: keyof typeof errors) => touched[field] ? errors[field] : undefined;
 
   const continueToAssessment = async () => {
-    setTouched({ fullName: true, email: true, phoneNumber: true, location: true, jobTitle: true, totalExperience: true, businessDevelopmentExperience: true, abujaAvailability: true, plannedRelocationDate: true, rightToWork: true, outboundWork: true, verificationConsent: true });
+    setTouched({ fullName: true, email: true, phoneNumber: true, location: true, jobTitle: true, totalExperience: true, businessDevelopmentExperience: true, abujaAvailability: true, plannedRelocationDate: true, rightToWork: true, startAvailability: true, compensationBand: true, outboundWork: true, verificationConsent: true });
     if (!formValid || !eligibilityConfiguration) return;
-    if (!eligibility.abujaAvailability || !eligibility.rightToWork || !eligibility.outboundWork || !eligibility.verificationConsent) return;
+    if (!eligibility.abujaAvailability || !eligibility.rightToWork || !eligibility.startAvailability || !eligibility.compensationBand || !eligibility.outboundWork || !eligibility.verificationConsent) return;
     if (eligibility.abujaAvailability === "relocate" && !eligibility.plannedRelocationDate) return;
 
     setSubmitting(true);
@@ -119,6 +119,8 @@ export default function ApplicantInformation() {
         abujaAvailability: eligibility.abujaAvailability as "abuja" | "relocate" | "not-relocate",
         plannedRelocationDate: eligibility.plannedRelocationDate || "",
         rightToWork: eligibility.rightToWork as "yes" | "no",
+        startAvailability: eligibility.startAvailability as "yes" | "no",
+        compensationBand: eligibility.compensationBand as "yes" | "no",
         outboundWork: eligibility.outboundWork as "yes" | "no",
         verificationConsent: eligibility.verificationConsent as "yes" | "no",
       },

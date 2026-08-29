@@ -99,9 +99,16 @@ export function evaluateEligibilityServerSide(
         results.push({ gateId: gate.id, gateReference: "G3", response: relevantExperience, outcome: represented >= minimumYears ? "Passed" : "Failed" });
         break;
       }
-      case "G4":
+      case "G4": {
+        // Gate is now active with a real start-date window.
+        const response = eligibility.startAvailability;
+        results.push({ gateId: gate.id, gateReference: "G4", response, outcome: response === "yes" ? "Passed" : "Failed" });
+        break;
+      }
       case "G5": {
-        results.push({ gateId: gate.id, gateReference: gate.reference, response: "", outcome: "Configuration required" });
+        // Gate is now active with a real compensation band.
+        const response = eligibility.compensationBand;
+        results.push({ gateId: gate.id, gateReference: "G5", response, outcome: response === "yes" ? "Passed" : "Failed" });
         break;
       }
       case "G6": {
