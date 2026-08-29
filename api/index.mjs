@@ -1942,14 +1942,32 @@ function scoreObjectiveQuestion(config, response) {
     case "NUMERIC": {
       if (!config.numericConfig || config.numericBands.length === 0) return null;
       const obj = typeof payload === "object" && payload !== null ? payload : {};
+      const defs = config.numericConfig.inputDefinitions;
+      const resolved = { ...obj };
+      if (defs.length > 0) {
+        const firstLabel = defs[0]?.label ?? "";
+        const secondLabel = defs[1]?.label ?? "";
+        if (config.numericConfig.mode === "calendarYearExperience") {
+          if (obj.year === void 0 && firstLabel && obj[firstLabel] !== void 0) {
+            resolved.year = obj[firstLabel];
+          }
+        } else {
+          if (obj.target === void 0 && firstLabel && obj[firstLabel] !== void 0) {
+            resolved.target = obj[firstLabel];
+          }
+          if (obj.actual === void 0 && secondLabel && obj[secondLabel] !== void 0) {
+            resolved.actual = obj[secondLabel];
+          }
+        }
+      }
       let derivedValue;
       if (config.numericConfig.mode === "calendarYearExperience") {
-        if (obj.never === true) derivedValue = 0;
-        else if (typeof obj.year !== "string" || !/^\d{4}$/.test(obj.year)) return null;
-        else derivedValue = (/* @__PURE__ */ new Date()).getFullYear() - Number(obj.year);
+        if (resolved.never === true) derivedValue = 0;
+        else if (typeof resolved.year !== "string" || !/^\d{4}$/.test(resolved.year)) return null;
+        else derivedValue = (/* @__PURE__ */ new Date()).getFullYear() - Number(resolved.year);
       } else {
-        const target = Number(obj.target);
-        const actual = Number(obj.actual);
+        const target = Number(resolved.target);
+        const actual = Number(resolved.actual);
         if (!Number.isFinite(target) || target <= 0 || !Number.isFinite(actual) || actual < 0) return null;
         derivedValue = actual / target * 100;
       }
@@ -2073,7 +2091,14 @@ function evaluateIntegrityCrossChecks(questionResults, responses, crossCheckConf
     const sourcePayload = parseJson2(sourceResponse.responsePayload, null);
     const comparisonPayload = parseJson2(comparisonResponse.responsePayload, null);
     if (sourceResponse.reference === "D1.Q1" && comparisonResponse.reference === "D1.Q2") {
-      const expectedYears = { a: 10, b: 4, c: 0 };
+      const expectedYears = {
+        a: 10,
+        "framework-d1-q1-option-1": 10,
+        b: 4,
+        "framework-d1-q1-option-2": 4,
+        c: 0,
+        "framework-d1-q1-option-3": 0
+      };
       let shouldFlag = false;
       if (typeof sourcePayload === "string") {
         const compObj = typeof comparisonPayload === "object" && comparisonPayload !== null ? comparisonPayload : {};
@@ -2303,7 +2328,11 @@ async function loadQuestionScoringConfigs(assessmentId) {
       })),
       numericConfig: numericConfigs[0] ? {
         mode: numericConfigs[0].mode,
-        derivedCalculationType: numericConfigs[0].derivedCalculationType
+        derivedCalculationType: numericConfigs[0].derivedCalculationType,
+        inputDefinitions: parseJson2(
+          numericConfigs[0].inputDefinitions,
+          []
+        )
       } : null,
       numericBands: numericBands.map((b) => ({
         lowerBound: b.lowerBound,
@@ -2409,9 +2438,12 @@ async function recalculateAndPersistEvaluation(applicationId) {
     }]);
   }
   await db.delete(applicationDimensionScores).where(eq4(applicationDimensionScores.applicationId, applicationId));
-  if (result.dimensions.length > 0) {
+  const scoredDims = result.dimensions.filter(
+    (dim) => dim.normalizedScore !== null && dim.weightedContribution !== null
+  );
+  if (scoredDims.length > 0) {
     await db.insert(applicationDimensionScores).values(
-      result.dimensions.map((dim) => ({
+      scoredDims.map((dim) => ({
         id: `dim-${generateId()}`,
         applicationId,
         dimensionId: dim.dimensionId,

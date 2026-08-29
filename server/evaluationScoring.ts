@@ -65,7 +65,12 @@ interface QuestionScoringConfig {
   qWeight: number | null;
   maxScore: number | null;
   options: Array<{ id: string; rawScore: number | null; isDecoy: number; verificationMultiplier: string | null; outcomeType: string | null }>;
-  numericConfig: { mode: string; derivedCalculationType: string } | null;
+  numericConfig: {
+    mode: string;
+    derivedCalculationType: string;
+    /** Ordered input field definitions as stored in numeric_question_configs.input_definitions. */
+    inputDefinitions: Array<{ label: string; unit: string }>;
+  } | null;
   numericBands: Array<{ lowerBound: string | null; upperBound: string | null; rawScore: number }>;
 }
 
@@ -99,14 +104,41 @@ export function scoreObjectiveQuestion(config: QuestionScoringConfig, response: 
     case "NUMERIC": {
       if (!config.numericConfig || config.numericBands.length === 0) return null;
       const obj = typeof payload === "object" && payload !== null ? payload as Record<string, unknown> : {};
+
+      // Normalise the payload object. The applicant runtime sends field values
+      // keyed by the input label from numeric_question_configs.input_definitions
+      // (e.g. {"Calendar year":"2019"}, {"Target":"180000000","Actual delivered":"216000000"}).
+      // Resolve label-keyed values to their positional internal keys so the
+      // scoring logic below always sees { year } or { target, actual }.
+      const defs = config.numericConfig.inputDefinitions;
+      const resolved: Record<string, unknown> = { ...obj };
+      if (defs.length > 0) {
+        // First-position label → "year" for calendarYearExperience
+        // First-position label → "target", second → "actual" for twoValueDerived
+        const firstLabel = defs[0]?.label ?? "";
+        const secondLabel = defs[1]?.label ?? "";
+        if (config.numericConfig.mode === "calendarYearExperience") {
+          if (obj.year === undefined && firstLabel && obj[firstLabel] !== undefined) {
+            resolved.year = obj[firstLabel];
+          }
+        } else {
+          if (obj.target === undefined && firstLabel && obj[firstLabel] !== undefined) {
+            resolved.target = obj[firstLabel];
+          }
+          if (obj.actual === undefined && secondLabel && obj[secondLabel] !== undefined) {
+            resolved.actual = obj[secondLabel];
+          }
+        }
+      }
+
       let derivedValue: number;
       if (config.numericConfig.mode === "calendarYearExperience") {
-        if (obj.never === true) derivedValue = 0;
-        else if (typeof obj.year !== "string" || !/^\d{4}$/.test(obj.year)) return null;
-        else derivedValue = new Date().getFullYear() - Number(obj.year);
+        if (resolved.never === true) derivedValue = 0;
+        else if (typeof resolved.year !== "string" || !/^\d{4}$/.test(resolved.year)) return null;
+        else derivedValue = new Date().getFullYear() - Number(resolved.year);
       } else {
-        const target = Number(obj.target);
-        const actual = Number(obj.actual);
+        const target = Number(resolved.target);
+        const actual = Number(resolved.actual);
         if (!Number.isFinite(target) || target <= 0 || !Number.isFinite(actual) || actual < 0) return null;
         derivedValue = (actual / target) * 100;
       }
@@ -304,7 +336,14 @@ export function evaluateIntegrityCrossChecks(
 
     // D1.Q1 vs D1.Q2 consistency check
     if (sourceResponse.reference === "D1.Q1" && comparisonResponse.reference === "D1.Q2") {
-      const expectedYears: Record<string, number> = { a: 10, b: 4, c: 0 };
+      // Map both the logical key (post-migration "a","b","c") and the legacy
+      // sequential key (pre-migration "framework-d1-q1-option-1" etc.) to the
+      // same expected-years value so the check works before and after migration.
+      const expectedYears: Record<string, number> = {
+        a: 10, "framework-d1-q1-option-1": 10,
+        b: 4,  "framework-d1-q1-option-2": 4,
+        c: 0,  "framework-d1-q1-option-3": 0,
+      };
       let shouldFlag = false;
       if (typeof sourcePayload === "string") {
         const compObj = typeof comparisonPayload === "object" && comparisonPayload !== null ? comparisonPayload as Record<string, unknown> : {};
@@ -606,6 +645,10 @@ export async function loadQuestionScoringConfigs(assessmentId: string): Promise<
       numericConfig: numericConfigs[0] ? {
         mode: numericConfigs[0].mode,
         derivedCalculationType: numericConfigs[0].derivedCalculationType,
+        inputDefinitions: parseJson<Array<{ label: string; unit: string }>>(
+          numericConfigs[0].inputDefinitions,
+          [],
+        ),
       } : null,
       numericBands: numericBands.map((b) => ({
         lowerBound: b.lowerBound,
@@ -742,11 +785,16 @@ export async function recalculateAndPersistEvaluation(applicationId: string): Pr
     }]);
   }
 
-  // Persist dimension scores
+  // Persist dimension scores — only insert rows that are fully scored.
+  // Pending dimensions (normalizedScore === null) cannot be stored in the
+  // NOT NULL decimal column and must be omitted until scoring is complete.
   await db.delete(applicationDimensionScores).where(eq(applicationDimensionScores.applicationId, applicationId));
-  if (result.dimensions.length > 0) {
+  const scoredDims = result.dimensions.filter(
+    (dim) => dim.normalizedScore !== null && dim.weightedContribution !== null,
+  );
+  if (scoredDims.length > 0) {
     await db.insert(applicationDimensionScores).values(
-      result.dimensions.map((dim) => ({
+      scoredDims.map((dim) => ({
         id: `dim-${generateId()}`,
         applicationId,
         dimensionId: dim.dimensionId,

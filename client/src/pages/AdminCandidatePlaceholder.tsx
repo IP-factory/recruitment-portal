@@ -69,6 +69,7 @@ function OpenReviewCard({ question, applicationId, onSaved }: { question: AdminE
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const handleSave = async () => {
+    if (score === "") { toast.error("Enter a score between 0 and 5."); return; }
     const rawScore = Number(score);
     if (!Number.isInteger(rawScore) || rawScore < 0 || rawScore > 5) { toast.error("Score must be 0–5."); return; }
     setSaving(true);
