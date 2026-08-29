@@ -21,8 +21,11 @@ import {
   slugifyRoleTitle,
   type AdminEligibilityGate,
   type AdminRecruitmentRole,
+  type EligibilityGateConfiguration,
+  type EligibilityGateInput,
   type EmploymentType,
   type EvaluationFrameworkConfiguration,
+  type GateInputType,
   type PublicEligibilityConfiguration,
   type PublicEligibilityGate,
   type PublicRecruitmentRole,
@@ -126,26 +129,52 @@ export async function getRoleEligibilityGates(roleId: string) {
 
 export function toAdminGate(gate: typeof eligibilityGates.$inferSelect): AdminEligibilityGate {
   return {
+    id: gate.id,
     reference: gate.reference,
     name: gate.name,
     description: gate.description,
     gateType: gate.gateType,
     status: gate.status,
     displayOrder: gate.displayOrder,
-    configuration: parseJson<Record<string, unknown>>(gate.configuration, {}),
+    configuration: parseJson<EligibilityGateConfiguration>(gate.configuration, { inputType: "YES_NO", label: gate.name, isBlocking: true } as EligibilityGateConfiguration),
   };
 }
 
 /**
- * Applicant-safe gate configuration: wording and state only. The only
- * structured value exposed is the minimum relevant experience where the
- * applicant UX needs it (G3) — never scoring or decision configuration.
+ * Applicant-safe gate configuration: wording, state and rendering hints only.
+ * Dates, compensation bands and option lists are exposed because the
+ * applicant form must render them verbatim from the role's live configuration
+ * — never scoring or decision internals.
  */
 export function toPublicEligibility(roleSlug: string, gates: Array<typeof eligibilityGates.$inferSelect>): PublicEligibilityConfiguration {
   const publicGates: PublicEligibilityGate[] = gates.map((gate) => {
-    const configuration = parseJson<Record<string, unknown>>(gate.configuration, {});
-    const minimumYears = gate.gateType === "experience" && typeof configuration.minimumYears === "number" ? configuration.minimumYears : undefined;
-    return { reference: gate.reference, name: gate.name, description: gate.description, gateType: gate.gateType, status: gate.status, ...(minimumYears !== undefined ? { minimumYears } : {}) };
+    const configuration = parseJson<Partial<EligibilityGateConfiguration>>(gate.configuration, {});
+    const inputType = configuration.inputType;
+    const minimumYears = inputType === "APPLICATION_FIELD" && typeof configuration.minimumYears === "number" ? configuration.minimumYears : undefined;
+    return {
+      reference: gate.reference,
+      name: gate.name,
+      description: gate.description,
+      gateType: gate.gateType,
+      status: gate.status,
+      ...(inputType ? { inputType: inputType as GateInputType } : {}),
+      // Options expose wording only — pass/fail outcomes and flag labels are
+      // evaluation internals and never reach the applicant.
+      ...(Array.isArray(configuration.options) ? { options: configuration.options.map((option) => ({ value: option.value, text: option.text })) } : {}),
+      ...(typeof configuration.isBlocking === "boolean" ? { isBlocking: configuration.isBlocking } : {}),
+      ...(configuration.allowSupplementaryField ? { allowSupplementaryField: true } : {}),
+      ...(typeof configuration.supplementaryFieldKey === "string" ? { supplementaryFieldKey: configuration.supplementaryFieldKey } : {}),
+      ...(typeof configuration.supplementaryFieldLabel === "string" ? { supplementaryFieldLabel: configuration.supplementaryFieldLabel } : {}),
+      ...(typeof configuration.supplementaryFieldVisibleWhen === "string" ? { supplementaryFieldVisibleWhen: configuration.supplementaryFieldVisibleWhen } : {}),
+      ...(typeof configuration.latestStartDate === "string" ? { latestStartDate: configuration.latestStartDate } : {}),
+      ...(typeof configuration.deadlineLabel === "string" ? { deadlineLabel: configuration.deadlineLabel } : {}),
+      ...(typeof configuration.minimumAmount === "number" ? { minimumAmount: configuration.minimumAmount } : {}),
+      ...(typeof configuration.maximumAmount === "number" ? { maximumAmount: configuration.maximumAmount } : {}),
+      ...(typeof configuration.currency === "string" ? { currency: configuration.currency } : {}),
+      ...(typeof configuration.period === "string" ? { period: configuration.period } : {}),
+      ...(typeof configuration.rangeLabel === "string" ? { rangeLabel: configuration.rangeLabel } : {}),
+      ...(minimumYears !== undefined ? { minimumYears } : {}),
+    };
   });
   return {
     roleSlug,
@@ -156,6 +185,56 @@ export function toPublicEligibility(roleSlug: string, gates: Array<typeof eligib
       configurationRequiredCount: publicGates.filter((gate) => gate.status === "Configuration Required").length,
     },
   };
+}
+
+// ── Admin eligibility gate CRUD (per-role) ───────────────────────────────────
+
+export async function getEligibilityGateById(gateId: string) {
+  const db = getDatabase();
+  return (await db.select().from(eligibilityGates).where(eq(eligibilityGates.id, gateId)).limit(1))[0] ?? null;
+}
+
+export async function createEligibilityGate(roleId: string, input: EligibilityGateInput): Promise<AdminEligibilityGate> {
+  const db = getDatabase();
+  const id = `gate-${randomBytes(8).toString("hex")}`;
+  await db.insert(eligibilityGates).values({
+    id,
+    roleId,
+    reference: input.reference,
+    name: input.name,
+    description: input.description,
+    gateType: "eligibility",
+    status: input.status,
+    displayOrder: input.displayOrder,
+    configuration: JSON.stringify(input.configuration),
+  });
+  const created = await getEligibilityGateById(id);
+  if (!created) throw new Error("Gate insert did not complete");
+  return toAdminGate(created);
+}
+
+export async function updateEligibilityGate(gateId: string, input: EligibilityGateInput): Promise<AdminEligibilityGate | null> {
+  const db = getDatabase();
+  const existing = await getEligibilityGateById(gateId);
+  if (!existing) return null;
+  await db.update(eligibilityGates).set({
+    reference: input.reference,
+    name: input.name,
+    description: input.description,
+    status: input.status,
+    displayOrder: input.displayOrder,
+    configuration: JSON.stringify(input.configuration),
+  }).where(eq(eligibilityGates.id, gateId));
+  const updated = await getEligibilityGateById(gateId);
+  return updated ? toAdminGate(updated) : null;
+}
+
+export async function deleteEligibilityGate(gateId: string): Promise<boolean> {
+  const db = getDatabase();
+  const existing = await getEligibilityGateById(gateId);
+  if (!existing) return false;
+  await db.delete(eligibilityGates).where(eq(eligibilityGates.id, gateId));
+  return true;
 }
 
 // ── Evaluation Framework configuration ───────────────────────────────────────

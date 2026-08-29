@@ -12,6 +12,7 @@
 import type {
   AdminEligibilityGate,
   AdminRecruitmentRole,
+  EligibilityGateInput,
   EvaluationFrameworkConfiguration,
   PublicEligibilityConfiguration,
   PublicRecruitmentRole,
@@ -28,9 +29,14 @@ import type {
 export type {
   AdminEligibilityGate,
   AdminRecruitmentRole,
+  EligibilityGateConfiguration,
+  EligibilityGateInput,
+  EligibilityGateOption,
   EligibilityGateSummary,
   EmploymentType,
   EvaluationFrameworkConfiguration,
+  GateInputType,
+  GateStatus,
   PublicEligibilityConfiguration,
   PublicEligibilityGate,
   PublicRecruitmentRole,
@@ -61,10 +67,13 @@ export type {
 
 export {
   deriveEligibilityGateSummary,
+  describeEligibilityGateSummary,
   describeScreeningBandRange,
   EMPLOYMENT_TYPES,
   formatRoleDateLabel,
   formatRoleUpdatedLabel,
+  GATE_INPUT_TYPES,
+  GATE_STATUSES,
   ROLE_STATUSES,
 } from "@shared/recruitmentApi";
 
@@ -144,6 +153,23 @@ export async function updateAdminRole(idOrSlug: string, input: RecruitmentRoleIn
 
 export async function fetchAdminEligibility(idOrSlug: string): Promise<{ roleId: string; gates: AdminEligibilityGate[] }> {
   return request<{ roleId: string; gates: AdminEligibilityGate[] }>(`/api/admin/recruitment-roles/${encodeURIComponent(idOrSlug)}/eligibility`);
+}
+
+export async function createAdminEligibilityGate(idOrSlug: string, input: EligibilityGateInput): Promise<AdminEligibilityGate> {
+  const payload = await request<{ gate: AdminEligibilityGate }>(`/api/admin/recruitment-roles/${encodeURIComponent(idOrSlug)}/eligibility`, jsonBody(input));
+  return payload.gate;
+}
+
+export async function updateAdminEligibilityGate(gateId: string, input: EligibilityGateInput): Promise<AdminEligibilityGate> {
+  const payload = await request<{ gate: AdminEligibilityGate }>(`/api/admin/eligibility-gates/${encodeURIComponent(gateId)}`, {
+    ...jsonBody(input),
+    method: "PUT",
+  });
+  return payload.gate;
+}
+
+export async function deleteAdminEligibilityGate(gateId: string): Promise<void> {
+  await request<{ ok: boolean }>(`/api/admin/eligibility-gates/${encodeURIComponent(gateId)}`, { method: "DELETE" });
 }
 
 export async function fetchEvaluationFramework(idOrSlug: string): Promise<EvaluationFrameworkConfiguration> {

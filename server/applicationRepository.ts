@@ -23,7 +23,7 @@ import {
 } from "../drizzle/schema";
 import type {
   ApplicantAssessmentState,
-  ApplicantEligibilityInput,
+  ApplicantEligibilityAnswers,
   ApplicantSafeOption,
   ApplicantSafeQuestion,
   ApplicationState,
@@ -34,6 +34,7 @@ import type {
   ServerEligibilityResult,
 } from "../shared/applicationApi";
 import { normalizeEmail } from "../shared/applicationApi";
+import type { EligibilityGateConfiguration } from "../shared/recruitmentApi";
 import { getDatabase } from "./db";
 
 function parseJson<T>(value: string, fallback: T): T {
@@ -51,8 +52,14 @@ export function hashApplicantToken(token: string): string {
 }
 
 // ── Server-side eligibility evaluation ───────────────────────────────────────
+//
+// The evaluator is fully configuration-driven (Task 24E): it dispatches on the
+// gate's configured `inputType` and never branches on gate references. Any
+// role may declare any number of gates — BDO currently has seven, other roles
+// may have four or twelve. APPLICATION_FIELD gates are derived from the
+// applicant information payload and never consume an applicant answer.
 
-const EXPERIENCE_OPTION_MINIMUM_YEARS: Record<string, number> = {
+const DEFAULT_EXPERIENCE_BAND_MINIMUM_YEARS: Record<string, number> = {
   "No direct experience": 0,
   "Less than 1 year": 0,
   "1–2 years": 1,
@@ -61,73 +68,102 @@ const EXPERIENCE_OPTION_MINIMUM_YEARS: Record<string, number> = {
   "9+ years": 9,
 };
 
+type GateEvaluationInput = {
+  id: string;
+  reference: string;
+  status: string;
+  configuration: string;
+};
+
+function derivedFieldValue(fieldKey: string | undefined, relevantExperience: string): string {
+  // The only applicant-information field currently derivable server-side.
+  if (fieldKey === "relevantExperience") return relevantExperience;
+  return relevantExperience;
+}
+
+function evaluateGate(
+  config: EligibilityGateConfiguration,
+  answer: { value: string; supplementary?: string } | undefined,
+  relevantExperience: string,
+): ServerEligibilityGateResult & { gateId?: string; gateReference?: string } {
+  switch (config.inputType) {
+    case "APPLICATION_FIELD": {
+      const represented = derivedFieldValue(config.fieldKey, relevantExperience);
+      const bands = config.experienceBandMinimumYears ?? DEFAULT_EXPERIENCE_BAND_MINIMUM_YEARS;
+      const minimumYears = typeof config.minimumYears === "number" ? config.minimumYears : 0;
+      const years = bands[represented] ?? 0;
+      return { gateId: "", gateReference: "", response: represented, outcome: years >= minimumYears ? "Passed" : "Failed" };
+    }
+    case "YES_NO": {
+      if (!answer) return { gateId: "", gateReference: "", response: "", outcome: "Failed" };
+      const passValue = config.passRule?.match ?? "yes";
+      return { gateId: "", gateReference: "", response: answer.value, outcome: answer.value === passValue ? "Passed" : "Failed" };
+    }
+    case "SINGLE_SELECT": {
+      if (!answer) return { gateId: "", gateReference: "", response: "", outcome: "Failed" };
+      const option = (config.options ?? []).find((candidate) => candidate.value === answer.value);
+      if (!option) return { gateId: "", gateReference: "", response: answer.value, outcome: "Failed" };
+      if (option.outcome === "FAIL") return { gateId: "", gateReference: "", response: answer.value, outcome: "Failed" };
+      if (option.outcome === "PASS_WITH_FLAG") {
+        return { gateId: "", gateReference: "", response: answer.value, outcome: "Flagged", ...(option.flag ? { flagReason: option.flag } : {}) };
+      }
+      return { gateId: "", gateReference: "", response: answer.value, outcome: "Passed" };
+    }
+    default: {
+      return { gateId: "", gateReference: "", response: "", outcome: "Configuration required" };
+    }
+  }
+}
+
 export function evaluateEligibilityServerSide(
-  gates: Array<{ id: string; reference: string; gateType: string; status: string; configuration: string }>,
-  eligibility: ApplicantEligibilityInput,
+  gates: GateEvaluationInput[],
+  eligibility: ApplicantEligibilityAnswers,
   relevantExperience: string,
 ): ServerEligibilityResult {
   const results: ServerEligibilityGateResult[] = [];
 
   for (const gate of gates) {
-    const config = parseJson<Record<string, unknown>>(gate.configuration, {});
+    // Inactive gates are not evaluated and produce no persisted result.
+    if (gate.status === "Inactive") continue;
 
-    if (gate.status === "Configuration Required") {
+    const config = parseJson<Partial<EligibilityGateConfiguration>>(gate.configuration, {});
+
+    if (gate.status === "Configuration Required" || !config.inputType) {
       results.push({ gateId: gate.id, gateReference: gate.reference, response: "", outcome: "Configuration required" });
       continue;
     }
 
-    switch (gate.reference) {
-      case "G1": {
-        const response = eligibility.abujaAvailability;
-        if (response === "not-relocate") {
-          results.push({ gateId: gate.id, gateReference: "G1", response, outcome: "Failed" });
-        } else if (response === "relocate") {
-          results.push({ gateId: gate.id, gateReference: "G1", response, outcome: "Flagged", flagReason: "Relocation commitment" });
-        } else {
-          results.push({ gateId: gate.id, gateReference: "G1", response, outcome: "Passed" });
-        }
-        break;
-      }
-      case "G2": {
-        const response = eligibility.rightToWork;
-        results.push({ gateId: gate.id, gateReference: "G2", response, outcome: response === "yes" ? "Passed" : "Failed" });
-        break;
-      }
-      case "G3": {
-        const minimumYears = typeof config.minimumYears === "number" ? config.minimumYears : 3;
-        const represented = EXPERIENCE_OPTION_MINIMUM_YEARS[relevantExperience] ?? 0;
-        results.push({ gateId: gate.id, gateReference: "G3", response: relevantExperience, outcome: represented >= minimumYears ? "Passed" : "Failed" });
-        break;
-      }
-      case "G4": {
-        // Gate is now active with a real start-date window.
-        const response = eligibility.startAvailability;
-        results.push({ gateId: gate.id, gateReference: "G4", response, outcome: response === "yes" ? "Passed" : "Failed" });
-        break;
-      }
-      case "G5": {
-        // Gate is now active with a real compensation band.
-        const response = eligibility.compensationBand;
-        results.push({ gateId: gate.id, gateReference: "G5", response, outcome: response === "yes" ? "Passed" : "Failed" });
-        break;
-      }
-      case "G6": {
-        const response = eligibility.outboundWork;
-        results.push({ gateId: gate.id, gateReference: "G6", response, outcome: response === "yes" ? "Passed" : "Failed" });
-        break;
-      }
-      case "G7": {
-        const response = eligibility.verificationConsent;
-        results.push({ gateId: gate.id, gateReference: "G7", response, outcome: response === "yes" ? "Passed" : "Failed" });
-        break;
-      }
-      default: {
-        results.push({ gateId: gate.id, gateReference: gate.reference, response: "", outcome: "Configuration required" });
-      }
+    const answer = eligibility[gate.reference];
+    // Gates that expect an applicant answer but did not receive one are a
+    // submission error surfaced as a failure rather than silently passing.
+    if (config.inputType !== "APPLICATION_FIELD" && !answer) {
+      results.push({ gateId: gate.id, gateReference: gate.reference, response: "", outcome: "Failed" });
+      continue;
     }
+
+    const evaluation = evaluateGate(config as EligibilityGateConfiguration, answer, relevantExperience);
+    // Supplementary follow-up fields (e.g. planned relocation date) are
+    // persisted with the response value for Admin visibility.
+    const responseValue = answer?.supplementary ? `${evaluation.response} | ${config.supplementaryFieldLabel ?? "supplementary"}: ${answer.supplementary}` : evaluation.response;
+    results.push({
+      gateId: gate.id,
+      gateReference: gate.reference,
+      response: responseValue,
+      outcome: evaluation.outcome,
+      ...(evaluation.flagReason ? { flagReason: evaluation.flagReason } : {}),
+    });
   }
 
-  const failedGate = results.find((r) => r.outcome === "Failed");
+  // Overall eligibility is decided by blocking gates only: a failed
+  // non-blocking gate is recorded but never closes the application.
+  const blockingGates = gates.filter((gate) => {
+    if (gate.status !== "Active") return false;
+    const config = parseJson<Partial<EligibilityGateConfiguration>>(gate.configuration, {});
+    return config.isBlocking !== false;
+  });
+  const blockingReferences = new Set(blockingGates.map((gate) => gate.reference));
+  const failedGate = results.find((result) => result.outcome === "Failed" && blockingReferences.has(result.gateReference));
+
   return {
     eligible: !failedGate,
     gates: results,

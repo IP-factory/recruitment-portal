@@ -22,7 +22,8 @@ import type {
 
 export type {
   ApplicantAssessmentState,
-  ApplicantEligibilityInput,
+  ApplicantEligibilityAnswers,
+  ApplicantGateAnswer,
   ApplicantSafeOption,
   ApplicantSafeQuestion,
   ApplicationState,

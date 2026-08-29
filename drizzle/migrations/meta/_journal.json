@@ -29,6 +29,20 @@
       "when": 1788278400000,
       "tag": "0003_task24d2_scoring_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1788451200000,
+      "tag": "0004_fix_scoring_and_gates",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1788537600000,
+      "tag": "0005_task24e_configurable_eligibility",
+      "breakpoints": true
     }
   ]
 }

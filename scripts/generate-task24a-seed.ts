@@ -17,15 +17,31 @@ const deferredCrossChecks: Array<{ id: string; sourceQuestionId: string; compari
 const insert = (table: string, columns: string[], values: unknown[]) => rows.push(`INSERT INTO ${table} (${columns.join(",")}) VALUES (${values.map(sql).join(",")}) ON DUPLICATE KEY UPDATE ${columns.slice(1).map((column) => `${column}=VALUES(${column})`).join(",")};`);
 
 insert("recruitment_roles", ["id","slug","title","department","location","employment_type","short_description","full_description","status","opening_date","closing_date"], [roleId, role.slug, role.title, role.department, role.location, role.employmentType, role.shortDescription, role.fullDescription, role.status, role.openingDate, role.closingDate]);
-const gates = [
-  ["G1", "Abuja presence", "Which statement best describes your current location and availability to work in Abuja?", "relocation", "Active", { resident: "pass", relocatingBeforeRequiredStart: "pass_with_flag", neither: "close" }],
-  ["G2", "Right to work", "Do you have the legal right to work in Nigeria?", "binary", "Active", { requiredAnswer: "yes" }],
-  ["G3", "Relevant experience", "Minimum 3 years in a Business Development, corporate sales or account management role.", "experience", "Active", { minimumYears: 3, relevantDomains: ["Business Development", "Corporate sales", "Account management"] }],
-  ["G4", "Start availability", "Are you available to start by 1 September 2026 or earlier?", "availability", "Active", { requiredAnswer: "yes", latestStartDate: "2026-09-01", description: "Candidates must be available to start no later than 1 September 2026." }],
-  ["G5", "Compensation band", "Is your salary expectation within the range of ₦6,000,000 – ₦9,600,000 gross per annum?", "compensation", "Active", { requiredAnswer: "yes", bandMin: 6000000, bandMax: 9600000, currency: "NGN", description: "Published gross annual salary band ₦6m – ₦9.6m." }],
-  ["G6", "Outbound work", "Are you willing to work in an outbound Business Development role that may involve client visits, site tours, evening events and occasional weekend events?", "binary", "Active", { requiredAnswer: "yes" }],
-  ["G7", "Verification consent", "Do you consent to reference and employment verification as part of the recruitment process?", "consent", "Active", { requiredAnswer: "yes" }],
-] as const;
+// Role-specific configurable eligibility gates (Task 24E). Each gate's
+// configuration declares its inputType, pass/fail rule, blocking flag and any
+// supporting values. The server evaluator dispatches on inputType only — the
+// reference strings below are labels, never branch keys.
+type GateSeedRow = readonly [string, string, string, string, string, Record<string, unknown>];
+const gates: GateSeedRow[] = [
+  ["G1", "Abuja availability", "Which statement best describes your current location and availability to work in Abuja?", "eligibility", "Active", {
+    inputType: "SINGLE_SELECT", label: "Abuja availability", isBlocking: true,
+    options: [
+      { value: "abuja", text: "I currently live in Abuja.", outcome: "PASS" },
+      { value: "relocate", text: "I do not currently live in Abuja, but I am committed to relocating before the required start date.", outcome: "PASS_WITH_FLAG", flag: "Relocation commitment" },
+      { value: "not-relocate", text: "I do not live in Abuja and I am not currently planning to relocate.", outcome: "FAIL" },
+    ],
+    allowSupplementaryField: true, supplementaryFieldKey: "plannedRelocationDate", supplementaryFieldLabel: "Planned relocation date", supplementaryFieldVisibleWhen: "relocate",
+  }],
+  ["G2", "Right to work in Nigeria", "Do you have the legal right to work in Nigeria?", "eligibility", "Active", { inputType: "YES_NO", label: "Right to work in Nigeria", passRule: { match: "yes" }, isBlocking: true }],
+  ["G3", "Minimum Business Development experience", "Minimum 3 years in a Business Development, corporate sales or account management role. Evaluated from the Applicant Information field.", "eligibility", "Active", {
+    inputType: "APPLICATION_FIELD", fieldKey: "relevantExperience", label: "Minimum Business Development experience", minimumYears: 3, isBlocking: true,
+    experienceBandMinimumYears: { "No direct experience": 0, "Less than 1 year": 0, "1–2 years": 1, "3–5 years": 3, "6–8 years": 6, "9+ years": 9 },
+  }],
+  ["G4", "Start availability", "Are you available to start by 1 September 2026 or earlier?", "eligibility", "Active", { inputType: "YES_NO", label: "Start availability", latestStartDate: "2026-09-01", deadlineLabel: "1 September 2026", passRule: { match: "yes" }, isBlocking: true }],
+  ["G5", "Compensation expectation", "Is your gross annual salary expectation within the range of ₦6,000,000 – ₦9,600,000?", "eligibility", "Active", { inputType: "YES_NO", label: "Compensation expectation", minimumAmount: 6000000, maximumAmount: 9600000, currency: "NGN", period: "gross annual", rangeLabel: "₦6,000,000 – ₦9,600,000 gross per annum", passRule: { match: "yes" }, isBlocking: true }],
+  ["G6", "Outbound work", "Are you willing to work in an outbound Business Development role that may involve client visits, site tours, evening events and occasional weekend events?", "eligibility", "Active", { inputType: "YES_NO", label: "Outbound work", passRule: { match: "yes" }, isBlocking: true }],
+  ["G7", "Reference and employment verification", "Do you consent to reference and employment verification as part of the recruitment process?", "eligibility", "Active", { inputType: "YES_NO", label: "Reference and employment verification", passRule: { match: "yes" }, isBlocking: true }],
+];
 gates.forEach(([reference, name, description, gateType, status, configuration], index) => insert("eligibility_gates", ["id","role_id","reference","name","description","gate_type","status","display_order","configuration"], [`gate-${reference.toLowerCase()}`, roleId, reference, name, description, gateType, status, index + 1, json(configuration)]));
 (Object.keys(dimensionNames) as Array<keyof typeof dimensionNames>).forEach((reference, index) => insert("assessment_dimensions", ["id","role_id","reference","name","weight","minimum_floor","display_order","status"], [`dimension-${reference.toLowerCase()}`, roleId, reference, dimensionNames[reference], dimensionWeights[reference], V2_DIMENSION_FLOORS[reference as keyof typeof V2_DIMENSION_FLOORS] ?? null, index + 1, "Active"]));
 

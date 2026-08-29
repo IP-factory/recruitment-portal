@@ -10,9 +10,9 @@ import { RoleEligibilitySection } from "@/components/application/RoleEligibility
 import { DataErrorState } from "@/components/AsyncStates";
 import { FieldFrame, FoundationButton, FoundationInput, FoundationSelect } from "@/components/foundation/ui";
 import { usePublicEligibility } from "@/hooks/useRecruitmentData";
-import { BUSINESS_DEVELOPMENT_OFFICER_ROUTE, type ApplicantEligibilityAnswers, emptyApplicantEligibilityAnswers } from "@/lib/eligibilityData";
+import { BUSINESS_DEVELOPMENT_OFFICER_ROUTE } from "@/lib/eligibilityData";
 import { createApplication, saveApplicantSession, loadApplicantSession, fetchApplication, ApplicationApiError, clearApplicantSession } from "@/lib/applicationApi";
-import type { CreateApplicationInput } from "@shared/applicationApi";
+import type { ApplicantEligibilityAnswers, CreateApplicationInput } from "@shared/applicationApi";
 import { emptyApplicantInformation, type ApplicantInformation } from "@/lib/applicationData";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -36,7 +36,7 @@ function getErrors(data: ApplicantInformation) {
 export default function ApplicantInformation() {
   const [, setLocation] = useLocation();
   const [data, setData] = useState<ApplicantInformation>(emptyApplicantInformation);
-  const [eligibility, setEligibility] = useState<ApplicantEligibilityAnswers>(emptyApplicantEligibilityAnswers);
+  const [eligibility, setEligibility] = useState<ApplicantEligibilityAnswers>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [hydrated, setHydrated] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -44,14 +44,19 @@ export default function ApplicantInformation() {
   const errors = useMemo(() => getErrors(data), [data]);
   const formValid = Object.values(errors).every((error) => !error);
 
-  // Gate configuration from TiDB
-  const gateConfiguration = usePublicEligibility(BUSINESS_DEVELOPMENT_OFFICER_ROUTE);
-  const eligibilityConfiguration = useMemo(() => {
-    if (gateConfiguration.status !== "ready" || !gateConfiguration.data) return null;
-    const experienceGate = gateConfiguration.data.gates.find((gate) => gate.gateType === "experience");
-    return typeof experienceGate?.minimumYears === "number" ? { minimumYears: experienceGate.minimumYears } : null;
+  // Gate configuration for this specific role, loaded from TiDB. The slug is
+  // resolved from the URL so each /apply/:roleSlug page loads its own gates.
+  const roleSlug = useMemo(() => {
+    if (typeof window === "undefined") return BUSINESS_DEVELOPMENT_OFFICER_ROUTE;
+    const match = window.location.pathname.match(/^\/apply\/([^/]+)/);
+    return match?.[1] || BUSINESS_DEVELOPMENT_OFFICER_ROUTE;
+  }, []);
+  const gateConfiguration = usePublicEligibility(roleSlug);
+  const eligibilityGates = useMemo(() => {
+    if (gateConfiguration.status !== "ready" || !gateConfiguration.data) return [];
+    return gateConfiguration.data.gates;
   }, [gateConfiguration.status, gateConfiguration.data]);
-  const configurationUnavailable = gateConfiguration.status === "error" || (gateConfiguration.status === "ready" && !eligibilityConfiguration);
+  const configurationUnavailable = gateConfiguration.status === "error" || (gateConfiguration.status === "ready" && eligibilityGates.length === 0);
 
   // Load persisted local form state for UX convenience
   useEffect(() => {
@@ -60,7 +65,7 @@ export default function ApplicantInformation() {
       const stored = window.localStorage.getItem("recruitment-portal:bdm:applicant-information");
       if (stored) setData({ ...emptyApplicantInformation, ...JSON.parse(stored) });
       const eligStored = window.localStorage.getItem("recruitment-portal:bdm:eligibility-answers");
-      if (eligStored) setEligibility({ ...emptyApplicantEligibilityAnswers, ...JSON.parse(eligStored) });
+      if (eligStored) setEligibility(JSON.parse(eligStored) as ApplicantEligibilityAnswers);
     } catch { /* ignore */ }
     setHydrated(true);
   }, []);
@@ -72,13 +77,13 @@ export default function ApplicantInformation() {
       fetchApplication()
         .then((state) => {
           if (state.eligibilityStatus === "Closed") {
-            setLocation("/apply/business-development-officer/eligibility");
+            setLocation(`/apply/${roleSlug}/eligibility`);
           } else if (state.applicationStatus === "Submitted") {
-            setLocation("/apply/business-development-officer/submitted");
+            setLocation(`/apply/${roleSlug}/submitted`);
           } else if (state.applicationStatus === "Assessment Complete") {
-            setLocation("/apply/business-development-officer/review");
+            setLocation(`/apply/${roleSlug}/review`);
           } else {
-            setLocation("/apply/business-development-officer/assessment");
+            setLocation(`/apply/${roleSlug}/assessment`);
           }
         })
         .catch((err) => {
@@ -88,24 +93,41 @@ export default function ApplicantInformation() {
           }
         });
     }
-  }, [setLocation]);
+  }, [setLocation, roleSlug]);
 
   const updateField = <Key extends keyof ApplicantInformation>(field: Key, value: ApplicantInformation[Key]) => setData((current) => ({ ...current, [field]: value }));
-  const updateEligibility = <Key extends keyof ApplicantEligibilityAnswers>(field: Key, value: ApplicantEligibilityAnswers[Key]) => setEligibility((current) => ({ ...current, [field]: value }));
+  const updateEligibility = (gateReference: string, value: string, supplementary?: string) => setEligibility((current) => ({
+    ...current,
+    [gateReference]: { value, ...(supplementary !== undefined ? { supplementary } : current[gateReference]?.supplementary ? { supplementary: current[gateReference].supplementary } : {}) },
+  }));
   const markTouched = (field: string) => setTouched((current) => ({ ...current, [field]: true }));
   const errorFor = (field: keyof typeof errors) => touched[field] ? errors[field] : undefined;
 
+  // Gates that require an applicant answer (derived gates evaluate from the
+  // Applicant Information fields and never collect an answer here).
+  const answerRequiredGates = useMemo(() => eligibilityGates.filter((gate) => gate.status === "Active" && gate.inputType && gate.inputType !== "APPLICATION_FIELD"), [eligibilityGates]);
+  const eligibilityComplete = answerRequiredGates.every((gate) => {
+    const answer = eligibility[gate.reference];
+    if (!answer?.value) return false;
+    if (gate.allowSupplementaryField && gate.supplementaryFieldVisibleWhen === answer.value && !answer.supplementary) return false;
+    return true;
+  });
+
   const continueToAssessment = async () => {
-    setTouched({ fullName: true, email: true, phoneNumber: true, location: true, jobTitle: true, totalExperience: true, businessDevelopmentExperience: true, abujaAvailability: true, plannedRelocationDate: true, rightToWork: true, startAvailability: true, compensationBand: true, outboundWork: true, verificationConsent: true });
-    if (!formValid || !eligibilityConfiguration) return;
-    if (!eligibility.abujaAvailability || !eligibility.rightToWork || !eligibility.startAvailability || !eligibility.compensationBand || !eligibility.outboundWork || !eligibility.verificationConsent) return;
-    if (eligibility.abujaAvailability === "relocate" && !eligibility.plannedRelocationDate) return;
+    const allTouched: Record<string, boolean> = { fullName: true, email: true, phoneNumber: true, location: true, jobTitle: true, totalExperience: true, businessDevelopmentExperience: true };
+    for (const gate of answerRequiredGates) {
+      allTouched[gate.reference] = true;
+      if (gate.supplementaryFieldKey) allTouched[gate.supplementaryFieldKey] = true;
+    }
+    setTouched(allTouched);
+    if (!formValid || eligibilityGates.length === 0) return;
+    if (!eligibilityComplete) return;
 
     setSubmitting(true);
     setError(null);
 
     const input: CreateApplicationInput = {
-      roleSlug: "business-development-officer",
+      roleSlug,
       fullName: data.fullName.trim(),
       email: data.email.trim(),
       phone: data.phoneNumber.trim(),
@@ -115,15 +137,7 @@ export default function ApplicantInformation() {
       totalExperience: data.totalExperience,
       relevantExperience: data.businessDevelopmentExperience,
       linkedinUrl: data.linkedInProfile.trim(),
-      eligibility: {
-        abujaAvailability: eligibility.abujaAvailability as "abuja" | "relocate" | "not-relocate",
-        plannedRelocationDate: eligibility.plannedRelocationDate || "",
-        rightToWork: eligibility.rightToWork as "yes" | "no",
-        startAvailability: eligibility.startAvailability as "yes" | "no",
-        compensationBand: eligibility.compensationBand as "yes" | "no",
-        outboundWork: eligibility.outboundWork as "yes" | "no",
-        verificationConsent: eligibility.verificationConsent as "yes" | "no",
-      },
+      eligibility,
     };
 
     try {
@@ -137,9 +151,9 @@ export default function ApplicantInformation() {
       }
 
       if (result.nextStep === "eligibility-closed") {
-        setLocation("/apply/business-development-officer/eligibility");
+        setLocation(`/apply/${roleSlug}/eligibility`);
       } else {
-        setLocation("/apply/business-development-officer/assessment");
+        setLocation(`/apply/${roleSlug}/assessment`);
       }
     } catch (err) {
       if (err instanceof ApplicationApiError) {
@@ -179,12 +193,12 @@ export default function ApplicantInformation() {
             <div className="sm:col-span-2"><FieldFrame helper="Optional" label="LinkedIn profile"><FoundationInput onChange={(event) => updateField("linkedInProfile", event.target.value)} placeholder="https://linkedin.com/in/..." value={data.linkedInProfile} /></FieldFrame></div>
           </div>
         </section>
-        <RoleEligibilitySection answers={eligibility} onBlur={markTouched} onChange={updateEligibility} touched={touched} />
+        <RoleEligibilitySection answers={eligibility} gates={eligibilityGates} onBlur={markTouched} onChange={updateEligibility} touched={touched} />
         {error ? <div className="mt-6 rounded-lg border border-status-error-strong bg-status-error-soft px-4 py-3 text-sm text-status-error-strong">{error}</div> : null}
         {configurationUnavailable ? (
           <div className="mt-9 border-t border-border pt-6"><DataErrorState message={gateConfiguration.error ?? "The role eligibility configuration could not be loaded."} onRetry={gateConfiguration.reload} /></div>
         ) : (
-          <div className="mt-9 flex justify-end border-t border-border pt-6"><FoundationButton className="w-full sm:w-auto" disabled={!hydrated || submitting || gateConfiguration.status === "loading" || !eligibilityConfiguration} size="lg" type="submit">{submitting ? "Submitting..." : "Continue to Assessment"}</FoundationButton></div>
+          <div className="mt-9 flex justify-end border-t border-border pt-6"><FoundationButton className="w-full sm:w-auto" disabled={!hydrated || submitting || gateConfiguration.status === "loading" || eligibilityGates.length === 0} size="lg" type="submit">{submitting ? "Submitting..." : "Continue to Assessment"}</FoundationButton></div>
         )}
       </form>
     </section>

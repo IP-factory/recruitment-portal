@@ -215,9 +215,17 @@ suite("Task 24C-1 recruitment API against TiDB", () => {
     expect(body.ok).toBe(true);
     expect(body.roleSlug).toBe("business-development-officer");
     expect(body.gates).toHaveLength(7);
-    expect(body.summary).toEqual({ totalCount: 7, activeCount: 5, configurationRequiredCount: 2 });
+    // Task 24E: every BDO gate is fully configured and Active.
+    expect(body.summary).toEqual({ totalCount: 7, activeCount: 7, configurationRequiredCount: 0 });
     const gate3 = body.gates.find((gate: any) => gate.reference === "G3");
     expect(gate3.minimumYears).toBe(3);
+    expect(gate3.inputType).toBe("APPLICATION_FIELD");
+    const gate1 = body.gates.find((gate: any) => gate.reference === "G1");
+    expect(gate1.inputType).toBe("SINGLE_SELECT");
+    expect(Array.isArray(gate1.options)).toBe(true);
+    expect(gate1.options.map((option: any) => option.value)).toEqual(["abuja", "relocate", "not-relocate"]);
+    // Option outcomes drive evaluation and are never exposed to applicants.
+    expect(JSON.stringify(body)).not.toMatch(/"outcome"/);
     for (const gate of body.gates) {
       expect(gate.configuration).toBeUndefined();
       if (gate.reference !== "G3") expect(gate.minimumYears).toBeUndefined();

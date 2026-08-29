@@ -39,18 +39,23 @@ export interface CreateApplicationInput {
   totalExperience: string;
   relevantExperience: string;
   linkedinUrl: string;
-  eligibility: ApplicantEligibilityInput;
+  /** Generic per-gate answers keyed by gate reference (e.g. "G1"). */
+  eligibility: ApplicantEligibilityAnswers;
 }
 
-export interface ApplicantEligibilityInput {
-  abujaAvailability: "abuja" | "relocate" | "not-relocate";
-  plannedRelocationDate: string;
-  rightToWork: "yes" | "no";
-  startAvailability: "yes" | "no";
-  compensationBand: "yes" | "no";
-  outboundWork: "yes" | "no";
-  verificationConsent: "yes" | "no";
+/**
+ * One applicant answer for a single eligibility gate. `value` is the selected
+ * option value (YES_NO: "yes"/"no"; SINGLE_SELECT: configured option value).
+ * `supplementary` carries follow-up field values such as a planned relocation
+ * date. Gates with inputType APPLICATION_FIELD are evaluated server-side from
+ * the applicant information fields and carry no applicant answer.
+ */
+export interface ApplicantGateAnswer {
+  value: string;
+  supplementary?: string;
 }
+
+export type ApplicantEligibilityAnswers = Record<string, ApplicantGateAnswer>;
 
 // ── Server-side eligibility evaluation result ────────────────────────────────
 
@@ -174,25 +179,30 @@ export function validateCreateApplicationInput(candidate: unknown): { input: Cre
   const linkedinUrl = typeof value.linkedinUrl === "string" ? value.linkedinUrl.trim() : "";
   if (linkedinUrl && linkedinUrl.length > 512) errors.push("LinkedIn URL is too long.");
 
-  const eligibility = value.eligibility;
-  if (!eligibility || typeof eligibility !== "object") {
+  const eligibilityRaw = value.eligibility;
+  let eligibility: ApplicantEligibilityAnswers = {};
+  if (!eligibilityRaw || typeof eligibilityRaw !== "object" || Array.isArray(eligibilityRaw)) {
     errors.push("Eligibility answers are missing.");
   } else {
-    const elig = eligibility as Record<string, unknown>;
-    if (!["abuja", "relocate", "not-relocate"].includes(elig.abujaAvailability as string)) errors.push("Select your Abuja availability.");
-    if (elig.abujaAvailability === "relocate" && (!elig.plannedRelocationDate || typeof elig.plannedRelocationDate !== "string" || !(elig.plannedRelocationDate as string).trim())) {
-      errors.push("Enter your planned relocation date.");
+    for (const [gateReference, answer] of Object.entries(eligibilityRaw as Record<string, unknown>)) {
+      if (!answer || typeof answer !== "object") {
+        errors.push(`The answer for gate ${gateReference} is missing.`);
+        continue;
+      }
+      const answerObject = answer as Record<string, unknown>;
+      if (typeof answerObject.value !== "string" || !(answerObject.value as string).trim()) {
+        errors.push(`Select an answer for gate ${gateReference}.`);
+        continue;
+      }
+      eligibility[gateReference] = {
+        value: (answerObject.value as string).trim(),
+        ...(typeof answerObject.supplementary === "string" ? { supplementary: (answerObject.supplementary as string).trim() } : {}),
+      };
     }
-    if (!["yes", "no"].includes(elig.rightToWork as string)) errors.push("Select your right to work status.");
-    if (!["yes", "no"].includes(elig.startAvailability as string)) errors.push("Select your start availability.");
-    if (!["yes", "no"].includes(elig.compensationBand as string)) errors.push("Select your compensation band confirmation.");
-    if (!["yes", "no"].includes(elig.outboundWork as string)) errors.push("Select your outbound work willingness.");
-    if (!["yes", "no"].includes(elig.verificationConsent as string)) errors.push("Select your verification consent.");
   }
 
   if (errors.length) return { errors };
 
-  const elig = eligibility as Record<string, unknown>;
   return {
     input: {
       roleSlug,
@@ -205,15 +215,7 @@ export function validateCreateApplicationInput(candidate: unknown): { input: Cre
       totalExperience,
       relevantExperience,
       linkedinUrl,
-      eligibility: {
-        abujaAvailability: elig.abujaAvailability as "abuja" | "relocate" | "not-relocate",
-        plannedRelocationDate: typeof elig.plannedRelocationDate === "string" ? (elig.plannedRelocationDate as string).trim() : "",
-        rightToWork: elig.rightToWork as "yes" | "no",
-        startAvailability: elig.startAvailability as "yes" | "no",
-        compensationBand: elig.compensationBand as "yes" | "no",
-        outboundWork: elig.outboundWork as "yes" | "no",
-        verificationConsent: elig.verificationConsent as "yes" | "no",
-      },
+      eligibility,
     },
   };
 }

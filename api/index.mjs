@@ -2988,23 +2988,28 @@ function validateCreateApplicationInput(candidate) {
   if (!relevantExperience) errors.push("Select your relevant experience level.");
   const linkedinUrl = typeof value.linkedinUrl === "string" ? value.linkedinUrl.trim() : "";
   if (linkedinUrl && linkedinUrl.length > 512) errors.push("LinkedIn URL is too long.");
-  const eligibility = value.eligibility;
-  if (!eligibility || typeof eligibility !== "object") {
+  const eligibilityRaw = value.eligibility;
+  let eligibility = {};
+  if (!eligibilityRaw || typeof eligibilityRaw !== "object" || Array.isArray(eligibilityRaw)) {
     errors.push("Eligibility answers are missing.");
   } else {
-    const elig2 = eligibility;
-    if (!["abuja", "relocate", "not-relocate"].includes(elig2.abujaAvailability)) errors.push("Select your Abuja availability.");
-    if (elig2.abujaAvailability === "relocate" && (!elig2.plannedRelocationDate || typeof elig2.plannedRelocationDate !== "string" || !elig2.plannedRelocationDate.trim())) {
-      errors.push("Enter your planned relocation date.");
+    for (const [gateReference, answer] of Object.entries(eligibilityRaw)) {
+      if (!answer || typeof answer !== "object") {
+        errors.push(`The answer for gate ${gateReference} is missing.`);
+        continue;
+      }
+      const answerObject = answer;
+      if (typeof answerObject.value !== "string" || !answerObject.value.trim()) {
+        errors.push(`Select an answer for gate ${gateReference}.`);
+        continue;
+      }
+      eligibility[gateReference] = {
+        value: answerObject.value.trim(),
+        ...typeof answerObject.supplementary === "string" ? { supplementary: answerObject.supplementary.trim() } : {}
+      };
     }
-    if (!["yes", "no"].includes(elig2.rightToWork)) errors.push("Select your right to work status.");
-    if (!["yes", "no"].includes(elig2.startAvailability)) errors.push("Select your start availability.");
-    if (!["yes", "no"].includes(elig2.compensationBand)) errors.push("Select your compensation band confirmation.");
-    if (!["yes", "no"].includes(elig2.outboundWork)) errors.push("Select your outbound work willingness.");
-    if (!["yes", "no"].includes(elig2.verificationConsent)) errors.push("Select your verification consent.");
   }
   if (errors.length) return { errors };
-  const elig = eligibility;
   return {
     input: {
       roleSlug,
@@ -3017,15 +3022,7 @@ function validateCreateApplicationInput(candidate) {
       totalExperience,
       relevantExperience,
       linkedinUrl,
-      eligibility: {
-        abujaAvailability: elig.abujaAvailability,
-        plannedRelocationDate: typeof elig.plannedRelocationDate === "string" ? elig.plannedRelocationDate.trim() : "",
-        rightToWork: elig.rightToWork,
-        startAvailability: elig.startAvailability,
-        compensationBand: elig.compensationBand,
-        outboundWork: elig.outboundWork,
-        verificationConsent: elig.verificationConsent
-      }
+      eligibility
     }
   };
 }
@@ -3072,7 +3069,7 @@ function generateApplicantToken() {
 function hashApplicantToken(token) {
   return createHash2("sha256").update(token).digest("hex");
 }
-var EXPERIENCE_OPTION_MINIMUM_YEARS = {
+var DEFAULT_EXPERIENCE_BAND_MINIMUM_YEARS = {
   "No direct experience": 0,
   "Less than 1 year": 0,
   "1\u20132 years": 1,
@@ -3080,63 +3077,70 @@ var EXPERIENCE_OPTION_MINIMUM_YEARS = {
   "6\u20138 years": 6,
   "9+ years": 9
 };
+function derivedFieldValue(fieldKey, relevantExperience) {
+  if (fieldKey === "relevantExperience") return relevantExperience;
+  return relevantExperience;
+}
+function evaluateGate(config, answer, relevantExperience) {
+  switch (config.inputType) {
+    case "APPLICATION_FIELD": {
+      const represented = derivedFieldValue(config.fieldKey, relevantExperience);
+      const bands = config.experienceBandMinimumYears ?? DEFAULT_EXPERIENCE_BAND_MINIMUM_YEARS;
+      const minimumYears = typeof config.minimumYears === "number" ? config.minimumYears : 0;
+      const years = bands[represented] ?? 0;
+      return { gateId: "", gateReference: "", response: represented, outcome: years >= minimumYears ? "Passed" : "Failed" };
+    }
+    case "YES_NO": {
+      if (!answer) return { gateId: "", gateReference: "", response: "", outcome: "Failed" };
+      const passValue = config.passRule?.match ?? "yes";
+      return { gateId: "", gateReference: "", response: answer.value, outcome: answer.value === passValue ? "Passed" : "Failed" };
+    }
+    case "SINGLE_SELECT": {
+      if (!answer) return { gateId: "", gateReference: "", response: "", outcome: "Failed" };
+      const option = (config.options ?? []).find((candidate) => candidate.value === answer.value);
+      if (!option) return { gateId: "", gateReference: "", response: answer.value, outcome: "Failed" };
+      if (option.outcome === "FAIL") return { gateId: "", gateReference: "", response: answer.value, outcome: "Failed" };
+      if (option.outcome === "PASS_WITH_FLAG") {
+        return { gateId: "", gateReference: "", response: answer.value, outcome: "Flagged", ...option.flag ? { flagReason: option.flag } : {} };
+      }
+      return { gateId: "", gateReference: "", response: answer.value, outcome: "Passed" };
+    }
+    default: {
+      return { gateId: "", gateReference: "", response: "", outcome: "Configuration required" };
+    }
+  }
+}
 function evaluateEligibilityServerSide(gates, eligibility, relevantExperience) {
   const results = [];
   for (const gate of gates) {
+    if (gate.status === "Inactive") continue;
     const config = parseJson3(gate.configuration, {});
-    if (gate.status === "Configuration Required") {
+    if (gate.status === "Configuration Required" || !config.inputType) {
       results.push({ gateId: gate.id, gateReference: gate.reference, response: "", outcome: "Configuration required" });
       continue;
     }
-    switch (gate.reference) {
-      case "G1": {
-        const response = eligibility.abujaAvailability;
-        if (response === "not-relocate") {
-          results.push({ gateId: gate.id, gateReference: "G1", response, outcome: "Failed" });
-        } else if (response === "relocate") {
-          results.push({ gateId: gate.id, gateReference: "G1", response, outcome: "Flagged", flagReason: "Relocation commitment" });
-        } else {
-          results.push({ gateId: gate.id, gateReference: "G1", response, outcome: "Passed" });
-        }
-        break;
-      }
-      case "G2": {
-        const response = eligibility.rightToWork;
-        results.push({ gateId: gate.id, gateReference: "G2", response, outcome: response === "yes" ? "Passed" : "Failed" });
-        break;
-      }
-      case "G3": {
-        const minimumYears = typeof config.minimumYears === "number" ? config.minimumYears : 3;
-        const represented = EXPERIENCE_OPTION_MINIMUM_YEARS[relevantExperience] ?? 0;
-        results.push({ gateId: gate.id, gateReference: "G3", response: relevantExperience, outcome: represented >= minimumYears ? "Passed" : "Failed" });
-        break;
-      }
-      case "G4": {
-        const response = eligibility.startAvailability;
-        results.push({ gateId: gate.id, gateReference: "G4", response, outcome: response === "yes" ? "Passed" : "Failed" });
-        break;
-      }
-      case "G5": {
-        const response = eligibility.compensationBand;
-        results.push({ gateId: gate.id, gateReference: "G5", response, outcome: response === "yes" ? "Passed" : "Failed" });
-        break;
-      }
-      case "G6": {
-        const response = eligibility.outboundWork;
-        results.push({ gateId: gate.id, gateReference: "G6", response, outcome: response === "yes" ? "Passed" : "Failed" });
-        break;
-      }
-      case "G7": {
-        const response = eligibility.verificationConsent;
-        results.push({ gateId: gate.id, gateReference: "G7", response, outcome: response === "yes" ? "Passed" : "Failed" });
-        break;
-      }
-      default: {
-        results.push({ gateId: gate.id, gateReference: gate.reference, response: "", outcome: "Configuration required" });
-      }
+    const answer = eligibility[gate.reference];
+    if (config.inputType !== "APPLICATION_FIELD" && !answer) {
+      results.push({ gateId: gate.id, gateReference: gate.reference, response: "", outcome: "Failed" });
+      continue;
     }
+    const evaluation = evaluateGate(config, answer, relevantExperience);
+    const responseValue = answer?.supplementary ? `${evaluation.response} | ${config.supplementaryFieldLabel ?? "supplementary"}: ${answer.supplementary}` : evaluation.response;
+    results.push({
+      gateId: gate.id,
+      gateReference: gate.reference,
+      response: responseValue,
+      outcome: evaluation.outcome,
+      ...evaluation.flagReason ? { flagReason: evaluation.flagReason } : {}
+    });
   }
-  const failedGate = results.find((r) => r.outcome === "Failed");
+  const blockingGates = gates.filter((gate) => {
+    if (gate.status !== "Active") return false;
+    const config = parseJson3(gate.configuration, {});
+    return config.isBlocking !== false;
+  });
+  const blockingReferences = new Set(blockingGates.map((gate) => gate.reference));
+  const failedGate = results.find((result) => result.outcome === "Failed" && blockingReferences.has(result.gateReference));
   return {
     eligible: !failedGate,
     gates: results,
@@ -3443,6 +3447,8 @@ import { asc as asc7, eq as eq7 } from "drizzle-orm";
 // shared/recruitmentApi.ts
 var ROLE_STATUSES = ["Draft", "Open", "Closed", "Archived"];
 var EMPLOYMENT_TYPES = ["Full-time", "Part-time", "Contract", "Internship", "Temporary"];
+var GATE_STATUSES = ["Active", "Configuration Required", "Inactive"];
+var GATE_INPUT_TYPES = ["YES_NO", "SINGLE_SELECT", "APPLICATION_FIELD", "DATE", "COMPENSATION", "FREE_TEXT"];
 var DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 function isValidDateString(value) {
   if (!DATE_PATTERN.test(value)) return false;
@@ -3500,6 +3506,60 @@ function resolveUniqueSlug(base, taken) {
     if (!taken.has(candidate)) return candidate;
   }
   throw new Error("Unable to allocate a unique slug");
+}
+function validateEligibilityGateInput(candidate) {
+  if (!candidate || typeof candidate !== "object") return { errors: ["Gate data is missing."] };
+  const value = candidate;
+  const errors = [];
+  const reference = typeof value.reference === "string" ? value.reference.trim() : "";
+  if (!reference) errors.push("Enter a gate code.");
+  else if (reference.length > 16) errors.push("Gate code is too long.");
+  const name = typeof value.name === "string" ? value.name.trim() : "";
+  if (!name) errors.push("Enter a display label.");
+  else if (name.length > 180) errors.push("Display label is too long.");
+  const description = typeof value.description === "string" ? value.description.trim() : "";
+  if (!description) errors.push("Enter the question text.");
+  const status = value.status;
+  if (typeof status !== "string" || !GATE_STATUSES.includes(status)) errors.push("Select a valid gate status.");
+  const displayOrder = typeof value.displayOrder === "number" && Number.isFinite(value.displayOrder) ? Math.round(value.displayOrder) : Number.NaN;
+  if (Number.isNaN(displayOrder) || displayOrder < 1) errors.push("Enter a valid display order.");
+  const configuration = value.configuration;
+  if (!configuration || typeof configuration !== "object" || Array.isArray(configuration)) {
+    errors.push("Gate configuration is missing.");
+  } else {
+    const config = configuration;
+    const inputType = config.inputType;
+    if (typeof inputType !== "string" || !GATE_INPUT_TYPES.includes(inputType)) {
+      errors.push("Select a valid input type.");
+    } else if (inputType === "SINGLE_SELECT") {
+      const options = Array.isArray(config.options) ? config.options : [];
+      if (options.length === 0) errors.push("Single-select gates require at least one option.");
+      options.forEach((option, index2) => {
+        if (!option || typeof option !== "object") {
+          errors.push(`Option ${index2 + 1} is invalid.`);
+          return;
+        }
+        const opt = option;
+        if (typeof opt.value !== "string" || !opt.value.trim()) errors.push(`Option ${index2 + 1} needs a value.`);
+        if (typeof opt.text !== "string" || !opt.text.trim()) errors.push(`Option ${index2 + 1} needs display text.`);
+        if (typeof opt.outcome !== "string" || !["PASS", "FAIL", "PASS_WITH_FLAG"].includes(opt.outcome)) errors.push(`Option ${index2 + 1} needs a pass/fail outcome.`);
+      });
+    } else if (inputType === "APPLICATION_FIELD") {
+      if (typeof config.fieldKey !== "string" || !config.fieldKey.trim()) errors.push("Derived gates must declare the applicant field they read.");
+    }
+    if (typeof config.isBlocking !== "boolean") errors.push("Declare whether the gate is blocking.");
+  }
+  if (errors.length) return { errors };
+  return {
+    input: {
+      reference,
+      name,
+      description,
+      status,
+      displayOrder,
+      configuration
+    }
+  };
 }
 
 // server/recruitmentRepository.ts
@@ -3581,20 +3641,45 @@ async function getRoleEligibilityGates(roleId) {
 }
 function toAdminGate(gate) {
   return {
+    id: gate.id,
     reference: gate.reference,
     name: gate.name,
     description: gate.description,
     gateType: gate.gateType,
     status: gate.status,
     displayOrder: gate.displayOrder,
-    configuration: parseJson4(gate.configuration, {})
+    configuration: parseJson4(gate.configuration, { inputType: "YES_NO", label: gate.name, isBlocking: true })
   };
 }
 function toPublicEligibility(roleSlug, gates) {
   const publicGates = gates.map((gate) => {
     const configuration = parseJson4(gate.configuration, {});
-    const minimumYears = gate.gateType === "experience" && typeof configuration.minimumYears === "number" ? configuration.minimumYears : void 0;
-    return { reference: gate.reference, name: gate.name, description: gate.description, gateType: gate.gateType, status: gate.status, ...minimumYears !== void 0 ? { minimumYears } : {} };
+    const inputType = configuration.inputType;
+    const minimumYears = inputType === "APPLICATION_FIELD" && typeof configuration.minimumYears === "number" ? configuration.minimumYears : void 0;
+    return {
+      reference: gate.reference,
+      name: gate.name,
+      description: gate.description,
+      gateType: gate.gateType,
+      status: gate.status,
+      ...inputType ? { inputType } : {},
+      // Options expose wording only — pass/fail outcomes and flag labels are
+      // evaluation internals and never reach the applicant.
+      ...Array.isArray(configuration.options) ? { options: configuration.options.map((option) => ({ value: option.value, text: option.text })) } : {},
+      ...typeof configuration.isBlocking === "boolean" ? { isBlocking: configuration.isBlocking } : {},
+      ...configuration.allowSupplementaryField ? { allowSupplementaryField: true } : {},
+      ...typeof configuration.supplementaryFieldKey === "string" ? { supplementaryFieldKey: configuration.supplementaryFieldKey } : {},
+      ...typeof configuration.supplementaryFieldLabel === "string" ? { supplementaryFieldLabel: configuration.supplementaryFieldLabel } : {},
+      ...typeof configuration.supplementaryFieldVisibleWhen === "string" ? { supplementaryFieldVisibleWhen: configuration.supplementaryFieldVisibleWhen } : {},
+      ...typeof configuration.latestStartDate === "string" ? { latestStartDate: configuration.latestStartDate } : {},
+      ...typeof configuration.deadlineLabel === "string" ? { deadlineLabel: configuration.deadlineLabel } : {},
+      ...typeof configuration.minimumAmount === "number" ? { minimumAmount: configuration.minimumAmount } : {},
+      ...typeof configuration.maximumAmount === "number" ? { maximumAmount: configuration.maximumAmount } : {},
+      ...typeof configuration.currency === "string" ? { currency: configuration.currency } : {},
+      ...typeof configuration.period === "string" ? { period: configuration.period } : {},
+      ...typeof configuration.rangeLabel === "string" ? { rangeLabel: configuration.rangeLabel } : {},
+      ...minimumYears !== void 0 ? { minimumYears } : {}
+    };
   });
   return {
     roleSlug,
@@ -3605,6 +3690,50 @@ function toPublicEligibility(roleSlug, gates) {
       configurationRequiredCount: publicGates.filter((gate) => gate.status === "Configuration Required").length
     }
   };
+}
+async function getEligibilityGateById(gateId) {
+  const db = getDatabase();
+  return (await db.select().from(eligibilityGates).where(eq7(eligibilityGates.id, gateId)).limit(1))[0] ?? null;
+}
+async function createEligibilityGate(roleId, input) {
+  const db = getDatabase();
+  const id = `gate-${randomBytes7(8).toString("hex")}`;
+  await db.insert(eligibilityGates).values({
+    id,
+    roleId,
+    reference: input.reference,
+    name: input.name,
+    description: input.description,
+    gateType: "eligibility",
+    status: input.status,
+    displayOrder: input.displayOrder,
+    configuration: JSON.stringify(input.configuration)
+  });
+  const created = await getEligibilityGateById(id);
+  if (!created) throw new Error("Gate insert did not complete");
+  return toAdminGate(created);
+}
+async function updateEligibilityGate(gateId, input) {
+  const db = getDatabase();
+  const existing = await getEligibilityGateById(gateId);
+  if (!existing) return null;
+  await db.update(eligibilityGates).set({
+    reference: input.reference,
+    name: input.name,
+    description: input.description,
+    status: input.status,
+    displayOrder: input.displayOrder,
+    configuration: JSON.stringify(input.configuration)
+  }).where(eq7(eligibilityGates.id, gateId));
+  const updated = await getEligibilityGateById(gateId);
+  return updated ? toAdminGate(updated) : null;
+}
+async function deleteEligibilityGate(gateId) {
+  const db = getDatabase();
+  const existing = await getEligibilityGateById(gateId);
+  if (!existing) return false;
+  await db.delete(eligibilityGates).where(eq7(eligibilityGates.id, gateId));
+  return true;
 }
 async function getRoleEvaluationFramework(roleId) {
   const db = getDatabase();
@@ -4017,6 +4146,48 @@ var getAdminRoleEligibility = async (request, response) => {
     handleRouteError2("admin eligibility")(error, response);
   }
 };
+var createAdminEligibilityGate = async (request, response) => {
+  try {
+    const role = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug ?? "");
+    if (!role) return void fail3(response, 404, "Unable to load this recruitment role.");
+    const validated = validateEligibilityGateInput(request.body);
+    if ("errors" in validated) return void fail3(response, 400, validated.errors[0]);
+    const existing = await getRoleEligibilityGates(role.id);
+    if (existing.some((gate2) => gate2.reference === validated.input.reference)) {
+      return void fail3(response, 409, "A gate with that code already exists for this role.");
+    }
+    const gate = await createEligibilityGate(role.id, validated.input);
+    response.status(201).json({ ok: true, gate });
+  } catch (error) {
+    handleRouteError2("admin gate create")(error, response);
+  }
+};
+var updateAdminEligibilityGate = async (request, response) => {
+  try {
+    const gate = await getEligibilityGateById(request.params.gateId ?? "");
+    if (!gate) return void fail3(response, 404, "Unable to load this eligibility gate.");
+    const validated = validateEligibilityGateInput(request.body);
+    if ("errors" in validated) return void fail3(response, 400, validated.errors[0]);
+    const siblings = await getRoleEligibilityGates(gate.roleId);
+    if (siblings.some((sibling) => sibling.reference === validated.input.reference && sibling.id !== gate.id)) {
+      return void fail3(response, 409, "A gate with that code already exists for this role.");
+    }
+    const updated = await updateEligibilityGate(gate.id, validated.input);
+    if (!updated) return void fail3(response, 404, "Unable to load this eligibility gate.");
+    response.json({ ok: true, gate: updated });
+  } catch (error) {
+    handleRouteError2("admin gate update")(error, response);
+  }
+};
+var deleteAdminEligibilityGate = async (request, response) => {
+  try {
+    const deleted = await deleteEligibilityGate(request.params.gateId ?? "");
+    if (!deleted) return void fail3(response, 404, "Unable to load this eligibility gate.");
+    response.json({ ok: true });
+  } catch (error) {
+    handleRouteError2("admin gate delete")(error, response);
+  }
+};
 var getAdminEvaluationFramework = async (request, response) => {
   try {
     const role = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug ?? "");
@@ -4037,6 +4208,9 @@ function createRecruitmentApiRouter() {
   router.get("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin2, getAdminRole);
   router.patch("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin2, patchAdminRole);
   router.get("/api/admin/recruitment-roles/:idOrSlug/eligibility", requireAuthorizedAdmin2, getAdminRoleEligibility);
+  router.post("/api/admin/recruitment-roles/:idOrSlug/eligibility", requireAuthorizedAdmin2, createAdminEligibilityGate);
+  router.put("/api/admin/eligibility-gates/:gateId", requireAuthorizedAdmin2, updateAdminEligibilityGate);
+  router.delete("/api/admin/eligibility-gates/:gateId", requireAuthorizedAdmin2, deleteAdminEligibilityGate);
   router.get("/api/admin/recruitment-roles/:idOrSlug/evaluation-framework", requireAuthorizedAdmin2, getAdminEvaluationFramework);
   return router;
 }

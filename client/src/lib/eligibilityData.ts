@@ -1,20 +1,27 @@
 /**
- * Business Development Officer eligibility: browser-local, score-free gate outcomes.
+ * Role eligibility: generic, role-specific gate support (Task 24E).
  *
- * Task 24C-1 boundary: the gate *configuration* (e.g. the G3 minimum relevant
- * experience) now comes from TiDB via the public eligibility endpoint and is
- * passed into the evaluator — nothing is hard-coded here anymore. The
- * evaluation itself remains client-side until the application-persistence
- * phase. The per-application summaries below serve the mock candidate domain
- * only and are not the applicant gate configuration source.
+ * The applicant form and the evaluator no longer assume any fixed G1–G7 set.
+ * Each recruitment role loads its own active gate configuration from TiDB via
+ * the public eligibility endpoint, and the form renders one input per gate
+ * based on its configured `inputType`. APPLICATION_FIELD gates (such as the
+ * BDO minimum-experience gate) are derived from the Applicant Information
+ * fields and are never rendered as duplicate questions.
+ *
+ * Server-side evaluation is authoritative — the client only collects answers.
+ *
+ * The per-application summaries below serve the mock candidate domain only
+ * and are not the applicant gate configuration source.
  */
 import type { AdminApplication } from "@/lib/adminMockData";
+import type { ApplicantEligibilityAnswers } from "@shared/applicationApi";
+
+export type { ApplicantEligibilityAnswers, ApplicantGateAnswer } from "@shared/applicationApi";
 
 export type EligibilityGateStatus = "Passed" | "Failed" | "Flagged" | "Configuration required" | "Pending";
 export type EligibilityOutcome = "Eligible" | "Closed — Eligibility" | "Pending";
-export type EligibilityGateId = "G1" | "G2" | "G3" | "G4" | "G5" | "G6" | "G7";
 export type EligibilityGate = {
-  id: EligibilityGateId;
+  id: string;
   title: string;
   question: string;
   status: EligibilityGateStatus;
@@ -24,7 +31,7 @@ export type EligibilityGate = {
 export type EligibilitySummary = {
   outcome: EligibilityOutcome;
   gates: EligibilityGate[];
-  activeGateIds: EligibilityGateId[];
+  activeGateIds: string[];
   activeCount: number;
   passedCount: number;
   failedCount: number;
@@ -36,19 +43,20 @@ export type EligibilitySummary = {
 
 export const ELIGIBILITY_STORAGE_KEY = "recruitment-portal:bd-officer:eligibility";
 export const BUSINESS_DEVELOPMENT_OFFICER_ROUTE = "business-development-officer";
-export const ACTIVE_ELIGIBILITY_GATE_IDS: EligibilityGateId[] = ["G1", "G2", "G3", "G4", "G5", "G6", "G7"];
 
-const gateDefinitions: Array<Pick<EligibilityGate, "id" | "title" | "question">> = [
-  { id: "G1", title: "Abuja presence", question: "Which statement best describes your current location and availability to work in Abuja?" },
-  { id: "G2", title: "Right to work", question: "Do you have the legal right to work in Nigeria?" },
-  { id: "G3", title: "Relevant experience", question: "Minimum 3 years in a Business Development, corporate sales or account management role." },
+// ── Mock candidate domain (legacy summary helpers) ──────────────────────────
+
+const mockGateDefinitions: Array<Pick<EligibilityGate, "id" | "title" | "question">> = [
+  { id: "G1", title: "Abuja availability", question: "Which statement best describes your current location and availability to work in Abuja?" },
+  { id: "G2", title: "Right to work in Nigeria", question: "Do you have the legal right to work in Nigeria?" },
+  { id: "G3", title: "Minimum Business Development experience", question: "Minimum 3 years in a Business Development, corporate sales or account management role." },
   { id: "G4", title: "Start availability", question: "Are you available to start by 1 September 2026 or earlier?" },
-  { id: "G5", title: "Compensation band", question: "Is your salary expectation within the range of ₦6,000,000 – ₦9,600,000 gross per annum?" },
+  { id: "G5", title: "Compensation expectation", question: "Is your gross annual salary expectation within the range of ₦6,000,000 – ₦9,600,000?" },
   { id: "G6", title: "Outbound work", question: "Are you willing to work in an outbound Business Development role that may involve client visits, site tours, evening events and occasional weekend events?" },
-  { id: "G7", title: "Verification consent", question: "Do you consent to reference and employment verification as part of the recruitment process?" },
+  { id: "G7", title: "Reference and employment verification", question: "Do you consent to reference and employment verification as part of the recruitment process?" },
 ];
 
-const configurationRequired: Record<EligibilityGateId, Pick<EligibilityGate, "status" | "detail">> = {
+const mockDefaultState: Record<string, Pick<EligibilityGate, "status" | "detail">> = {
   G1: { status: "Passed", detail: "Abuja availability confirmed." },
   G2: { status: "Passed", detail: "Right to work confirmed." },
   G3: { status: "Passed", detail: "Minimum relevant experience confirmed." },
@@ -58,7 +66,7 @@ const configurationRequired: Record<EligibilityGateId, Pick<EligibilityGate, "st
   G7: { status: "Passed", detail: "Verification consent recorded." },
 };
 
-const seededStates: Record<string, Partial<Record<EligibilityGateId, Pick<EligibilityGate, "status" | "detail" | "flagReason">>>> = {
+const seededStates: Record<string, Partial<Record<string, Pick<EligibilityGate, "status" | "detail" | "flagReason">>>> = {
   "app-amina-bello": {},
   "app-chinedu-okafor": {
     G1: { status: "Flagged", detail: "Relocation commitment recorded for Abuja.", flagReason: "Relocation commitment" },
@@ -80,19 +88,18 @@ function readOverrides(): Record<string, EligibilitySummary> {
 
 function buildSummary(applicationId: string): EligibilitySummary {
   const seeded = seededStates[applicationId];
-  const gates = gateDefinitions.map((definition) => ({ ...definition, ...(seeded?.[definition.id] ?? configurationRequired[definition.id]) }));
+  const gates = mockGateDefinitions.map((definition) => ({ ...definition, ...(seeded?.[definition.id] ?? mockDefaultState[definition.id] ?? { status: "Pending" as const, detail: "" }) }));
   const failedCount = gates.filter((gate) => gate.status === "Failed").length;
   const flaggedCount = gates.filter((gate) => gate.status === "Flagged").length;
   const passedCount = gates.filter((gate) => gate.status === "Passed").length;
-  const activeGates = gates.filter((gate) => ACTIVE_ELIGIBILITY_GATE_IDS.includes(gate.id));
-  const completedCount = activeGates.filter((gate) => ["Passed", "Failed", "Flagged"].includes(gate.status)).length;
-  const outcome: EligibilityOutcome = failedCount ? "Closed — Eligibility" : activeGates.some((gate) => gate.status === "Pending") ? "Pending" : "Eligible";
+  const completedCount = gates.filter((gate) => ["Passed", "Failed", "Flagged"].includes(gate.status)).length;
+  const outcome: EligibilityOutcome = failedCount ? "Closed — Eligibility" : gates.some((gate) => gate.status === "Pending") ? "Pending" : "Eligible";
   const g1 = gates.find((gate) => gate.id === "G1");
   return {
     outcome,
     gates,
-    activeGateIds: ACTIVE_ELIGIBILITY_GATE_IDS,
-    activeCount: ACTIVE_ELIGIBILITY_GATE_IDS.length,
+    activeGateIds: gates.map((gate) => gate.id),
+    activeCount: gates.length,
     passedCount,
     failedCount,
     flaggedCount,
@@ -125,74 +132,7 @@ export function clearEligibilityOverrides() {
   if (typeof window !== "undefined") window.localStorage.removeItem(ELIGIBILITY_STORAGE_KEY);
 }
 
-export type ApplicantEligibilityAnswers = {
-  abujaAvailability: "abuja" | "relocate" | "not-relocate" | "";
-  plannedRelocationDate: string;
-  rightToWork: "yes" | "no" | "";
-  startAvailability: "yes" | "no" | "";
-  compensationBand: "yes" | "no" | "";
-  outboundWork: "yes" | "no" | "";
-  verificationConsent: "yes" | "no" | "";
-};
+// ── Generic applicant answers ────────────────────────────────────────────────
 
-/** Database-provided gate configuration consumed by the evaluator. */
-export interface ApplicantEligibilityGateConfiguration {
-  /** G3 minimum relevant experience in years (from the gate configuration). */
-  minimumYears: number;
-}
-
-/** Minimum years represented by each approved experience option. */
-const EXPERIENCE_OPTION_MINIMUM_YEARS: Record<string, number> = {
-  "No direct experience": 0,
-  "Less than 1 year": 0,
-  "1–2 years": 1,
-  "3–5 years": 3,
-  "6–8 years": 6,
-  "9+ years": 9,
-};
-
-/** Does an approved experience option satisfy the configured minimum? */
-export function experienceOptionMeetsMinimumYears(option: string, minimumYears: number): boolean {
-  const represented = EXPERIENCE_OPTION_MINIMUM_YEARS[option];
-  return typeof represented === "number" && represented >= minimumYears;
-}
-
-export const emptyApplicantEligibilityAnswers: ApplicantEligibilityAnswers = {
-  abujaAvailability: "",
-  plannedRelocationDate: "",
-  rightToWork: "",
-  startAvailability: "",
-  compensationBand: "",
-  outboundWork: "",
-  verificationConsent: "",
-};
-
-export type ApplicantEligibilityGateOutcome = {
-  gateId: EligibilityGateId;
-  response: string;
-  status: "Passed" | "Failed" | "Flagged" | "Configuration required";
-  flagReason?: string;
-};
-
-export type ApplicantEligibilityEvaluation = {
-  outcome: EligibilityOutcome | "Incomplete";
-  gates: ApplicantEligibilityGateOutcome[];
-  failedGate: EligibilityGateId | null;
-  incomplete: boolean;
-};
-
-export function evaluateApplicantEligibility(answers: ApplicantEligibilityAnswers, relevantExperience: string, configuration: ApplicantEligibilityGateConfiguration): ApplicantEligibilityEvaluation {
-  const required = [answers.abujaAvailability, answers.rightToWork, relevantExperience, answers.startAvailability, answers.compensationBand, answers.outboundWork, answers.verificationConsent];
-  if (required.some((answer) => !answer) || (answers.abujaAvailability === "relocate" && !answers.plannedRelocationDate)) return { outcome: "Incomplete", gates: [], failedGate: null, incomplete: true };
-  const gates: ApplicantEligibilityGateOutcome[] = [
-    { gateId: "G1", response: answers.abujaAvailability, status: answers.abujaAvailability === "not-relocate" ? "Failed" : answers.abujaAvailability === "relocate" ? "Flagged" : "Passed", ...(answers.abujaAvailability === "relocate" ? { flagReason: "Relocation commitment" } : {}) },
-    { gateId: "G2", response: answers.rightToWork, status: answers.rightToWork === "yes" ? "Passed" : "Failed" },
-    { gateId: "G3", response: relevantExperience, status: experienceOptionMeetsMinimumYears(relevantExperience, configuration.minimumYears) ? "Passed" : "Failed" },
-    { gateId: "G4", response: answers.startAvailability, status: answers.startAvailability === "yes" ? "Passed" : "Failed" },
-    { gateId: "G5", response: answers.compensationBand, status: answers.compensationBand === "yes" ? "Passed" : "Failed" },
-    { gateId: "G6", response: answers.outboundWork, status: answers.outboundWork === "yes" ? "Passed" : "Failed" },
-    { gateId: "G7", response: answers.verificationConsent, status: answers.verificationConsent === "yes" ? "Passed" : "Failed" },
-  ];
-  const failedGate = gates.find((gate) => gate.status === "Failed")?.gateId ?? null;
-  return { outcome: failedGate ? "Closed — Eligibility" : "Eligible", gates, failedGate, incomplete: false };
-}
+/** Empty answer set: gate references are only known once configuration loads. */
+export const emptyApplicantEligibilityAnswers: ApplicantEligibilityAnswers = {};

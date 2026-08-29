@@ -13,7 +13,10 @@
 import { Router, type RequestHandler, type Response } from "express";
 import { findAdminProfileForUser, readSessionToken, resolveSession } from "./adminAuth";
 import {
+  createEligibilityGate,
   createRecruitmentRole,
+  deleteEligibilityGate,
+  getEligibilityGateById,
   getRecruitmentRoleByIdOrSlug,
   getRoleEligibilityGates,
   getRoleEvaluationFramework,
@@ -22,10 +25,11 @@ import {
   toAdminRole,
   toPublicEligibility,
   toPublicRole,
+  updateEligibilityGate,
   updateRecruitmentRole,
 } from "./recruitmentRepository";
 import { isAdminAuthorized } from "../shared/adminAuth";
-import { validateRecruitmentRoleInput } from "../shared/recruitmentApi";
+import { validateEligibilityGateInput, validateRecruitmentRoleInput } from "../shared/recruitmentApi";
 
 function databaseConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL);
@@ -167,6 +171,52 @@ const getAdminRoleEligibility: RequestHandler = async (request, response) => {
   }
 };
 
+const createAdminEligibilityGate: RequestHandler = async (request, response) => {
+  try {
+    const role = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug ?? "");
+    if (!role) return void fail(response, 404, "Unable to load this recruitment role.");
+    const validated = validateEligibilityGateInput(request.body);
+    if ("errors" in validated) return void fail(response, 400, validated.errors[0]);
+    // Enforce the (role_id, reference) uniqueness contract with a safe message.
+    const existing = await getRoleEligibilityGates(role.id);
+    if (existing.some((gate) => gate.reference === validated.input.reference)) {
+      return void fail(response, 409, "A gate with that code already exists for this role.");
+    }
+    const gate = await createEligibilityGate(role.id, validated.input);
+    response.status(201).json({ ok: true, gate });
+  } catch (error) {
+    handleRouteError("admin gate create")(error, response);
+  }
+};
+
+const updateAdminEligibilityGate: RequestHandler = async (request, response) => {
+  try {
+    const gate = await getEligibilityGateById(request.params.gateId ?? "");
+    if (!gate) return void fail(response, 404, "Unable to load this eligibility gate.");
+    const validated = validateEligibilityGateInput(request.body);
+    if ("errors" in validated) return void fail(response, 400, validated.errors[0]);
+    const siblings = await getRoleEligibilityGates(gate.roleId);
+    if (siblings.some((sibling) => sibling.reference === validated.input.reference && sibling.id !== gate.id)) {
+      return void fail(response, 409, "A gate with that code already exists for this role.");
+    }
+    const updated = await updateEligibilityGate(gate.id, validated.input);
+    if (!updated) return void fail(response, 404, "Unable to load this eligibility gate.");
+    response.json({ ok: true, gate: updated });
+  } catch (error) {
+    handleRouteError("admin gate update")(error, response);
+  }
+};
+
+const deleteAdminEligibilityGate: RequestHandler = async (request, response) => {
+  try {
+    const deleted = await deleteEligibilityGate(request.params.gateId ?? "");
+    if (!deleted) return void fail(response, 404, "Unable to load this eligibility gate.");
+    response.json({ ok: true });
+  } catch (error) {
+    handleRouteError("admin gate delete")(error, response);
+  }
+};
+
 const getAdminEvaluationFramework: RequestHandler = async (request, response) => {
   try {
     const role = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug ?? "");
@@ -194,6 +244,9 @@ export function createRecruitmentApiRouter(): Router {
   router.get("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin, getAdminRole);
   router.patch("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin, patchAdminRole);
   router.get("/api/admin/recruitment-roles/:idOrSlug/eligibility", requireAuthorizedAdmin, getAdminRoleEligibility);
+  router.post("/api/admin/recruitment-roles/:idOrSlug/eligibility", requireAuthorizedAdmin, createAdminEligibilityGate);
+  router.put("/api/admin/eligibility-gates/:gateId", requireAuthorizedAdmin, updateAdminEligibilityGate);
+  router.delete("/api/admin/eligibility-gates/:gateId", requireAuthorizedAdmin, deleteAdminEligibilityGate);
   router.get("/api/admin/recruitment-roles/:idOrSlug/evaluation-framework", requireAuthorizedAdmin, getAdminEvaluationFramework);
 
   return router;
