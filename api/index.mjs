@@ -1919,17 +1919,24 @@ function generateId() {
   return randomBytes4(12).toString("hex");
 }
 function scoreObjectiveQuestion(config, response) {
-  const payload = parseJson2(response.responsePayload, null);
-  if (!payload) return null;
+  const rawPayload = response.responsePayload;
   switch (config.questionType) {
     case "ORDINAL":
     case "SJT":
     case "GATE": {
-      if (typeof payload !== "string") return null;
-      const option = config.options.find((o) => o.id === payload);
+      let optionId;
+      try {
+        const parsed = JSON.parse(rawPayload);
+        optionId = typeof parsed === "string" ? parsed : rawPayload;
+      } catch {
+        optionId = rawPayload;
+      }
+      if (!optionId) return null;
+      const option = config.options.find((o) => o.id === optionId);
       return option?.rawScore ?? null;
     }
     case "MULTI": {
+      const payload = parseJson2(rawPayload, null);
       if (!Array.isArray(payload)) return null;
       const selected = payload.filter((id) => typeof id === "string");
       let total = 0;
@@ -1941,6 +1948,7 @@ function scoreObjectiveQuestion(config, response) {
     }
     case "NUMERIC": {
       if (!config.numericConfig || config.numericBands.length === 0) return null;
+      const payload = parseJson2(rawPayload, null);
       const obj = typeof payload === "object" && payload !== null ? payload : {};
       const defs = config.numericConfig.inputDefinitions;
       const resolved = { ...obj };
@@ -1948,14 +1956,14 @@ function scoreObjectiveQuestion(config, response) {
         const firstLabel = defs[0]?.label ?? "";
         const secondLabel = defs[1]?.label ?? "";
         if (config.numericConfig.mode === "calendarYearExperience") {
-          if (obj.year === void 0 && firstLabel && obj[firstLabel] !== void 0) {
+          if (resolved.year === void 0 && firstLabel && obj[firstLabel] !== void 0) {
             resolved.year = obj[firstLabel];
           }
         } else {
-          if (obj.target === void 0 && firstLabel && obj[firstLabel] !== void 0) {
+          if (resolved.target === void 0 && firstLabel && obj[firstLabel] !== void 0) {
             resolved.target = obj[firstLabel];
           }
-          if (obj.actual === void 0 && secondLabel && obj[secondLabel] !== void 0) {
+          if (resolved.actual === void 0 && secondLabel && obj[secondLabel] !== void 0) {
             resolved.actual = obj[secondLabel];
           }
         }
@@ -1987,9 +1995,15 @@ function scoreObjectiveQuestion(config, response) {
 }
 function resolveEvidenceMultiplier(config, response) {
   if (config.questionType !== "EVIDENCE") return null;
-  const payload = parseJson2(response.responsePayload, null);
-  if (typeof payload !== "string") return null;
-  const option = config.options.find((o) => o.id === payload);
+  let optionId;
+  try {
+    const parsed = JSON.parse(response.responsePayload);
+    optionId = typeof parsed === "string" ? parsed : response.responsePayload;
+  } catch {
+    optionId = response.responsePayload;
+  }
+  if (!optionId) return null;
+  const option = config.options.find((o) => o.id === optionId);
   if (!option?.verificationMultiplier) return null;
   const value = Number(option.verificationMultiplier);
   return Number.isFinite(value) ? value : null;

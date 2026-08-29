@@ -80,18 +80,30 @@ interface ResponsePayload {
 }
 
 export function scoreObjectiveQuestion(config: QuestionScoringConfig, response: ResponsePayload): number | null {
-  const payload = parseJson<unknown>(response.responsePayload, null);
-  if (!payload) return null;
+  const rawPayload = response.responsePayload;
 
   switch (config.questionType) {
     case "ORDINAL":
     case "SJT":
     case "GATE": {
-      if (typeof payload !== "string") return null;
-      const option = config.options.find((o) => o.id === payload);
+      // The applicant runtime stores ORDINAL/SJT responses as a raw unquoted
+      // string (e.g. "framework-d1-q1-option-1"), not JSON-encoded. Attempt
+      // JSON parse first (forward-compatibility); if that fails or returns a
+      // non-string, treat the raw value as the option ID directly.
+      let optionId: string;
+      try {
+        const parsed = JSON.parse(rawPayload);
+        optionId = typeof parsed === "string" ? parsed : rawPayload;
+      } catch {
+        optionId = rawPayload;
+      }
+      if (!optionId) return null;
+      const option = config.options.find((o) => o.id === optionId);
       return option?.rawScore ?? null;
     }
     case "MULTI": {
+      // MULTI responses are always JSON-encoded arrays sent by the runtime.
+      const payload = parseJson<unknown>(rawPayload, null);
       if (!Array.isArray(payload)) return null;
       const selected = payload.filter((id): id is string => typeof id === "string");
       let total = 0;
@@ -103,29 +115,31 @@ export function scoreObjectiveQuestion(config: QuestionScoringConfig, response: 
     }
     case "NUMERIC": {
       if (!config.numericConfig || config.numericBands.length === 0) return null;
+      const payload = parseJson<unknown>(rawPayload, null);
       const obj = typeof payload === "object" && payload !== null ? payload as Record<string, unknown> : {};
 
       // Normalise the payload object. The applicant runtime sends field values
-      // keyed by the input label from numeric_question_configs.input_definitions
-      // (e.g. {"Calendar year":"2019"}, {"Target":"180000000","Actual delivered":"216000000"}).
-      // Resolve label-keyed values to their positional internal keys so the
-      // scoring logic below always sees { year } or { target, actual }.
+      // keyed by the configured input label from numeric_question_configs.
+      // input_definitions (e.g. {"Calendar year":"2019"} for D1.Q2 or
+      // {"Target":"180000000","Actual delivered":"216000000"} for D2.Q2).
+      // Values here are whatever the candidate actually submitted — the
+      // specific numbers are regression-test examples only, never hardcoded.
+      // Resolve label-keyed values to internal keys so the scoring logic
+      // always sees { year } or { target, actual }.
       const defs = config.numericConfig.inputDefinitions;
       const resolved: Record<string, unknown> = { ...obj };
       if (defs.length > 0) {
-        // First-position label → "year" for calendarYearExperience
-        // First-position label → "target", second → "actual" for twoValueDerived
         const firstLabel = defs[0]?.label ?? "";
         const secondLabel = defs[1]?.label ?? "";
         if (config.numericConfig.mode === "calendarYearExperience") {
-          if (obj.year === undefined && firstLabel && obj[firstLabel] !== undefined) {
+          if (resolved.year === undefined && firstLabel && obj[firstLabel] !== undefined) {
             resolved.year = obj[firstLabel];
           }
         } else {
-          if (obj.target === undefined && firstLabel && obj[firstLabel] !== undefined) {
+          if (resolved.target === undefined && firstLabel && obj[firstLabel] !== undefined) {
             resolved.target = obj[firstLabel];
           }
-          if (obj.actual === undefined && secondLabel && obj[secondLabel] !== undefined) {
+          if (resolved.actual === undefined && secondLabel && obj[secondLabel] !== undefined) {
             resolved.actual = obj[secondLabel];
           }
         }
@@ -150,7 +164,6 @@ export function scoreObjectiveQuestion(config: QuestionScoringConfig, response: 
       return band?.rawScore ?? null;
     }
     case "EVIDENCE": {
-      // EVIDENCE awards no raw assessment points
       return null;
     }
     default:
@@ -163,9 +176,17 @@ export function resolveEvidenceMultiplier(
   response: ResponsePayload,
 ): number | null {
   if (config.questionType !== "EVIDENCE") return null;
-  const payload = parseJson<unknown>(response.responsePayload, null);
-  if (typeof payload !== "string") return null;
-  const option = config.options.find((o) => o.id === payload);
+  // EVIDENCE responses are stored as raw unquoted strings (same as ORDINAL).
+  // Try JSON parse first; fall back to treating the raw value as the option ID.
+  let optionId: string;
+  try {
+    const parsed = JSON.parse(response.responsePayload);
+    optionId = typeof parsed === "string" ? parsed : response.responsePayload;
+  } catch {
+    optionId = response.responsePayload;
+  }
+  if (!optionId) return null;
+  const option = config.options.find((o) => o.id === optionId);
   if (!option?.verificationMultiplier) return null;
   const value = Number(option.verificationMultiplier);
   return Number.isFinite(value) ? value : null;

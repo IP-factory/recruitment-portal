@@ -639,9 +639,11 @@ describe("production-format payloads: NUMERIC label-key resolution", () => {
 });
 
 describe("production-format payloads: ORDINAL/SJT/MULTI with logical option IDs", () => {
-  // After migration 0004, question_options.id values are "a","b","c"…
-  // These fixtures prove the scorer handles both the post-migration logical IDs
-  // and the pre-migration sequential IDs (belt-and-suspenders).
+  // These fixtures use the option IDs as they exist in the production database
+  // AFTER migration 0004 (logical keys "a","b","c"…).
+  // A separate set of fixtures below tests the pre-migration sequential IDs
+  // ("framework-d1-q1-option-1" etc.) to prove the unquoted-string fix works
+  // for both formats.
 
   const d1q1Config = {
     questionId: "framework-d1-q1",
@@ -652,27 +654,141 @@ describe("production-format payloads: ORDINAL/SJT/MULTI with logical option IDs"
     qWeight: 3,
     maxScore: 5,
     options: [
-      { id: "a", rawScore: 5,         isDecoy: 0, verificationMultiplier: null, outcomeType: null },
-      { id: "b", rawScore: 3,         isDecoy: 0, verificationMultiplier: null, outcomeType: null },
-      { id: "c", rawScore: 1,         isDecoy: 0, verificationMultiplier: null, outcomeType: null },
-      { id: "d", rawScore: null,      isDecoy: 0, verificationMultiplier: null, outcomeType: "close" },
+      { id: "a", rawScore: 5,    isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      { id: "b", rawScore: 3,    isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      { id: "c", rawScore: 1,    isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      { id: "d", rawScore: null, isDecoy: 0, verificationMultiplier: null, outcomeType: "close" },
     ],
     numericConfig: null,
     numericBands: [],
   };
 
-  it("D1.Q1 logical key 'a' → raw 5", () => {
+  it("D1.Q1 JSON-encoded logical key '\"a\"' resolves raw 5", () => {
     expect(scoreObjectiveQuestion(d1q1Config, {
       responseType: "ORDINAL",
       responsePayload: JSON.stringify("a"),
     })).toBe(5);
   });
 
+  it("D1.Q1 unquoted logical key 'a' (raw string) also resolves raw 5", () => {
+    // Covers the case where the DB value is stored without JSON quotes
+    expect(scoreObjectiveQuestion(d1q1Config, {
+      responseType: "ORDINAL",
+      responsePayload: "a",
+    })).toBe(5);
+  });
+
   it("unknown option ID returns null — not 0", () => {
+    // "framework-d1-q1-option-1" is not in this config's options (logical-key format)
     expect(scoreObjectiveQuestion(d1q1Config, {
       responseType: "ORDINAL",
       responsePayload: JSON.stringify("framework-d1-q1-option-1"),
     })).toBeNull();
+    // Raw unquoted form also returns null when not in config
+    expect(scoreObjectiveQuestion(d1q1Config, {
+      responseType: "ORDINAL",
+      responsePayload: "framework-d1-q1-option-1",
+    })).toBeNull();
+  });
+
+  // Pre-migration format: question_options.id = "framework-d1-q1-option-1" etc.
+  // The applicant runtime stores responsePayload as the raw unquoted option ID.
+  // The scorer must resolve "framework-d1-q1-option-1" → raw 5 when those IDs
+  // are present in the config (i.e. before migration 0004 is applied).
+  const d1q1PreMigrationConfig = {
+    ...d1q1Config,
+    options: [
+      { id: "framework-d1-q1-option-1", rawScore: 5,    isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      { id: "framework-d1-q1-option-2", rawScore: 3,    isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      { id: "framework-d1-q1-option-3", rawScore: 1,    isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      { id: "framework-d1-q1-option-4", rawScore: null, isDecoy: 0, verificationMultiplier: null, outcomeType: "close" },
+    ],
+  };
+
+  it("D1.Q1 pre-migration: unquoted payload 'framework-d1-q1-option-1' → raw 5", () => {
+    // This is the actual production scenario: responsePayload stored as a raw
+    // string (not JSON-encoded), option IDs in the DB are sequential strings.
+    expect(scoreObjectiveQuestion(d1q1PreMigrationConfig, {
+      responseType: "ORDINAL",
+      responsePayload: "framework-d1-q1-option-1",
+    })).toBe(5);
+  });
+
+  it("D1.Q1 pre-migration: JSON-encoded payload '\"framework-d1-q1-option-1\"' → raw 5", () => {
+    expect(scoreObjectiveQuestion(d1q1PreMigrationConfig, {
+      responseType: "ORDINAL",
+      responsePayload: JSON.stringify("framework-d1-q1-option-1"),
+    })).toBe(5);
+  });
+
+  it("D2.Q3 pre-migration: 'framework-d2-q3-option-1' → raw 5", () => {
+    const d2q3Config = {
+      questionId: "framework-d2-q3", reference: "D2.Q3", questionType: "ORDINAL",
+      dimensionId: "dimension-d2", dimensionReference: "D2", qWeight: 1, maxScore: 5,
+      options: [
+        { id: "framework-d2-q3-option-1", rawScore: 5,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+        { id: "framework-d2-q3-option-2", rawScore: 4,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+        { id: "framework-d2-q3-option-5", rawScore: 0,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      ],
+      numericConfig: null, numericBands: [],
+    };
+    expect(scoreObjectiveQuestion(d2q3Config, { responseType: "ORDINAL", responsePayload: "framework-d2-q3-option-1" })).toBe(5);
+  });
+
+  it("D3.Q3 pre-migration: 'framework-d3-q3-option-1' → raw 5", () => {
+    const d3q3Config = {
+      questionId: "framework-d3-q3", reference: "D3.Q3", questionType: "ORDINAL",
+      dimensionId: "dimension-d3", dimensionReference: "D3", qWeight: 3, maxScore: 5,
+      options: [
+        { id: "framework-d3-q3-option-1", rawScore: 5,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+        { id: "framework-d3-q3-option-2", rawScore: 4,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+        { id: "framework-d3-q3-option-5", rawScore: 0,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      ],
+      numericConfig: null, numericBands: [],
+    };
+    expect(scoreObjectiveQuestion(d3q3Config, { responseType: "ORDINAL", responsePayload: "framework-d3-q3-option-1" })).toBe(5);
+  });
+
+  it("D5.Q1 pre-migration (SJT): 'framework-d5-q1-option-1' → raw 5", () => {
+    const d5q1Config = {
+      questionId: "framework-d5-q1", reference: "D5.Q1", questionType: "SJT",
+      dimensionId: "dimension-d5", dimensionReference: "D5", qWeight: 3, maxScore: 5,
+      options: [
+        { id: "framework-d5-q1-option-1", rawScore: 5,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+        { id: "framework-d5-q1-option-2", rawScore: 2,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+        { id: "framework-d5-q1-option-4", rawScore: -2, isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      ],
+      numericConfig: null, numericBands: [],
+    };
+    expect(scoreObjectiveQuestion(d5q1Config, { responseType: "SJT", responsePayload: "framework-d5-q1-option-1" })).toBe(5);
+  });
+
+  it("D7.Q1 pre-migration (SJT): 'framework-d7-q1-option-1' → raw 5", () => {
+    const d7q1Config = {
+      questionId: "framework-d7-q1", reference: "D7.Q1", questionType: "SJT",
+      dimensionId: "dimension-d7", dimensionReference: "D7", qWeight: 3, maxScore: 5,
+      options: [
+        { id: "framework-d7-q1-option-1", rawScore: 5,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+        { id: "framework-d7-q1-option-4", rawScore: -2, isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      ],
+      numericConfig: null, numericBands: [],
+    };
+    expect(scoreObjectiveQuestion(d7q1Config, { responseType: "SJT", responsePayload: "framework-d7-q1-option-1" })).toBe(5);
+  });
+
+  it("D2.Q1E pre-migration (EVIDENCE): 'framework-d2-q1e-option-1' → V = 1.00", () => {
+    const evidPreMigConfig = {
+      questionId: "framework-d2-q1e", reference: "D2.Q1E", questionType: "EVIDENCE",
+      dimensionId: "dimension-d2", dimensionReference: "D2", qWeight: null, maxScore: null,
+      options: [
+        { id: "framework-d2-q1e-option-1", rawScore: null, isDecoy: 0, verificationMultiplier: "1.00", outcomeType: null },
+        { id: "framework-d2-q1e-option-2", rawScore: null, isDecoy: 0, verificationMultiplier: "0.95", outcomeType: null },
+        { id: "framework-d2-q1e-option-3", rawScore: null, isDecoy: 0, verificationMultiplier: "0.85", outcomeType: null },
+      ],
+      numericConfig: null, numericBands: [],
+    };
+    expect(resolveEvidenceMultiplier(evidPreMigConfig, { responseType: "EVIDENCE", responsePayload: "framework-d2-q1e-option-1" })).toBe(1);
+    expect(resolveEvidenceMultiplier(evidPreMigConfig, { responseType: "EVIDENCE", responsePayload: "framework-d2-q1e-option-3" })).toBe(0.85);
   });
 
   const d3q1Config = {
@@ -684,10 +800,10 @@ describe("production-format payloads: ORDINAL/SJT/MULTI with logical option IDs"
     qWeight: 3,
     maxScore: 5,
     options: [
-      { id: "a", rawScore: 3,  isDecoy: 0, verificationMultiplier: null, outcomeType: null }, // Corporate accommodation
-      { id: "b", rawScore: 3,  isDecoy: 0, verificationMultiplier: null, outcomeType: null }, // Embassy / NGO
-      { id: "c", rawScore: 2,  isDecoy: 0, verificationMultiplier: null, outcomeType: null }, // Hotel / F&B
-      { id: "h", rawScore: -1, isDecoy: 1, verificationMultiplier: null, outcomeType: null }, // decoy
+      { id: "a", rawScore: 3,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      { id: "b", rawScore: 3,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      { id: "c", rawScore: 2,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+      { id: "h", rawScore: -1, isDecoy: 1, verificationMultiplier: null, outcomeType: null },
     ],
     numericConfig: null,
     numericBands: [],
@@ -704,7 +820,24 @@ describe("production-format payloads: ORDINAL/SJT/MULTI with logical option IDs"
     expect(scoreObjectiveQuestion(d3q1Config, {
       responseType: "MULTI",
       responsePayload: JSON.stringify(["h"]),
-    })).toBe(0); // max(0, -1) = 0
+    })).toBe(0);
+  });
+
+  it("D3.Q1 pre-migration MULTI: framework IDs in JSON array resolve correctly", () => {
+    const d3q1PreMig = {
+      ...d3q1Config,
+      options: [
+        { id: "framework-d3-q1-option-1", rawScore: 3,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+        { id: "framework-d3-q1-option-2", rawScore: 3,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+        { id: "framework-d3-q1-option-3", rawScore: 2,  isDecoy: 0, verificationMultiplier: null, outcomeType: null },
+        { id: "framework-d3-q1-option-8", rawScore: -1, isDecoy: 1, verificationMultiplier: null, outcomeType: null },
+      ],
+    };
+    // MULTI payloads are always JSON-encoded arrays — this is why MULTI already worked
+    expect(scoreObjectiveQuestion(d3q1PreMig, {
+      responseType: "MULTI",
+      responsePayload: JSON.stringify(["framework-d3-q1-option-1", "framework-d3-q1-option-2", "framework-d3-q1-option-3"]),
+    })).toBe(5);
   });
 
   const d2q1eConfig = {
@@ -766,7 +899,8 @@ describe("production-format payloads: full pipeline with synthetic candidate", (
     questionId: id, reference: ref, questionType: "EVIDENCE",
     dimensionId: dimId, dimensionReference: dimRef,
     qWeight: null, maxScore: null,
-    options: [{ id: "a", rawScore: null, isDecoy: 0, verificationMultiplier: multiplier, outcomeType: null }],
+    // Use pre-migration sequential option ID matching the production DB
+    options: [{ id: `${id}-option-1`, rawScore: null, isDecoy: 0, verificationMultiplier: multiplier, outcomeType: null }],
     numericConfig: null, numericBands: [],
   });
   const makeNumericCalendar = (id: string, ref: string, dimId: string, dimRef: string, qWeight: number) => ({
@@ -807,52 +941,59 @@ describe("production-format payloads: full pipeline with synthetic candidate", (
   });
 
   // Full 14-question config matching the BDO v2 assessment in display order
+  // Using pre-migration option IDs ("framework-*-option-N") as that is the
+  // actual production format currently in TiDB.
   const allConfigs = [
     makeOrdinal("framework-d1-q1", "D1.Q1", "dim-d1", "D1", 3,
-      [{ id: "a", rawScore: 5 }, { id: "b", rawScore: 3 }, { id: "c", rawScore: 1 }]),
+      [{ id: "framework-d1-q1-option-1", rawScore: 5 }, { id: "framework-d1-q1-option-2", rawScore: 3 }, { id: "framework-d1-q1-option-3", rawScore: 1 }]),
     makeMulti("framework-d3-q1", "D3.Q1", "dim-d3", "D3", 3,
-      [{ id: "a", rawScore: 3 }, { id: "b", rawScore: 3 }, { id: "c", rawScore: 2 },
-       { id: "d", rawScore: 2 }, { id: "g", rawScore: 1 }, { id: "h", rawScore: -1 }]),
+      [{ id: "framework-d3-q1-option-1", rawScore: 3 }, { id: "framework-d3-q1-option-2", rawScore: 3 }, { id: "framework-d3-q1-option-3", rawScore: 2 },
+       { id: "framework-d3-q1-option-4", rawScore: 2 }, { id: "framework-d3-q1-option-7", rawScore: 1 }, { id: "framework-d3-q1-option-8", rawScore: -1 }]),
     makeOrdinal("framework-d2-q3", "D2.Q3", "dim-d2", "D2", 1,
-      [{ id: "a", rawScore: 5 }, { id: "b", rawScore: 4 }, { id: "c", rawScore: 3 },
-       { id: "d", rawScore: 2 }, { id: "e", rawScore: 0 }]),
+      [{ id: "framework-d2-q3-option-1", rawScore: 5 }, { id: "framework-d2-q3-option-2", rawScore: 4 }, { id: "framework-d2-q3-option-3", rawScore: 3 },
+       { id: "framework-d2-q3-option-4", rawScore: 2 }, { id: "framework-d2-q3-option-5", rawScore: 0 }]),
     makeMulti("framework-d4-q1", "D4.Q1", "dim-d4", "D4", 2,
-      [{ id: "a", rawScore: 3 }, { id: "b", rawScore: 3 }, { id: "c", rawScore: 2 },
-       { id: "d", rawScore: 2 }, { id: "f", rawScore: 1 }, { id: "h", rawScore: -1 }]),
+      [{ id: "framework-d4-q1-option-1", rawScore: 3 }, { id: "framework-d4-q1-option-2", rawScore: 3 }, { id: "framework-d4-q1-option-3", rawScore: 2 },
+       { id: "framework-d4-q1-option-4", rawScore: 2 }, { id: "framework-d4-q1-option-6", rawScore: 1 }, { id: "framework-d4-q1-option-8", rawScore: -1 }]),
     makeOpen("framework-d4-q2", "D4.Q2", "dim-d4", "D4", 3),
     makeOrdinal("framework-d3-q3", "D3.Q3", "dim-d3", "D3", 3,
-      [{ id: "a", rawScore: 5 }, { id: "b", rawScore: 4 }, { id: "c", rawScore: 3 },
-       { id: "d", rawScore: 1 }, { id: "e", rawScore: 0 }]),
+      [{ id: "framework-d3-q3-option-1", rawScore: 5 }, { id: "framework-d3-q3-option-2", rawScore: 4 }, { id: "framework-d3-q3-option-3", rawScore: 3 },
+       { id: "framework-d3-q3-option-4", rawScore: 1 }, { id: "framework-d3-q3-option-5", rawScore: 0 }]),
     makeSjt("framework-d5-q1", "D5.Q1", "dim-d5", "D5", 3,
-      [{ id: "a", rawScore: 5 }, { id: "b", rawScore: 2 }, { id: "c", rawScore: 1 }, { id: "d", rawScore: -2 }]),
+      [{ id: "framework-d5-q1-option-1", rawScore: 5 }, { id: "framework-d5-q1-option-2", rawScore: 2 }, { id: "framework-d5-q1-option-3", rawScore: 1 }, { id: "framework-d5-q1-option-4", rawScore: -2 }]),
     makeOpen("framework-d2-q1", "D2.Q1", "dim-d2", "D2", 3),
     makeEvidence("framework-d2-q1e", "D2.Q1E", "dim-d2", "D2", "1.00"),
     makeSjt("framework-d7-q1", "D7.Q1", "dim-d7", "D7", 3,
-      [{ id: "a", rawScore: 5 }, { id: "b", rawScore: 4 }, { id: "c", rawScore: 2 }, { id: "d", rawScore: -2 }]),
+      [{ id: "framework-d7-q1-option-1", rawScore: 5 }, { id: "framework-d7-q1-option-2", rawScore: 4 }, { id: "framework-d7-q1-option-3", rawScore: 2 }, { id: "framework-d7-q1-option-4", rawScore: -2 }]),
     makeNumericCalendar("framework-d1-q2", "D1.Q2", "dim-d1", "D1", 2),
     makeOpen("framework-d6-q1", "D6.Q1", "dim-d6", "D6", 3),
     makeMulti("framework-d8-q1", "D8.Q1", "dim-d8", "D8", 2,
-      [{ id: "a", rawScore: 2 }, { id: "b", rawScore: 2 }, { id: "c", rawScore: 2 },
-       { id: "e", rawScore: 1 }, { id: "f", rawScore: 1 }, { id: "g", rawScore: -1 }]),
+      [{ id: "framework-d8-q1-option-1", rawScore: 2 }, { id: "framework-d8-q1-option-2", rawScore: 2 }, { id: "framework-d8-q1-option-3", rawScore: 2 },
+       { id: "framework-d8-q1-option-5", rawScore: 1 }, { id: "framework-d8-q1-option-6", rawScore: 1 }, { id: "framework-d8-q1-option-7", rawScore: -1 }]),
     makeNumericAttainment("framework-d2-q2", "D2.Q2", "dim-d2", "D2", 3),
   ];
 
-  // Production-format responses for the synthetic candidate
+  // Production-format responses — unquoted ORDINAL/SJT/EVIDENCE option IDs,
+  // JSON-encoded MULTI arrays, JSON-encoded NUMERIC objects with label keys.
+  // The "2019", "180000000", "216000000" values are regression-test fixtures
+  // representing whatever the synthetic candidate actually submitted.
   const prodResponses = [
-    { questionId: "framework-d1-q1", responseType: "ORDINAL",  responsePayload: JSON.stringify("a") },
-    { questionId: "framework-d3-q1", responseType: "MULTI",    responsePayload: JSON.stringify(["a", "b", "c"]) },
-    { questionId: "framework-d2-q3", responseType: "ORDINAL",  responsePayload: JSON.stringify("a") },
-    { questionId: "framework-d4-q1", responseType: "MULTI",    responsePayload: JSON.stringify(["a", "b", "c"]) },
-    { questionId: "framework-d4-q2", responseType: "OPEN",     responsePayload: JSON.stringify("Head of Administration. Started through a corporate accommodation project.") },
-    { questionId: "framework-d3-q3", responseType: "ORDINAL",  responsePayload: JSON.stringify("a") },
-    { questionId: "framework-d5-q1", responseType: "SJT",      responsePayload: JSON.stringify("a") },
-    { questionId: "framework-d2-q1", responseType: "OPEN",     responsePayload: JSON.stringify("Apex Meridian Energy — ₦240m/year. Reached via referral from existing client.") },
-    { questionId: "framework-d2-q1e",responseType: "EVIDENCE", responsePayload: JSON.stringify("a") },
-    { questionId: "framework-d7-q1", responseType: "SJT",      responsePayload: JSON.stringify("a") },
-    // Production label-keyed NUMERIC payloads
+    // ORDINAL/SJT stored as raw unquoted strings by the applicant runtime
+    { questionId: "framework-d1-q1", responseType: "ORDINAL",  responsePayload: "framework-d1-q1-option-1" },
+    { questionId: "framework-d3-q1", responseType: "MULTI",    responsePayload: JSON.stringify(["framework-d3-q1-option-1", "framework-d3-q1-option-2", "framework-d3-q1-option-3"]) },
+    { questionId: "framework-d2-q3", responseType: "ORDINAL",  responsePayload: "framework-d2-q3-option-1" },
+    { questionId: "framework-d4-q1", responseType: "MULTI",    responsePayload: JSON.stringify(["framework-d4-q1-option-1", "framework-d4-q1-option-2", "framework-d4-q1-option-3"]) },
+    { questionId: "framework-d4-q2", responseType: "OPEN",     responsePayload: "Head of Administration. Started through a corporate accommodation project." },
+    { questionId: "framework-d3-q3", responseType: "ORDINAL",  responsePayload: "framework-d3-q3-option-1" },
+    { questionId: "framework-d5-q1", responseType: "SJT",      responsePayload: "framework-d5-q1-option-1" },
+    { questionId: "framework-d2-q1", responseType: "OPEN",     responsePayload: "Apex Meridian Energy — ₦240m/year. Reached via referral from existing client." },
+    // EVIDENCE also stored as raw unquoted string
+    { questionId: "framework-d2-q1e",responseType: "EVIDENCE", responsePayload: "framework-d2-q1e-option-1" },
+    { questionId: "framework-d7-q1", responseType: "SJT",      responsePayload: "framework-d7-q1-option-1" },
+    // NUMERIC payloads are JSON-encoded objects with label keys
     { questionId: "framework-d1-q2", responseType: "NUMERIC",  responsePayload: JSON.stringify({ "Calendar year": "2019" }) },
-    { questionId: "framework-d6-q1", responseType: "OPEN",     responsePayload: JSON.stringify("Dear Head of Administration, I'm reaching out because embassy postings require comfortable accommodation for extended stays.") },
-    { questionId: "framework-d8-q1", responseType: "MULTI",    responsePayload: JSON.stringify(["a", "b", "c", "e", "f"]) },
+    { questionId: "framework-d6-q1", responseType: "OPEN",     responsePayload: "Dear Head of Administration, I'm reaching out because embassy postings require comfortable accommodation for extended stays." },
+    { questionId: "framework-d8-q1", responseType: "MULTI",    responsePayload: JSON.stringify(["framework-d8-q1-option-1", "framework-d8-q1-option-2", "framework-d8-q1-option-3", "framework-d8-q1-option-5", "framework-d8-q1-option-6"]) },
     { questionId: "framework-d2-q2", responseType: "NUMERIC",  responsePayload: JSON.stringify({ Target: "180000000", "Actual delivered": "216000000" }) },
   ];
 
@@ -924,10 +1065,10 @@ describe("production-format payloads: full pipeline with synthetic candidate", (
   });
 
   it("unresolved option ID returns null — not 0 — and blocks scoring", () => {
-    // Use a legacy pre-migration option ID that does not exist in the config
+    // Use a completely unknown option ID that isn't in any config
     const badResponses = prodResponses.map((r) =>
       r.questionId === "framework-d1-q1"
-        ? { ...r, responsePayload: JSON.stringify("framework-d1-q1-option-1") }
+        ? { ...r, responsePayload: "framework-d1-q1-option-UNKNOWN" }
         : r,
     );
     const result = calculateFullEvaluation(allConfigs, badResponses, openScores, allDimensions, [], {}, true);
