@@ -10,7 +10,7 @@
  * `{ ok: false, error }` — SQL, connection details, and stack traces are
  * logged server-side only and never returned to the client.
  */
-import { Router, type RequestHandler } from "express";
+import { Router, type RequestHandler, type Response } from "express";
 import { findAdminProfileForUser, readSessionToken, resolveSession } from "./adminAuth";
 import {
   createRecruitmentRole,
@@ -26,21 +26,20 @@ import {
 } from "./recruitmentRepository";
 import { isAdminAuthorized } from "../shared/adminAuth";
 import { validateRecruitmentRoleInput } from "../shared/recruitmentApi";
-import type express from "express";
 
 function databaseConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL);
 }
 
-export function fail(response: express.Response, status: number, error: string): void {
-  response.status(status).json({ ok: false, error });
+export function fail(res: Response, status: number, error: string): void {
+  res.status(status).json({ ok: false, error });
 }
 
 /** Restrained fallback — never reveals database internals. */
 export function handleRouteError(context: string) {
-  return (error: unknown, response: express.Response) => {
+  return (error: unknown, res: Response) => {
     console.error(`[recruitment] ${context} failed:`, error instanceof Error ? error.message : String(error));
-    fail(response, 503, "Unable to load recruitment data.");
+    fail(res, 503, "Unable to load recruitment data.");
   };
 }
 
@@ -83,7 +82,7 @@ const getPublicRoles: RequestHandler = async (_request, response) => {
 const getPublicRoleEligibility: RequestHandler = async (request, response) => {
   if (!databaseConfigured()) return void fail(response, 503, "Unable to load eligibility configuration.");
   try {
-    const slug = request.params["slug"] ?? "";
+    const slug = request.params.slug ?? "";
     const role = await getRecruitmentRoleByIdOrSlug(slug);
     if (!role || role.slug !== slug || (role.status !== "Open" && role.status !== "Closed")) {
       return void fail(response, 404, "Unable to load this recruitment role.");
@@ -98,7 +97,7 @@ const getPublicRoleEligibility: RequestHandler = async (request, response) => {
 const getPublicRole: RequestHandler = async (request, response) => {
   if (!databaseConfigured()) return void fail(response, 503, "Unable to load this recruitment role.");
   try {
-    const slug = request.params["slug"] ?? "";
+    const slug = request.params.slug ?? "";
     const role = await getRecruitmentRoleByIdOrSlug(slug);
     if (!role || role.slug !== slug || (role.status !== "Open" && role.status !== "Closed")) {
       return void fail(response, 404, "Unable to load this recruitment role.");
@@ -120,7 +119,7 @@ const getAdminRoles: RequestHandler = async (_request, response) => {
   }
 };
 
-const postAdminRole: RequestHandler = async (request, response) => {
+const createAdminRole: RequestHandler = async (request, response) => {
   try {
     const validated = validateRecruitmentRoleInput(request.body);
     if ("errors" in validated) return void fail(response, 400, validated.errors[0]);
@@ -133,7 +132,7 @@ const postAdminRole: RequestHandler = async (request, response) => {
 
 const getAdminRole: RequestHandler = async (request, response) => {
   try {
-    const role = await getRecruitmentRoleByIdOrSlug(request.params["idOrSlug"] ?? "");
+    const role = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug ?? "");
     if (!role) return void fail(response, 404, "Unable to load this recruitment role.");
     response.json({ ok: true, role: toAdminRole(role) });
   } catch (error) {
@@ -143,7 +142,7 @@ const getAdminRole: RequestHandler = async (request, response) => {
 
 const patchAdminRole: RequestHandler = async (request, response) => {
   try {
-    const existing = await getRecruitmentRoleByIdOrSlug(request.params["idOrSlug"] ?? "");
+    const existing = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug ?? "");
     if (!existing) return void fail(response, 404, "Unable to load this recruitment role.");
     const validated = validateRecruitmentRoleInput(request.body);
     if ("errors" in validated) return void fail(response, 400, validated.errors[0]);
@@ -159,7 +158,7 @@ const patchAdminRole: RequestHandler = async (request, response) => {
 
 const getAdminRoleEligibility: RequestHandler = async (request, response) => {
   try {
-    const role = await getRecruitmentRoleByIdOrSlug(request.params["idOrSlug"] ?? "");
+    const role = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug ?? "");
     if (!role) return void fail(response, 404, "Unable to load this recruitment role.");
     const gates = await getRoleEligibilityGates(role.id);
     response.json({ ok: true, roleId: role.id, gates: gates.map(toAdminGate) });
@@ -170,7 +169,7 @@ const getAdminRoleEligibility: RequestHandler = async (request, response) => {
 
 const getAdminEvaluationFramework: RequestHandler = async (request, response) => {
   try {
-    const role = await getRecruitmentRoleByIdOrSlug(request.params["idOrSlug"] ?? "");
+    const role = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug ?? "");
     if (!role) return void fail(response, 404, "Unable to load this recruitment role.");
     const framework = await getRoleEvaluationFramework(role.id);
     response.json({ ok: true, ...framework });
@@ -191,7 +190,7 @@ export function createRecruitmentApiRouter(): Router {
 
   // Admin endpoints (Task 24B authorization)
   router.get("/api/admin/recruitment-roles", requireAuthorizedAdmin, getAdminRoles);
-  router.post("/api/admin/recruitment-roles", requireAuthorizedAdmin, postAdminRole);
+  router.post("/api/admin/recruitment-roles", requireAuthorizedAdmin, createAdminRole);
   router.get("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin, getAdminRole);
   router.patch("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin, patchAdminRole);
   router.get("/api/admin/recruitment-roles/:idOrSlug/eligibility", requireAuthorizedAdmin, getAdminRoleEligibility);
