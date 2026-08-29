@@ -10,7 +10,7 @@
  * `{ ok: false, error }` — SQL, connection details, and stack traces are
  * logged server-side only and never returned to the client.
  */
-import express, { type NextFunction, type Request, type Response, type Router } from "express";
+import express, { Router, type RequestHandler } from "express";
 import { findAdminProfileForUser, readSessionToken, resolveSession } from "./adminAuth";
 import {
   createRecruitmentRole,
@@ -31,20 +31,23 @@ function databaseConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL);
 }
 
-export function fail(response: Response, status: number, error: string) {
+// express.Response / express.Request are used via the router's inference.
+// These helpers accept the raw express response object — typed via the
+// router's own inference so we avoid importing the conflicting global types.
+export function fail(response: express.Response, status: number, error: string) {
   response.status(status).json({ ok: false, error });
 }
 
 /** Restrained fallback — never reveals database internals. */
 export function handleRouteError(context: string) {
-  return (error: unknown, response: Response) => {
+  return (error: unknown, response: express.Response) => {
     console.error(`[recruitment] ${context} failed:`, error instanceof Error ? error.message : String(error));
     fail(response, 503, "Unable to load recruitment data.");
   };
 }
 
 /** Task 24B authorization guard for Admin configuration endpoints. */
-export async function requireAuthorizedAdmin(request: Request, response: Response, next: NextFunction) {
+export const requireAuthorizedAdmin: RequestHandler = async (request, response, next) => {
   if (!databaseConfigured()) {
     fail(response, 503, "Unable to load recruitment data.");
     return;
@@ -62,14 +65,14 @@ export async function requireAuthorizedAdmin(request: Request, response: Respons
     console.error("[recruitment] admin authorization failed:", error instanceof Error ? error.message : String(error));
     fail(response, 503, "Unable to load recruitment data.");
   }
-}
+};
 
 export function createRecruitmentApiRouter(): Router {
   const router = express.Router();
 
   // ── Public (applicant-safe) endpoints ──────────────────────────────────────
 
-  router.get("/api/public/recruitment-roles", async (_request: Request, response: Response) => {
+  router.get("/api/public/recruitment-roles", async (_request, response) => {
     if (!databaseConfigured()) return fail(response, 503, "Unable to load recruitment roles.");
     try {
       const roles = await listRecruitmentRoles();
@@ -82,7 +85,7 @@ export function createRecruitmentApiRouter(): Router {
     }
   });
 
-  router.get("/api/public/recruitment-roles/:slug/eligibility", async (request: Request, response: Response) => {
+  router.get("/api/public/recruitment-roles/:slug/eligibility", async (request, response) => {
     if (!databaseConfigured()) return fail(response, 503, "Unable to load eligibility configuration.");
     try {
       const slug = request.params.slug ?? "";
@@ -97,7 +100,7 @@ export function createRecruitmentApiRouter(): Router {
     }
   });
 
-  router.get("/api/public/recruitment-roles/:slug", async (request: Request, response: Response) => {
+  router.get("/api/public/recruitment-roles/:slug", async (request, response) => {
     if (!databaseConfigured()) return fail(response, 503, "Unable to load this recruitment role.");
     try {
       const slug = request.params.slug ?? "";
@@ -113,7 +116,7 @@ export function createRecruitmentApiRouter(): Router {
 
   // ── Admin endpoints (Task 24B authorization) ───────────────────────────────
 
-  router.get("/api/admin/recruitment-roles", requireAuthorizedAdmin, async (_request: Request, response: Response) => {
+  router.get("/api/admin/recruitment-roles", requireAuthorizedAdmin, async (_request, response) => {
     try {
       const roles = await listRecruitmentRoles();
       response.json({ ok: true, roles: roles.map(toAdminRole) });
@@ -122,7 +125,7 @@ export function createRecruitmentApiRouter(): Router {
     }
   });
 
-  router.post("/api/admin/recruitment-roles", requireAuthorizedAdmin, async (request: Request, response: Response) => {
+  router.post("/api/admin/recruitment-roles", requireAuthorizedAdmin, async (request, response) => {
     try {
       const validated = validateRecruitmentRoleInput(request.body);
       if ("errors" in validated) return fail(response, 400, validated.errors[0]);
@@ -133,7 +136,7 @@ export function createRecruitmentApiRouter(): Router {
     }
   });
 
-  router.get("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin, async (request: Request, response: Response) => {
+  router.get("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin, async (request, response) => {
     try {
       const role = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug ?? "");
       if (!role) return fail(response, 404, "Unable to load this recruitment role.");
@@ -143,7 +146,7 @@ export function createRecruitmentApiRouter(): Router {
     }
   });
 
-  router.patch("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin, async (request: Request, response: Response) => {
+  router.patch("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin, async (request, response) => {
     try {
       const existing = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug ?? "");
       if (!existing) return fail(response, 404, "Unable to load this recruitment role.");
@@ -159,7 +162,7 @@ export function createRecruitmentApiRouter(): Router {
     }
   });
 
-  router.get("/api/admin/recruitment-roles/:idOrSlug/eligibility", requireAuthorizedAdmin, async (request: Request, response: Response) => {
+  router.get("/api/admin/recruitment-roles/:idOrSlug/eligibility", requireAuthorizedAdmin, async (request, response) => {
     try {
       const role = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug ?? "");
       if (!role) return fail(response, 404, "Unable to load this recruitment role.");
@@ -170,7 +173,7 @@ export function createRecruitmentApiRouter(): Router {
     }
   });
 
-  router.get("/api/admin/recruitment-roles/:idOrSlug/evaluation-framework", requireAuthorizedAdmin, async (request: Request, response: Response) => {
+  router.get("/api/admin/recruitment-roles/:idOrSlug/evaluation-framework", requireAuthorizedAdmin, async (request, response) => {
     try {
       const role = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug ?? "");
       if (!role) return fail(response, 404, "Unable to load this recruitment role.");
