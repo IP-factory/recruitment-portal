@@ -69,3 +69,23 @@ export function validateCvUpload(buffer: Buffer, filename: string): CvValidation
 
   return { ok: true, mimeType: CV_MIME_TYPES[extension as CvExtension], extension: extension as CvExtension, sanitizedFilename: cleanName };
 }
+
+/**
+ * Validate only the DECLARED upload (filename + size) before authorizing a
+ * direct browser-to-Blob upload — no bytes are available yet. The stored
+ * object is re-verified (size + content type) when the upload completes.
+ */
+export function validateCvUploadDeclaration(filename: string, declaredSize: number | null): CvValidationResult {
+  const cleanName = filename.replace(/^.*[\\/]/, "").trim();
+  if (!cleanName) return { ok: false, error: "The file name is missing." };
+  if (cleanName.length > 320) return { ok: false, error: "The file name is too long." };
+  if (declaredSize !== null && declaredSize <= 0) return { ok: false, error: "The selected file is empty." };
+  if (declaredSize !== null && declaredSize > CV_MAX_FILE_SIZE) {
+    return { ok: false, error: "The file is too large. CVs must be 10 MB or smaller." };
+  }
+  const extension = cvExtensionOf(cleanName);
+  if (!(CV_ACCEPTED_EXTENSIONS as readonly string[]).includes(extension)) {
+    return { ok: false, error: "Unsupported file type. Please upload a PDF, DOC or DOCX file." };
+  }
+  return { ok: true, mimeType: CV_MIME_TYPES[extension as CvExtension], extension: extension as CvExtension, sanitizedFilename: cleanName };
+}

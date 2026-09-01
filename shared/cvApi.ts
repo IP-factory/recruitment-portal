@@ -3,8 +3,9 @@
  *
  * Pure DTO types and constants shared between the Express API and the client.
  * CV file bytes never travel through TiDB — only metadata is persisted, and
- * the file itself lives in object/file storage accessed via authenticated,
- * proxied endpoints (never a public URL).
+ * the file itself lives in private object storage. In deployments the bytes
+ * travel directly between the browser and the Blob store (scoped client
+ * upload token / short-lived signed GET URL), never through the API function.
  */
 
 /** Maximum CV file size: 10 MB. */
@@ -41,6 +42,48 @@ export interface ApplicantCvResponse {
   ok: boolean;
   cv: CvFileMetadata | null;
 }
+
+/**
+ * Direct browser-to-Blob upload authorization. The client token is scoped to
+ * exactly one pathname with size/content-type constraints — it is NOT the
+ * store's read-write token, which never leaves the server.
+ */
+export interface CvDirectUploadAuthorization {
+  mode: "blob";
+  clientToken: string;
+  pathname: string;
+  validUntil: number;
+  maximumSizeInBytes: number;
+}
+
+/**
+ * Local-development-only alternative: the client must send the raw file bytes
+ * to `PUT /api/public/applications/me/cv` (there is no CDN locally).
+ */
+export interface CvLocalUploadInstruction {
+  mode: "local";
+  code: "local-upload-required";
+  maximumSizeInBytes: number;
+}
+
+export type CvUploadAuthorizationResponse = CvDirectUploadAuthorization | CvLocalUploadInstruction;
+
+/** Input for persisting a directly uploaded CV after the Blob put succeeds. */
+export interface CvCompleteUploadInput {
+  pathname: string;
+  filename: string;
+  contentType?: string;
+  size?: number;
+}
+
+/**
+ * Admin CV file access. Deployments return a short-lived signed URL for the
+ * private blob (bytes never pass through the API); local development streams
+ * the file through the authenticated route itself.
+ */
+export type AdminCvFileResponse =
+  | { ok: true; kind: "url"; url: string; filename: string; mimeType: string; expiresAt: number }
+  | { ok: true; kind: "bytes" };
 
 /** Admin-facing CV review payload. */
 export interface AdminCvDetail {

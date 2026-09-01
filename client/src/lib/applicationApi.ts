@@ -191,10 +191,13 @@ export async function fetchReviewData(): Promise<{
 }
 
 // ── CV upload (Task 24G) ──────────────────────────────────────────────────────
-// The file body is sent as raw bytes with the applicant token header; the
-// filename travels in an `x-cv-filename` header because the body is the file.
+// In deployments the file bytes travel DIRECTLY from the browser to the
+// private Blob store: the API only issues a scoped, short-lived client
+// upload token and later persists metadata. The raw-bytes PUT path exists
+// for local development only (there is no object-store CDN locally).
 
-import type { ApplicantCvResponse } from "@shared/cvApi";
+import type { ApplicantCvResponse, CvUploadAuthorizationResponse } from "@shared/cvApi";
+import { CV_MIME_TYPES, cvExtensionOf, type CvExtension } from "@shared/cvApi";
 
 export type { CvFileMetadata as ApplicantCvFileMetadata } from "@shared/cvApi";
 
@@ -202,9 +205,7 @@ export async function fetchApplicantCv(): Promise<ApplicantCvResponse> {
   return applicationRequest<ApplicantCvResponse>("/api/public/applications/me/cv");
 }
 
-export async function uploadApplicantCv(file: File): Promise<ApplicantCvResponse> {
-  const token = readApplicantToken();
-  if (!token) throw new ApplicationApiError(401, "No active application session.");
+async function rawPutApplicantCv(token: string, file: File): Promise<ApplicantCvResponse> {
   const response = await fetch("/api/public/applications/me/cv", {
     method: "PUT",
     headers: {
@@ -221,6 +222,48 @@ export async function uploadApplicantCv(file: File): Promise<ApplicantCvResponse
     throw new ApplicationApiError(response.status, serverMessage ?? "Unable to upload your CV.");
   }
   return body as ApplicantCvResponse;
+}
+
+export async function uploadApplicantCv(file: File): Promise<ApplicantCvResponse> {
+  const token = readApplicantToken();
+  if (!token) throw new ApplicationApiError(401, "No active application session.");
+
+  // 1. Ask the API for a scoped direct-upload authorization (the server
+  //    validates the session, status and declared filename/size first).
+  const authorization = await applicationRequest<CvUploadAuthorizationResponse>("/api/public/applications/me/cv/upload-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename: file.name, size: file.size }),
+  });
+
+  if (authorization.mode === "local") {
+    return rawPutApplicantCv(token, file);
+  }
+
+  // 2. Upload the bytes straight to the PRIVATE Blob store using the scoped
+  //    client token — the file never passes through the application server.
+  const contentType = CV_MIME_TYPES[cvExtensionOf(file.name) as CvExtension] ?? "application/octet-stream";
+  try {
+    const { put } = await import("@vercel/blob/client");
+    await put(authorization.pathname, file, {
+      access: "private",
+      token: authorization.clientToken,
+      contentType,
+    });
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    if (name === "BlobFileTooLargeError") throw new ApplicationApiError(400, "The file is too large. CVs must be 10 MB or smaller.");
+    if (name === "BlobContentTypeNotAllowedError") throw new ApplicationApiError(400, "Unsupported file type. Please upload a PDF, DOC or DOCX file.");
+    if (name === "BlobClientTokenExpiredError") throw new ApplicationApiError(400, "The upload authorization expired. Please try again.");
+    throw new ApplicationApiError(503, "Unable to upload your CV. Please try again.");
+  }
+
+  // 3. Persist the metadata now that the blob exists.
+  return applicationRequest<ApplicantCvResponse>("/api/public/applications/me/cv/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pathname: authorization.pathname, filename: file.name, contentType, size: file.size }),
+  });
 }
 
 export async function removeApplicantCv(): Promise<ApplicantCvResponse> {

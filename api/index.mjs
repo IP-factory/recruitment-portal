@@ -4469,10 +4469,37 @@ function validateCvUpload(buffer, filename) {
   }
   return { ok: true, mimeType: CV_MIME_TYPES[extension], extension, sanitizedFilename: cleanName };
 }
+function validateCvUploadDeclaration(filename, declaredSize) {
+  const cleanName = filename.replace(/^.*[\\/]/, "").trim();
+  if (!cleanName) return { ok: false, error: "The file name is missing." };
+  if (cleanName.length > 320) return { ok: false, error: "The file name is too long." };
+  if (declaredSize !== null && declaredSize <= 0) return { ok: false, error: "The selected file is empty." };
+  if (declaredSize !== null && declaredSize > CV_MAX_FILE_SIZE) {
+    return { ok: false, error: "The file is too large. CVs must be 10 MB or smaller." };
+  }
+  const extension = cvExtensionOf(cleanName);
+  if (!CV_ACCEPTED_EXTENSIONS.includes(extension)) {
+    return { ok: false, error: "Unsupported file type. Please upload a PDF, DOC or DOCX file." };
+  }
+  return { ok: true, mimeType: CV_MIME_TYPES[extension], extension, sanitizedFilename: cleanName };
+}
 
 // server/cvStorage.ts
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
+var CvStorageConfigurationError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "CvStorageConfigurationError";
+  }
+};
+var LOCAL_DIRECT_UPLOAD_CODE = "local-upload-required";
+function isProductionRuntime() {
+  return process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+}
+function isBlobConfigured() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
 function createLocalCvStorage(directory) {
   const baseDir = path.resolve(directory ?? process.env.CV_STORAGE_DIR ?? "data/cv-uploads");
   const resolveKey = (key) => {
@@ -4481,6 +4508,7 @@ function createLocalCvStorage(directory) {
     return resolved;
   };
   return {
+    mode: "local",
     async save(key, bytes) {
       const target = resolveKey(key);
       await mkdir(path.dirname(target), { recursive: true });
@@ -4496,11 +4524,27 @@ function createLocalCvStorage(directory) {
     },
     async remove(key) {
       await rm(resolveKey(key), { force: true });
+    },
+    async head(key) {
+      try {
+        const info = await stat(resolveKey(key));
+        return { size: info.size, contentType: "application/octet-stream" };
+      } catch (error) {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      }
+    },
+    async createUploadAuthorization() {
+      throw new CvStorageConfigurationError("Direct uploads are unavailable in this environment.");
+    },
+    async createSignedDownloadUrl() {
+      throw new CvStorageConfigurationError("Signed downloads are unavailable in this environment.");
     }
   };
 }
 function createVercelBlobCvStorage(token) {
   return {
+    mode: "blob",
     async save(key, bytes) {
       const { put } = await import("@vercel/blob");
       await put(key, bytes, { access: "private", token, addRandomSuffix: false });
@@ -4526,15 +4570,74 @@ function createVercelBlobCvStorage(token) {
     async remove(key) {
       const { del } = await import("@vercel/blob");
       await del(key, { token });
+    },
+    async head(key) {
+      return blobTestSeams.head(key, token);
+    },
+    async createUploadAuthorization(key, constraints) {
+      const generate = blobTestSeams.generateClientToken;
+      const clientToken = await generate({
+        pathname: key,
+        token,
+        access: "private",
+        maximumSizeInBytes: constraints.maximumSizeInBytes,
+        allowedContentTypes: constraints.allowedContentTypes,
+        validUntil: constraints.validUntilMs,
+        addRandomSuffix: false
+      });
+      return { clientToken, pathname: key, validUntil: constraints.validUntilMs };
+    },
+    async createSignedDownloadUrl(key, opts) {
+      const issue = blobTestSeams.issueSignedToken;
+      const presign = blobTestSeams.presignUrl;
+      const signedToken = await issue({ pathname: key, operations: ["get"], validUntil: opts.validUntilMs, token });
+      const { presignedUrl } = await presign(signedToken, { operation: "get", pathname: key, validUntil: opts.validUntilMs, access: "private" });
+      return presignedUrl;
     }
   };
 }
+var realBlobSeams = {
+  async generateClientToken(options) {
+    const { generateClientTokenFromReadWriteToken } = await import("@vercel/blob/client");
+    return generateClientTokenFromReadWriteToken(options);
+  },
+  async head(key, token) {
+    const { head } = await import("@vercel/blob");
+    try {
+      const result = await head(key, { token });
+      return { size: result.size, contentType: result.contentType };
+    } catch (error) {
+      if (error instanceof Error && (error.name === "BlobNotFoundError" || error.name === "BlobUnknownError")) return null;
+      throw error;
+    }
+  },
+  async issueSignedToken(options) {
+    const { issueSignedToken } = await import("@vercel/blob");
+    return issueSignedToken(options);
+  },
+  async presignUrl(signedToken, options) {
+    const { presignUrl } = await import("@vercel/blob");
+    return presignUrl(signedToken, options);
+  }
+};
+var blobTestSeams = realBlobSeams;
 var cached = null;
 function getCvStorage() {
   if (cached) return cached;
   const token = process.env.BLOB_READ_WRITE_TOKEN;
-  cached = token ? createVercelBlobCvStorage(token) : createLocalCvStorage();
+  if (token) {
+    cached = createVercelBlobCvStorage(token);
+    return cached;
+  }
+  if (isProductionRuntime()) {
+    console.error("[cv] CV storage is disabled: BLOB_READ_WRITE_TOKEN is not configured. Local filesystem fallback is never used in production because the serverless filesystem is not durable.");
+    throw new CvStorageConfigurationError("CV storage is not configured for this deployment.");
+  }
+  cached = createLocalCvStorage();
   return cached;
+}
+function directBlobUploadAvailable() {
+  return isBlobConfigured();
 }
 
 // shared/candidateScore.ts
@@ -4548,6 +4651,8 @@ function validateCvScoreInput(candidate) {
 }
 
 // server/cvApi.ts
+var UPLOAD_AUTH_TTL_MS = 15 * 60 * 1e3;
+var ADMIN_CV_URL_TTL_MS = 10 * 60 * 1e3;
 function databaseConfigured5() {
   return Boolean(process.env.DATABASE_URL);
 }
@@ -4556,6 +4661,11 @@ function fail4(response, status, error) {
 }
 function handleRouteError3(context) {
   return (error, response) => {
+    if (error instanceof CvStorageConfigurationError) {
+      console.error(`[cv] ${context}: storage unavailable:`, error.message);
+      fail4(response, 503, "CV storage is not configured for this deployment.");
+      return;
+    }
     console.error(`[cv] ${context} failed:`, error instanceof Error ? error.message : String(error));
     fail4(response, 503, "Unable to process your request.");
   };
@@ -4565,6 +4675,31 @@ function generateId3() {
 }
 async function getDb() {
   return (await Promise.resolve().then(() => (init_db(), db_exports))).getDatabase();
+}
+async function persistCvFile(storage, applicationId, storageKey, details) {
+  const db = await getDb();
+  const existing = await loadCvFileRow(applicationId);
+  try {
+    if (existing) {
+      await db.update(applicationCvFiles).set({ storageKey, originalFilename: details.sanitizedFilename, mimeType: details.mimeType, fileSize: details.fileSize, uploadedAt: /* @__PURE__ */ new Date() }).where(eq9(applicationCvFiles.id, existing.id));
+      if (existing.storageKey !== storageKey) await storage.remove(existing.storageKey).catch(() => void 0);
+    } else {
+      await db.insert(applicationCvFiles).values({
+        id: generateId3(),
+        applicationId,
+        storageKey,
+        originalFilename: details.sanitizedFilename,
+        mimeType: details.mimeType,
+        fileSize: details.fileSize
+      });
+    }
+  } catch (error) {
+    await storage.remove(storageKey).catch(() => void 0);
+    throw error;
+  }
+}
+function storageKeyBelongsToApplication(key, applicationId) {
+  return key.startsWith(`cv/${applicationId}/`) && key.length > `cv/${applicationId}/`.length && !key.slice(`cv/${applicationId}/`.length).includes("/");
 }
 async function resolveApplicantApplication(request, response) {
   const header = request.headers["x-application-token"];
@@ -4630,10 +4765,88 @@ async function requireAuthorizedAdmin3(request, response) {
 }
 function createCvApiRouter() {
   const router = express5.Router();
+  router.post("/api/public/applications/me/cv/upload-url", async (request, response) => {
+    if (!databaseConfigured5()) return fail4(response, 503, "Unable to upload your CV.");
+    try {
+      const application = await resolveApplicantApplication(request, response);
+      if (!application) return;
+      if (!cvChangeAllowed(application.applicationStatus)) {
+        return fail4(response, 403, "Your CV can no longer be changed because the application has been submitted.");
+      }
+      const body = request.body ?? {};
+      const filename = typeof body.filename === "string" ? body.filename : "";
+      const declaredSize = typeof body.size === "number" && Number.isFinite(body.size) ? body.size : null;
+      const validation = validateCvUploadDeclaration(filename, declaredSize);
+      if (!validation.ok) return fail4(response, 400, validation.error);
+      if (!directBlobUploadAvailable()) {
+        if (isProductionRuntime()) {
+          return fail4(response, 503, "CV storage is not configured for this deployment.");
+        }
+        response.json({ mode: "local", code: LOCAL_DIRECT_UPLOAD_CODE, maximumSizeInBytes: CV_MAX_FILE_SIZE });
+        return;
+      }
+      const storageKey = `cv/${application.id}/${generateId3()}${validation.extension}`;
+      const authorization = await getCvStorage().createUploadAuthorization(storageKey, {
+        maximumSizeInBytes: CV_MAX_FILE_SIZE,
+        allowedContentTypes: [validation.mimeType],
+        validUntilMs: Date.now() + UPLOAD_AUTH_TTL_MS
+      });
+      response.json({ mode: "blob", clientToken: authorization.clientToken, pathname: authorization.pathname, validUntil: authorization.validUntil, maximumSizeInBytes: CV_MAX_FILE_SIZE });
+    } catch (error) {
+      handleRouteError3("authorize CV upload")(error, response);
+    }
+  });
+  router.post("/api/public/applications/me/cv/complete", async (request, response) => {
+    if (!databaseConfigured5()) return fail4(response, 503, "Unable to upload your CV.");
+    try {
+      const application = await resolveApplicantApplication(request, response);
+      if (!application) return;
+      if (!cvChangeAllowed(application.applicationStatus)) {
+        return fail4(response, 403, "Your CV can no longer be changed because the application has been submitted.");
+      }
+      const body = request.body ?? {};
+      const pathname = typeof body.pathname === "string" ? body.pathname : "";
+      const filename = typeof body.filename === "string" ? body.filename : "";
+      if (!storageKeyBelongsToApplication(pathname, application.id)) {
+        return fail4(response, 403, "This file does not belong to your application.");
+      }
+      const declaredSize = typeof body.size === "number" && Number.isFinite(body.size) ? body.size : null;
+      const validation = validateCvUploadDeclaration(filename, declaredSize);
+      if (!validation.ok) return fail4(response, 400, validation.error);
+      const storage = getCvStorage();
+      const info = await storage.head(pathname);
+      if (!info) return fail4(response, 404, "The uploaded file could not be found. Please upload it again.");
+      if (info.size > CV_MAX_FILE_SIZE) {
+        await storage.remove(pathname).catch(() => void 0);
+        return fail4(response, 400, "The file is too large. CVs must be 10 MB or smaller.");
+      }
+      if (declaredSize !== null && info.size !== declaredSize) {
+        await storage.remove(pathname).catch(() => void 0);
+        return fail4(response, 400, "The uploaded file does not match its declared size.");
+      }
+      if (info.contentType && info.contentType !== "application/octet-stream" && info.contentType !== validation.mimeType) {
+        await storage.remove(pathname).catch(() => void 0);
+        return fail4(response, 400, "The uploaded file does not match its declared type.");
+      }
+      await persistCvFile(storage, application.id, pathname, {
+        sanitizedFilename: validation.sanitizedFilename,
+        mimeType: validation.mimeType,
+        fileSize: info.size
+      });
+      const row = await loadCvFileRow(application.id);
+      if (!row) return fail4(response, 503, "Unable to upload your CV.");
+      response.json({ ok: true, cv: toCvMetadata(row) });
+    } catch (error) {
+      handleRouteError3("complete CV upload")(error, response);
+    }
+  });
   router.put(
     "/api/public/applications/me/cv",
     express5.raw({ type: () => true, limit: "11mb" }),
     async (request, response) => {
+      if (isProductionRuntime()) {
+        return fail4(response, 403, "Direct server uploads are disabled in this environment.");
+      }
       if (!databaseConfigured5()) return fail4(response, 503, "Unable to upload your CV.");
       try {
         const application = await resolveApplicantApplication(request, response);
@@ -4650,28 +4863,13 @@ function createCvApiRouter() {
         const validation = validateCvUpload(body, filename);
         if (!validation.ok) return fail4(response, 400, validation.error);
         const storage = getCvStorage();
-        const existing = await loadCvFileRow(application.id);
         const storageKey = `cv/${application.id}/${generateId3()}${validation.extension}`;
         await storage.save(storageKey, body);
-        const db = await getDb();
-        try {
-          if (existing) {
-            await db.update(applicationCvFiles).set({ storageKey, originalFilename: validation.sanitizedFilename, mimeType: validation.mimeType, fileSize: body.length, uploadedAt: /* @__PURE__ */ new Date() }).where(eq9(applicationCvFiles.id, existing.id));
-            if (existing.storageKey !== storageKey) await storage.remove(existing.storageKey).catch(() => void 0);
-          } else {
-            await db.insert(applicationCvFiles).values({
-              id: generateId3(),
-              applicationId: application.id,
-              storageKey,
-              originalFilename: validation.sanitizedFilename,
-              mimeType: validation.mimeType,
-              fileSize: body.length
-            });
-          }
-        } catch (error) {
-          await storage.remove(storageKey).catch(() => void 0);
-          throw error;
-        }
+        await persistCvFile(storage, application.id, storageKey, {
+          sanitizedFilename: validation.sanitizedFilename,
+          mimeType: validation.mimeType,
+          fileSize: body.length
+        });
         const row = await loadCvFileRow(application.id);
         if (!row) return fail4(response, 503, "Unable to upload your CV.");
         response.json({ ok: true, cv: toCvMetadata(row) });
@@ -4733,7 +4931,14 @@ function createCvApiRouter() {
     try {
       const row = await loadCvFileRow(request.params.id);
       if (!row) return fail4(response, 404, "No CV has been uploaded for this application.");
-      const bytes = await getCvStorage().read(row.storageKey);
+      const storage = getCvStorage();
+      if (storage.mode === "blob") {
+        const expiresAt = Date.now() + ADMIN_CV_URL_TTL_MS;
+        const url = await storage.createSignedDownloadUrl(row.storageKey, { validUntilMs: expiresAt });
+        response.json({ ok: true, kind: "url", url, filename: row.originalFilename, mimeType: row.mimeType, expiresAt });
+        return;
+      }
+      const bytes = await storage.read(row.storageKey);
       if (!bytes) return fail4(response, 404, "The CV file could not be found in storage.");
       const disposition = request.query.download === "1" ? "attachment" : "inline";
       const asciiName = row.originalFilename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "");

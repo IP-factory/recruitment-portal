@@ -164,11 +164,34 @@ export async function updateApplicationStatus(applicationId: string, input: Upda
 // CV scoring is fully separate from the assessment engine: these calls only
 // read/write the application_cv_reviews record.
 
-import type { CvReviewRecord } from "@shared/cvApi";
+import type { AdminCvFileResponse, CvReviewRecord } from "@shared/cvApi";
 
-/** Authenticated proxied CV file URL — never a public/permanent storage URL. */
+/** Authenticated CV file route — never a public/permanent storage URL. */
 export function adminCvFileUrl(applicationId: string, download = false): string {
   return `/api/admin/applications/${encodeURIComponent(applicationId)}/cv/file${download ? "?download=1" : ""}`;
+}
+
+export interface AdminCvFileAccess {
+  /** "url" = signed private blob URL; "bytes" = same-origin streaming route. */
+  kind: "url" | "bytes";
+  url: string;
+  filename: string | null;
+  expiresAt: number | null;
+}
+
+/**
+ * Resolve private CV file access after Admin authentication. Deployments
+ * return a short-lived signed URL for the PRIVATE blob (bytes stream from
+ * Blob storage, never through the API); local development returns the
+ * authenticated same-origin route which streams the bytes itself.
+ */
+export async function fetchAdminCvFileAccess(applicationId: string, download = false): Promise<AdminCvFileAccess> {
+  const routeUrl = adminCvFileUrl(applicationId, download);
+  const body = await request<AdminCvFileResponse>(routeUrl);
+  if (body.kind === "url") {
+    return { kind: "url", url: body.url, filename: body.filename, expiresAt: body.expiresAt };
+  }
+  return { kind: "bytes", url: routeUrl, filename: null, expiresAt: null };
 }
 
 export async function saveCvReview(applicationId: string, input: { score: number; note?: string }): Promise<CvReviewRecord> {

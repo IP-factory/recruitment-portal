@@ -22,7 +22,7 @@ import {
   updateBonus,
   updateShortlist,
   updateApplicationStatus,
-  adminCvFileUrl,
+  fetchAdminCvFileAccess,
   saveCvReview,
   resetCvReview,
   ADMIN_APPLICATION_STATUSES,
@@ -130,9 +130,10 @@ function CandidateEvaluationCard({ data }: { data: AdminApplicationDetailRespons
 }
 
 /**
- * Task 24G (Part B) — CV Review tab. Secure view/download through the
- * authenticated proxy route and the manual 0–100 CV score. Saving a score
- * only writes the CV review record — it never triggers assessment recalculation.
+ * Task 24G (Part B) — CV Review tab. Secure view/download (short-lived
+ * signed private URL in deployments, authenticated stream locally) and the
+ * manual 0–100 CV score. Saving a score only writes the CV review record —
+ * it never triggers assessment recalculation.
  */
 function CvReviewTab({ data, onRefresh }: { data: AdminApplicationDetailResponse; onRefresh: () => void }) {
   const { application } = data;
@@ -142,7 +143,41 @@ function CvReviewTab({ data, onRefresh }: { data: AdminApplicationDetailResponse
   const [noteInput, setNoteInput] = useState(review?.reviewNote ?? "");
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [fileBusy, setFileBusy] = useState<"view" | "download" | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const openCvFile = async (download: boolean) => {
+    setFileBusy(download ? "download" : "view");
+    try {
+      const access = await fetchAdminCvFileAccess(application.id, download);
+      if (access.kind === "url") {
+        if (download) {
+          // Signed GET URLs cannot force attachment, so save through the
+          // browser to get a proper download with the original filename.
+          const fileResponse = await fetch(access.url);
+          if (!fileResponse.ok) throw new Error("Unable to fetch the CV file.");
+          const blob = await fileResponse.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const anchor = document.createElement("a");
+          anchor.download = access.filename ?? cv?.originalFilename ?? "cv";
+          anchor.href = objectUrl;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(objectUrl);
+        } else {
+          window.open(access.url, "_blank", "noopener,noreferrer");
+        }
+      } else {
+        // Local development: same-origin authenticated streaming route.
+        window.open(access.url, "_blank", "noopener");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to open the CV file.");
+    } finally {
+      setFileBusy(null);
+    }
+  };
 
   const handleSave = async () => {
     // Server is authoritative; this mirror validation gives instant feedback.
@@ -195,10 +230,10 @@ function CvReviewTab({ data, onRefresh }: { data: AdminApplicationDetailResponse
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-3 border-t border-border pt-4">
-          <a className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-3.5 py-2 text-[13px] font-medium text-primary transition-colors hover:bg-portal-surface" href={adminCvFileUrl(application.id)} rel="noopener noreferrer" target="_blank"><Eye className="size-3.5" />View CV</a>
-          <a className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-3.5 py-2 text-[13px] font-medium text-primary transition-colors hover:bg-portal-surface" download={cv.originalFilename} href={adminCvFileUrl(application.id, true)}><Download className="size-3.5" />Download CV</a>
+          <button className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-3.5 py-2 text-[13px] font-medium text-primary transition-colors hover:bg-portal-surface disabled:opacity-60" disabled={fileBusy !== null} onClick={() => { void openCvFile(false); }} type="button"><Eye className="size-3.5" />{fileBusy === "view" ? "Opening…" : "View CV"}</button>
+          <button className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-3.5 py-2 text-[13px] font-medium text-primary transition-colors hover:bg-portal-surface disabled:opacity-60" disabled={fileBusy !== null} onClick={() => { void openCvFile(true); }} type="button"><Download className="size-3.5" />{fileBusy === "download" ? "Preparing…" : "Download CV"}</button>
         </div>
-        <p className="mt-3 text-[12px] leading-5 text-muted-foreground">CV files are served through this authenticated Admin route only — never through a public or permanent URL.</p>
+        <p className="mt-3 text-[12px] leading-5 text-muted-foreground">CV files open only after Admin authentication, through a short-lived private URL — never through a public or permanent link.</p>
       </div>
       {review ? <div className="mt-5 border-t border-border pt-4">
         <p className="text-[12px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">Current review</p>
