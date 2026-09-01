@@ -4,6 +4,10 @@
  * Loads applicant-safe questions from TiDB, saves responses to the server
  * on each answer, supports one-at-a-time navigation, OPEN timers, and
  * refresh/resume.
+ *
+ * Task 24F: saving is fully backgrounded. Inputs are never disabled while a
+ * save is in flight; OPEN answers are debounced with latest-value-wins
+ * ordering via the autosave controller, and Next only flushes pending saves.
  */
 import { ApplicationShell } from "@/components/application/ApplicationShell";
 import { FoundationButton, FoundationInput } from "@/components/foundation/ui";
@@ -16,6 +20,7 @@ import {
   type ApplicantSafeQuestion,
   type SaveAssessmentResponseInput,
 } from "@/lib/applicationApi";
+import { createAutosaveController, type AutosaveController, type AutosavePhase } from "@/lib/assessmentAutosave";
 import { Check, Loader2, AlertCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -30,13 +35,29 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
   const [responses, setResponses] = useState<ResponseState>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [savePhase, setSavePhase] = useState<AutosavePhase>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState("");
   const [timerRemaining, setTimerRemaining] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Background autosave: never blocks inputs, debounces OPEN typing, and
+  // always persists the latest value last (stale responses cannot win).
+  const controllerRef = useRef<AutosaveController | null>(null);
+  if (!controllerRef.current) {
+    controllerRef.current = createAutosaveController({
+      debounceMs: 700,
+      onPhaseChange: setSavePhase,
+      save: async (questionId, payload) => {
+        const result = await saveAssessmentResponse(questionId, payload as SaveAssessmentResponseInput);
+        if (result.closed) setLocation("/apply/business-development-officer/eligibility");
+      },
+    });
+  }
+  const controller = controllerRef.current;
+
+  useEffect(() => () => controller.cancel(), [controller]);
 
   // Load assessment from database
   useEffect(() => {
@@ -101,28 +122,14 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
 
   // ── Response handling ──────────────────────────────────────────────────────
 
-  const persistResponse = async (questionId: string, input: SaveAssessmentResponseInput) => {
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const result = await saveAssessmentResponse(questionId, input);
-      if (result.closed) {
-        setLocation("/apply/business-development-officer/eligibility");
-        return;
-      }
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Unable to save your response. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  };
+  // Every handler updates local state immediately and persists in the
+  // background; the UI is never disabled while a save is in flight.
 
   const selectOption = (optionId: string) => {
     if (!question) return;
     setValidationError("");
-    const newResponses = { ...responses, [question.id]: optionId };
-    setResponses(newResponses);
-    persistResponse(question.id, { responseType: question.type as "ORDINAL" | "MULTI" | "SJT" | "EVIDENCE", responsePayload: optionId });
+    setResponses({ ...responses, [question.id]: optionId });
+    controller.saveNow(question.id, { responseType: question.type as "ORDINAL" | "SJT" | "EVIDENCE", responsePayload: optionId });
   };
 
   const selectMultiOptions = (optionId: string) => {
@@ -130,20 +137,20 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
     setValidationError("");
     const current = Array.isArray(responses[question.id]) ? (responses[question.id] as string[]) : [];
     const updated = current.includes(optionId) ? current.filter((id) => id !== optionId) : [...current, optionId];
-    const newResponses = { ...responses, [question.id]: updated };
-    setResponses(newResponses);
-    persistResponse(question.id, { responseType: "MULTI", responsePayload: updated });
+    setResponses({ ...responses, [question.id]: updated });
+    controller.saveNow(question.id, { responseType: "MULTI", responsePayload: updated });
   };
 
   const saveNumericResponse = (values: Record<string, string>) => {
     if (!question) return;
     setValidationError("");
-    const newResponses = { ...responses, [question.id]: values };
-    setResponses(newResponses);
-    persistResponse(question.id, { responseType: "NUMERIC", responsePayload: values });
+    setResponses({ ...responses, [question.id]: values });
+    controller.saveNow(question.id, { responseType: "NUMERIC", responsePayload: values });
   };
 
-  const saveOpenResponse = (text: string) => {
+  // OPEN drafts are debounced by the controller; typing never triggers a
+  // request per keystroke and the latest text always wins.
+  const draftOpenResponse = (text: string) => {
     if (!question || question.type !== "OPEN") return;
     if (question.maximumWords) {
       const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
@@ -153,9 +160,8 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
       }
     }
     setValidationError("");
-    const newResponses = { ...responses, [question.id]: text };
-    setResponses(newResponses);
-    persistResponse(question.id, { responseType: "OPEN", responsePayload: text });
+    setResponses({ ...responses, [question.id]: text });
+    controller.schedule(question.id, { responseType: "OPEN", responsePayload: text });
   };
 
   // ── Navigation ─────────────────────────────────────────────────────────────
@@ -167,6 +173,15 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
     const currentResponse = responses[question.id];
     const hasResponse = currentResponse !== undefined && currentResponse !== null && currentResponse !== "" && !(Array.isArray(currentResponse) && currentResponse.length === 0);
     if (!hasResponse) { setValidationError("Please provide an answer before continuing."); return; }
+
+    // Next is never disabled by network latency; it only flushes outstanding
+    // background saves. An actual save failure keeps the answer local and
+    // reports it instead of silently moving on.
+    await controller.flush();
+    if (controller.failedQuestionIds().length > 0) {
+      setValidationError("Your answer could not be saved yet. Please try again.");
+      return;
+    }
 
     if (currentIndex === totalQuestions - 1) {
       // Complete the assessment
@@ -228,7 +243,7 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
             question={question}
             selectedId={typeof responses[question.id] === "string" ? (responses[question.id] as string) : undefined}
             onSelect={selectOption}
-            disabled={saving || timerExpired === true}
+            disabled={timerExpired === true}
           />
         )}
 
@@ -237,7 +252,7 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
             question={question}
             selectedIds={Array.isArray(responses[question.id]) ? (responses[question.id] as string[]) : []}
             onToggle={selectMultiOptions}
-            disabled={saving || timerExpired === true}
+            disabled={timerExpired === true}
           />
         )}
 
@@ -246,7 +261,7 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
             question={question}
             values={(responses[question.id] as Record<string, string>) ?? {}}
             onSave={saveNumericResponse}
-            disabled={saving || timerExpired === true}
+            disabled={timerExpired === true}
           />
         )}
 
@@ -254,18 +269,19 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
           <QuestionOpenRenderer
             question={question}
             value={typeof responses[question.id] === "string" ? (responses[question.id] as string) : ""}
-            onSave={saveOpenResponse}
-            disabled={saving || timerExpired === true}
+            onDraft={draftOpenResponse}
+            disabled={timerExpired === true}
             pasteAllowed={question.pasteAllowed}
           />
         )}
 
-        {saveError ? <p className="mt-4 text-[13px] text-status-error-strong" role="alert">{saveError}</p> : null}
+        {savePhase === "saving" || savePhase === "pending" ? <p className="mt-4 text-[13px] text-muted-foreground" role="status">Saving…</p> : null}
+        {savePhase === "error" ? <p className="mt-4 text-[13px] text-status-error-strong" role="alert">Your last answer could not be saved. It will be saved again automatically — you can keep answering.</p> : null}
         {validationError ? <p className="mt-4 text-[13px] text-status-error-strong" role="alert">{validationError}</p> : null}
 
         <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
           <div>{currentIndex > 0 ? <FoundationButton className="w-full sm:w-auto" onClick={() => moveTo(currentIndex - 1)} variant="secondary">Previous</FoundationButton> : null}</div>
-          <FoundationButton className="w-full sm:w-auto" disabled={saving || completing} onClick={nextQuestion} size="lg">
+          <FoundationButton className="w-full sm:w-auto" disabled={completing} onClick={nextQuestion} size="lg">
             {completing ? "Completing..." : currentIndex === totalQuestions - 1 ? "Complete assessment" : "Next"}
           </FoundationButton>
         </div>
@@ -387,24 +403,24 @@ function QuestionNumericRenderer({ question, values, onSave, disabled }: {
   );
 }
 
-function QuestionOpenRenderer({ question, value, onSave, disabled, pasteAllowed }: {
+function QuestionOpenRenderer({ question, value, onDraft, disabled, pasteAllowed }: {
   question: Extract<ApplicantSafeQuestion, { type: "OPEN" }>;
   value: string;
-  onSave: (text: string) => void;
+  onDraft: (text: string) => void;
   disabled: boolean;
   pasteAllowed: boolean;
 }) {
   const [localValue, setLocalValue] = useState(value);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { setLocalValue(value); }, [value]);
 
   const wordCount = localValue.trim().split(/\s+/).filter(Boolean).length;
   const maxWords = question.maximumWords;
 
+  // Typing stays local and immediate; persistence is debounced upstream by
+  // the autosave controller, so the textarea is never disabled by saving.
   const handleChange = (text: string) => {
     setLocalValue(text);
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => onSave(text), 800);
+    onDraft(text);
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {

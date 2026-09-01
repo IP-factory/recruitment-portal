@@ -7,6 +7,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  fetchAdminApplications,
+  type AdminApplicationListResponse,
+} from "@/lib/adminApplicationApi";
+import {
   fetchAdminEligibility,
   fetchAdminRole,
   fetchAdminRoles,
@@ -99,6 +103,12 @@ export function useAdminEligibility(idOrSlug: string | undefined) {
 
 export function useEvaluationFramework(idOrSlug: string | undefined) {
   return useAsyncData<EvaluationFrameworkConfiguration | null>(async () => (idOrSlug ? fetchEvaluationFramework(idOrSlug) : null), [idOrSlug]);
+}
+
+// ── Admin applications (Task 24F — live TiDB counts on the role pages) ──────
+
+export function useAdminApplicationsLive() {
+  return useAsyncData<AdminApplicationListResponse>(() => fetchAdminApplications());
 }
 
 // ── Question Bank (Task 24C-2) ───────────────────────────────────────────────

@@ -1,21 +1,32 @@
 import { DataErrorState, DataLoadingState } from "@/components/AsyncStates";
 import { useEvaluationFramework } from "@/hooks/useRecruitmentData";
 import { describeScreeningBandRange } from "@/lib/recruitmentApi";
+import { describeFrameworkState } from "@/lib/roleConfigurationDisplay";
 import { V2_PIPELINE_STEPS } from "@/lib/v2EvaluationFramework";
 import { Info } from "lucide-react";
 
 /**
- * Task 24C-1 — the Evaluation Framework tab renders its configuration
+ * Task 24F — the Evaluation Framework tab renders its configuration
  * (dimension weights/floors, verification multipliers, integrity penalty,
  * bonus cap and screening bands) from TiDB via the Admin recruitment API.
- * Only the descriptive pipeline copy stays local.
+ * The readiness badge is derived from the same live configuration; only
+ * descriptive pipeline copy stays local.
  */
 export function V2EvaluationFrameworkTab({ roleSlug }: { roleSlug: string }) {
   const framework = useEvaluationFramework(roleSlug);
+  const state = describeFrameworkState(framework.status === "ready" ? framework.data : null);
+  const headerCopy = framework.status === "loading"
+    ? "Loading the evaluation framework configuration…"
+    : framework.status === "error"
+    ? "The evaluation framework configuration could not be loaded."
+    : state.active
+    ? "The live v2 evaluation framework for this role. Candidate assessments are scored using this configuration."
+    : "The v2 evaluation framework has not been configured for this role yet.";
+  const badge = framework.status === "loading" ? { label: "Loading…", tone: "neutral" } : framework.status === "error" ? { label: "Unavailable", tone: "amber" } : state.active ? { label: state.label, tone: "green" } : { label: state.label, tone: "amber" };
   return <section aria-labelledby="evaluation-framework-title" className="space-y-6">
     <article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div><p className="section-kicker">Admin-only evaluation reference</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.025em] text-primary" id="evaluation-framework-title">Evaluation Framework</h3><p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">The Business Development Officer v2 framework is the future evaluation architecture. It remains Draft / Inactive while the question set is completed and is not used for live applicants.</p></div><span className="inline-flex w-fit shrink-0 rounded-full border border-[#ead9b2] bg-[#fffaf0] px-3 py-1 text-[12px] font-semibold text-[#765d22]">Draft / Inactive</span>
+        <div><p className="section-kicker">Admin-only evaluation reference</p><h3 className="mt-3 text-xl font-semibold tracking-[-0.025em] text-primary" id="evaluation-framework-title">Evaluation Framework</h3><p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{headerCopy}</p></div><span className={`inline-flex w-fit shrink-0 rounded-full border px-3 py-1 text-[12px] font-semibold ${badge.tone === "green" ? "border-status-success/30 bg-status-success/5 text-status-success-strong" : badge.tone === "amber" ? "border-[#ead9b2] bg-[#fffaf0] text-[#765d22]" : "border-border bg-white text-muted-foreground"}`}>{badge.label}</span>
       </div>
       <div className="mt-6 flex gap-3 rounded-lg border border-portal-blue/15 bg-portal-blue-soft/50 px-4 py-4"><Info className="mt-0.5 size-[18px] shrink-0 text-portal-blue" /><p className="text-[13px] leading-6 text-muted-foreground">The screening framework structures job-relevant evidence and assessment responses. Final recruitment decisions remain subject to human review.</p></div>
     </article>
@@ -23,7 +34,7 @@ export function V2EvaluationFrameworkTab({ roleSlug }: { roleSlug: string }) {
       : framework.status === "error" || !framework.data ? <DataErrorState message={framework.error ?? "Unable to load the evaluation framework."} onRetry={framework.reload} />
       : <>
     <article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6"><div><h4 className="text-lg font-semibold text-primary">Dimensions</h4><p className="mt-1 text-[13px] text-muted-foreground">Weights and floors are read from the role's v2 configuration stored in the recruitment database.</p></div><div className="mt-5 overflow-x-auto"><table className="w-full min-w-[580px] text-left text-sm"><thead className="border-b border-border text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground"><tr><th className="pb-3 pr-4">Dimension</th><th className="pb-3 pr-4 text-right">Weight</th><th className="pb-3 text-right">Floor</th></tr></thead><tbody className="divide-y divide-border">{framework.data.dimensions.map((dimension) => <tr key={dimension.reference}><td className="py-3 pr-4 font-medium text-primary">{dimension.reference} · {dimension.name}</td><td className="py-3 pr-4 text-right font-semibold text-primary">{dimension.weight}%</td><td className="py-3 text-right text-muted-foreground">{dimension.minimumFloor === null ? "—" : `${dimension.minimumFloor}%`}</td></tr>)}</tbody><tfoot className="border-t border-border"><tr><td className="pt-3 font-semibold text-primary">Total</td><td className="pt-3 text-right font-semibold text-primary">{framework.data.totalWeight}%</td><td /></tr></tfoot></table></div></article>
-    <article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6"><h4 className="text-lg font-semibold text-primary">Score pipeline</h4><p className="mt-1 text-[13px] text-muted-foreground">Each stage is resolved in sequence. Legacy scores are not translated into this pipeline.</p><ol className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{V2_PIPELINE_STEPS.map((step, index) => <li className="rounded-lg border border-border px-4 py-3" key={step}><span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-portal-blue">{String(index + 1).padStart(2, "0")}</span><p className="mt-1 text-sm font-semibold text-primary">{step}</p></li>)}</ol></article>
+    <article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6"><h4 className="text-lg font-semibold text-primary">Score pipeline</h4><p className="mt-1 text-[13px] text-muted-foreground">Each stage is resolved in sequence using the live configuration values.</p><ol className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{V2_PIPELINE_STEPS.map((step, index) => <li className="rounded-lg border border-border px-4 py-3" key={step}><span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-portal-blue">{String(index + 1).padStart(2, "0")}</span><p className="mt-1 text-sm font-semibold text-primary">{step}</p></li>)}</ol></article>
     <div className="grid gap-6 lg:grid-cols-2"><article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6"><h4 className="text-lg font-semibold text-primary">Modifier rules</h4>{framework.data.screening ? <dl className="mt-5 space-y-4 text-sm"><div><dt className="font-semibold text-primary">Verification</dt><dd className="mt-1 text-muted-foreground">{framework.data.screening.verification.map((entry) => entry.multiplier.toFixed(2)).join(" · ")}</dd></div><div><dt className="font-semibold text-primary">Integrity</dt><dd className="mt-1 text-muted-foreground">−{framework.data.screening.integrityPenalty} per confirmed integrity flag</dd></div><div><dt className="font-semibold text-primary">Bonus</dt><dd className="mt-1 text-muted-foreground">Maximum +{framework.data.screening.bonusCap}; explicit Admin confirmation only</dd></div></dl> : <p className="mt-5 text-sm text-muted-foreground">Screening configuration has not been set for this role.</p>}</article><article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6"><h4 className="text-lg font-semibold text-primary">Screening bands</h4>{framework.data.screening ? <><div className="mt-5 divide-y divide-border border-y border-border">{framework.data.screening.bands.map((band) => <div className="flex items-center justify-between gap-4 py-3" key={band.band}><div><p className="text-sm font-semibold text-primary">{band.band} · {describeScreeningBandRange(band)}</p><p className="mt-1 text-[12px] text-muted-foreground">{band.label}</p></div><span className="text-[12px] font-medium text-muted-foreground">Applied band</span></div>)}</div><p className="mt-4 text-[12px] leading-5 text-muted-foreground">The applied band supports screening decisions. Recruitment actions remain subject to Admin review.</p></> : <p className="mt-5 text-sm text-muted-foreground">Screening bands have not been configured for this role.</p>}</article></div>
       </>}
   </section>;

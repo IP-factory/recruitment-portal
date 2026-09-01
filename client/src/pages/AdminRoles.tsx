@@ -1,25 +1,27 @@
 /**
- * Quiet Authority Recruitment Roles list — Task 24C-1: roles load from TiDB
- * through the Admin recruitment API. Application counts remain derived from
- * the (not yet migrated) application domain, matched by role title.
+ * Quiet Authority Recruitment Roles list — Task 24F: roles and per-role
+ * application counts both load from TiDB (no mock application data).
  */
 import { AdminShell } from "@/components/admin/AdminShell";
 import { DataErrorState, DataLoadingState } from "@/components/AsyncStates";
 import { FoundationButton, FoundationInput, FoundationSelect, StatusBadge } from "@/components/foundation/ui";
-import { useAdminRoles } from "@/hooks/useRecruitmentData";
-import { getAdminApplications } from "@/lib/adminMockData";
+import { useAdminApplicationsLive, useAdminRoles } from "@/hooks/useRecruitmentData";
 import { formatRoleUpdatedLabel, ROLE_STATUSES, type AdminRecruitmentRole, type RoleStatus } from "@/lib/recruitmentApi";
+import { deriveRoleApplicationCounts } from "@/lib/roleConfigurationDisplay";
+import type { AdminApplicationSummary } from "@/lib/adminApplicationApi";
 import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
 const statusOptions: RoleStatus[] = [...ROLE_STATUSES];
 function RoleCell({ role }: { role: AdminRecruitmentRole }) { return <div><p className="font-medium text-primary">{role.title}</p><p className="mt-1 text-[12px] text-muted-foreground">{role.employmentType}</p></div>; }
-function applicationCountFor(role: AdminRecruitmentRole) { return getAdminApplications().filter((application) => application.role === role.title).length; }
 
 export default function AdminRoles() {
   const [, setLocation] = useLocation();
   const { status, data, error, reload } = useAdminRoles();
+  const applicationsState = useAdminApplicationsLive();
+  const liveApplications: AdminApplicationSummary[] = applicationsState.status === "ready" && applicationsState.data ? applicationsState.data.applications : [];
+  const applicationCountFor = (role: AdminRecruitmentRole) => applicationsState.status === "loading" ? "…" : deriveRoleApplicationCounts(liveApplications, role.title).total;
   const roles = data ?? [];
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");

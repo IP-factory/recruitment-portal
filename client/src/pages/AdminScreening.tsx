@@ -16,6 +16,7 @@ import {
   type EvaluationStatus,
   type ScreeningBand,
 } from "@/lib/adminApplicationApi";
+import { applicationStatusDisplayLabel, eligibilityDisplayLabel } from "@/lib/adminDisplay";
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -29,7 +30,8 @@ const statusOptions = ["all", "Submitted", "Shortlisted", "Hold", "Closed"];
 const initials = (name: string) => name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 
 function EligibilityValue({ value }: { value: string }) {
-  return <span className={`text-[13px] font-semibold ${value === "Eligible" ? "text-status-success-strong" : value === "Closed" ? "text-status-error-strong" : "text-[#765d22]"}`}>{value}</span>;
+  const label = eligibilityDisplayLabel(value);
+  return <span className={`text-[13px] font-semibold ${label === "Eligible" ? "text-status-success-strong" : label === "Not Eligible" ? "text-status-error-strong" : "text-[#765d22]"}`}>{label}</span>;
 }
 function ScoreValue({ score, status }: { score: number | null; status: EvaluationStatus | null }) {
   if (status === "Pending Assessment" || status === "Pending OPEN Review") return <span className="text-[13px] text-muted-foreground">Pending review</span>;
@@ -162,7 +164,7 @@ export default function AdminScreening() {
           <td className="px-3 py-4"><ScoreValue score={app.finalScore} status={app.evaluationStatus} /></td>
           <td className="px-3 py-4"><BandValue band={app.appliedBand} /></td>
           <td className="px-3 py-4"><IntegrityValue shortlisted={app.shortlisted} /></td>
-          <td className="px-3 py-4"><StatusBadge status={app.applicationStatus} /></td>
+          <td className="px-3 py-4"><StatusBadge status={applicationStatusDisplayLabel(app.applicationStatus)} /></td>
           <td className="px-3 py-4">{app.shortlisted ? <StatusBadge status="Shortlisted" /> : <FoundationButton onClick={() => setPendingAction({ type: "shortlist", app })} size="sm" variant="secondary">Shortlist</FoundationButton>}</td>
           <td className="px-3 py-4 text-right"><button className="text-[13px] font-medium text-portal-blue transition-colors hover:text-primary hover:underline" onClick={() => setLocation(`/admin/applications/${app.id}`)} type="button">View</button></td>
         </tr>)}</tbody></table></div>
@@ -173,7 +175,7 @@ export default function AdminScreening() {
             <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Eligibility</p><p className="mt-1"><EligibilityValue value={app.eligibilityStatus} /></p></div>
             <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Final Score</p><p className="mt-1"><ScoreValue score={app.finalScore} status={app.evaluationStatus} /></p></div>
             <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Applied Band</p><p className="mt-1"><BandValue band={app.appliedBand} /></p></div>
-            <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Status</p><div className="mt-1.5"><StatusBadge status={app.applicationStatus} /></div></div>
+            <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Status</p><div className="mt-1.5"><StatusBadge status={applicationStatusDisplayLabel(app.applicationStatus)} /></div></div>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             {!app.shortlisted && <FoundationButton onClick={() => setPendingAction({ type: "shortlist", app })} size="sm" variant="secondary">Shortlist</FoundationButton>}

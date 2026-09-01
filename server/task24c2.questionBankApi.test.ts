@@ -251,6 +251,25 @@ suite("Task 24C-2 Question Bank API against TiDB", () => {
     expect(body.items).toHaveLength(4);
   });
 
+  it("keeps filters applied on the second page and reports the filtered total", async () => {
+    const filtered = await api("/api/admin/questions?status=Active&page=2", { headers: { Cookie: adminCookie } });
+    expect(filtered.body.total).toBe(14);
+    expect(filtered.body.totalPages).toBe(2);
+    expect(filtered.body.page).toBe(2);
+    expect(filtered.body.items).toHaveLength(4);
+
+    const byDimension = await api("/api/admin/questions?dimension=D1", { headers: { Cookie: adminCookie } });
+    expect(byDimension.body.total).toBe(2);
+    expect(byDimension.body.totalPages).toBe(1);
+    expect(byDimension.body.items).toHaveLength(2);
+  });
+
+  it("clamps out-of-range pages to the last page instead of returning an empty set", async () => {
+    const beyond = await api("/api/admin/questions?page=99", { headers: { Cookie: adminCookie } });
+    expect(beyond.body.page).toBe(beyond.body.totalPages);
+    expect(beyond.body.items.length).toBeGreaterThan(0);
+  });
+
   it("filters by type, dimension, status, and search", async () => {
     const byType = await api("/api/admin/questions?type=MULTI&pageSize=50", { headers: { Cookie: adminCookie } });
     expect(byType.body.total).toBe(3);

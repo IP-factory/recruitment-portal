@@ -9,6 +9,7 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { FoundationInput, FoundationSelect, StatusBadge } from "@/components/foundation/ui";
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { fetchAdminApplications, type AdminApplicationSummary, type EvaluationStatus, type ScreeningBand } from "@/lib/adminApplicationApi";
+import { applicationStatusDisplayLabel, eligibilityDisplayLabel } from "@/lib/adminDisplay";
 import { Search, ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -27,8 +28,8 @@ function CandidateCell({ app }: { app: AdminApplicationSummary }) {
 }
 
 function EligibilityCell({ status }: { status: string }) {
-  const label = status === "Eligible" ? "Eligible" : status === "Closed" ? "Closed" : "Pending";
-  return <span className={`text-[13px] font-semibold ${label === "Eligible" ? "text-status-success-strong" : label === "Closed" ? "text-status-error-strong" : "text-[#765d22]"}`}>{label}</span>;
+  const label = eligibilityDisplayLabel(status);
+  return <span className={`text-[13px] font-semibold ${label === "Eligible" ? "text-status-success-strong" : label === "Not Eligible" ? "text-status-error-strong" : "text-[#765d22]"}`}>{label}</span>;
 }
 
 function AssessmentStatusCell({ status }: { status: string }) {
@@ -125,7 +126,7 @@ export default function AdminApplications() {
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:w-auto">
           <div><label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="application-status-filter">Application status</label><FoundationSelect id="application-status-filter" onChange={(e) => { setApplicationStatus(e.target.value); setPage(1); }} value={applicationStatus}><option value="all">All statuses</option><option value="In Progress">In Progress</option><option value="Submitted">Submitted</option><option value="Shortlisted">Shortlisted</option><option value="Hold">Hold</option><option value="Closed">Closed</option></FoundationSelect></div>
-          <div><label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="eligibility-filter">Eligibility</label><FoundationSelect id="eligibility-filter" onChange={(e) => { setEligibility(e.target.value); setPage(1); }} value={eligibility}><option value="all">All eligibility states</option><option value="eligible">Eligible</option><option value="pending">Pending</option><option value="closed">Closed</option></FoundationSelect></div>
+          <div><label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="eligibility-filter">Eligibility</label><FoundationSelect id="eligibility-filter" onChange={(e) => { setEligibility(e.target.value); setPage(1); }} value={eligibility}><option value="all">All eligibility states</option><option value="eligible">Eligible</option><option value="pending">Pending</option><option value="closed">Not Eligible</option></FoundationSelect></div>
         </div>
       </div>
       <div className="mt-5 flex items-center justify-between gap-4 border-t border-border pt-4">
@@ -155,7 +156,7 @@ export default function AdminApplications() {
                 <td className="px-3 py-4"><AssessmentStatusCell status={app.assessmentStatus} /></td>
                 <td className="px-3 py-4"><ScoreCell evaluationStatus={app.evaluationStatus} score={app.finalScore} /></td>
                 <td className="px-3 py-4"><BandCell band={app.appliedBand} /></td>
-                <td className="px-3 py-4"><StatusBadge status={app.applicationStatus} /></td>
+                <td className="px-3 py-4"><StatusBadge status={applicationStatusDisplayLabel(app.applicationStatus)} /></td>
                 <td className="whitespace-nowrap px-3 py-4 text-[13px] text-muted-foreground">{new Date(app.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
                 <td className="px-3 py-4 text-right"><button className="text-[13px] font-medium text-portal-blue transition-colors hover:text-primary hover:underline" onClick={() => setLocation(`/admin/applications/${app.id}`)} type="button">View</button></td>
               </tr>)}
@@ -170,7 +171,7 @@ export default function AdminApplications() {
               <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Eligibility</p><p className="mt-1"><EligibilityCell status={app.eligibilityStatus} /></p></div>
               <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Final Score</p><p className="mt-1"><ScoreCell evaluationStatus={app.evaluationStatus} score={app.finalScore} /></p></div>
               <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Applied Band</p><p className="mt-1"><BandCell band={app.appliedBand} /></p></div>
-              <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Status</p><div className="mt-1.5"><StatusBadge status={app.applicationStatus} /></div></div>
+              <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Status</p><div className="mt-1.5"><StatusBadge status={applicationStatusDisplayLabel(app.applicationStatus)} /></div></div>
               <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Applied</p><p className="mt-1 text-[13px] text-primary">{new Date(app.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p></div>
             </div>
             <button className="mt-4 text-[13px] font-medium text-portal-blue transition-colors hover:text-primary hover:underline" onClick={() => setLocation(`/admin/applications/${app.id}`)} type="button">View application</button>

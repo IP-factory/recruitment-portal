@@ -3,9 +3,11 @@
  *
  * Real TiDB-backed candidate review with three tabs:
  * 1. Overview — candidate info, eligibility, screening evaluation
- * 2. Assessment — 14-question responses with OPEN review UI
+ * 2. Assessment — persisted responses with OPEN review UI
  * 3. Integrity & Bonus — integrity flags, bonus confirmation
  *
+ * Everything renders from the application's real database records; nothing
+ * assumes a fixed gate set, dimension set, or question count.
  * CV tabs are deferred and not shown for real applications.
  */
 import { AdminShell } from "@/components/admin/AdminShell";
@@ -24,6 +26,7 @@ import {
   type AdminApplicationDetailResponse,
   type AdminEvaluationDetail,
 } from "@/lib/adminApplicationApi";
+import { applicationStatusDisplayLabel, eligibilityDisplayLabel } from "@/lib/adminDisplay";
 import { AlertTriangle, ArrowLeft, Check, MapPin, Star } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -108,14 +111,14 @@ function OverviewTab({ data }: { data: AdminApplicationDetailResponse }) {
         <DetailRows title="Contact" rows={[{ label: "Full name", value: application.fullName }, { label: "Email address", value: application.email }, { label: "Phone number", value: application.phone }, { label: "Current city", value: application.city }]} />
         <DetailRows title="Professional" rows={[{ label: "Recent role", value: application.recentRole }, { label: "Recent employer", value: application.recentEmployer }, { label: "Total experience", value: application.totalExperience }, { label: "BD experience", value: application.relevantExperience }, { label: "LinkedIn", value: application.linkedinUrl }]} />
       </div>
-      {application.eligibilityResponses.length > 0 && <section className="border-t border-border pt-5 mt-5"><h4 className="text-[12px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">Eligibility</h4><span className={`mt-2 inline-flex w-fit rounded-full border px-3 py-1 text-[12px] font-semibold ${application.eligibilityStatus === "Eligible" ? "border-status-success/30 bg-status-success/5 text-status-success-strong" : application.eligibilityStatus === "Closed" ? "border-status-error/30 bg-status-error/5 text-status-error-strong" : "border-[#eadfbd] bg-[#fbf8ef] text-[#765d22]"}`}>{application.eligibilityStatus}</span><div className="mt-4 divide-y divide-border">{application.eligibilityResponses.map((g) => <div className="flex items-center justify-between gap-4 py-2" key={g.gateReference}><p className="text-[13px] text-primary"><span className="mr-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{g.gateReference}</span>{g.outcome}{g.internalFlag ? ` · ${g.internalFlag}` : ""}</p></div>)}</div></section>}
+      {application.eligibilityResponses.length > 0 && <section className="border-t border-border pt-5 mt-5"><h4 className="text-[12px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">Eligibility</h4><span className={`mt-2 inline-flex w-fit rounded-full border px-3 py-1 text-[12px] font-semibold ${application.eligibilityStatus === "Eligible" ? "border-status-success/30 bg-status-success/5 text-status-success-strong" : application.eligibilityStatus === "Closed" ? "border-status-error/30 bg-status-error/5 text-status-error-strong" : "border-[#eadfbd] bg-[#fbf8ef] text-[#765d22]"}`}>{eligibilityDisplayLabel(application.eligibilityStatus)}</span><div className="mt-4 divide-y divide-border">{application.eligibilityResponses.map((g) => <div className="flex items-center justify-between gap-4 py-2" key={g.gateReference}><p className="text-[13px] text-primary"><span className="mr-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{g.gateReference}</span>{g.outcome}{g.internalFlag ? ` · ${g.internalFlag}` : ""}</p></div>)}</div></section>}
     </article>
     <div className="space-y-5">
       <article className="rounded-xl border border-border bg-white p-5">
         <h3 className="text-lg font-semibold text-primary">Application summary</h3>
         <dl className="mt-5 space-y-4">
           <div><dt className="text-[12px] text-muted-foreground">Role</dt><dd className="mt-1 text-sm font-medium text-primary">{application.roleTitle}</dd></div>
-          <div><dt className="text-[12px] text-muted-foreground">Application status</dt><dd className="mt-1.5"><StatusBadge status={application.applicationStatus} /></dd></div>
+          <div><dt className="text-[12px] text-muted-foreground">Application status</dt><dd className="mt-1.5"><StatusBadge status={applicationStatusDisplayLabel(application.applicationStatus)} /></dd></div>
           <div><dt className="text-[12px] text-muted-foreground">Assessment</dt><dd className="mt-1.5"><StatusBadge status={application.assessmentStatus} /></dd></div>
           <div><dt className="text-[12px] text-muted-foreground">Applied</dt><dd className="mt-1 text-sm font-medium text-primary">{new Date(application.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</dd></div>
         </dl>
@@ -247,7 +250,7 @@ export default function AdminCandidatePlaceholder() {
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-muted-foreground">
               <span className="font-medium text-primary">{application.roleTitle}</span>
               <span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5" />Applied {new Date(application.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
-              <StatusBadge status={application.applicationStatus} />
+              <StatusBadge status={applicationStatusDisplayLabel(application.applicationStatus)} />
             </div>
           </div>
         </div>

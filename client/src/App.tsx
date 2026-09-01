@@ -9,7 +9,7 @@ import ApplicantAssessmentPlaceholder from "@/pages/ApplicantAssessmentPlacehold
 import ApplicantAssessmentQuestionsPlaceholder from "@/pages/ApplicantAssessmentQuestionsPlaceholder";
 import ApplicantAssessmentComplete from "@/pages/ApplicantAssessmentComplete";
 import ApplicantReviewPlaceholder from "@/pages/ApplicantReviewPlaceholder";
-import ApplicantSubmitted from "@/pages/ApplicantSubmitted";
+import ApplicantSubmissionOutcome from "@/pages/ApplicantSubmissionOutcome";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminApplications from "@/pages/AdminApplications";
 import AdminCandidatePlaceholder from "@/pages/AdminCandidatePlaceholder";
@@ -80,7 +80,7 @@ function Router() {
       <Route path="/apply/business-development-officer/assessment/questions">{() => <ApplicantEligibilityGuard><ApplicantAssessmentQuestionsPlaceholder /></ApplicantEligibilityGuard>}</Route>
       <Route path="/apply/business-development-officer/assessment/complete">{() => <ApplicantEligibilityGuard><ApplicantAssessmentComplete /></ApplicantEligibilityGuard>}</Route>
       <Route path="/apply/business-development-officer/review">{() => <ApplicantEligibilityGuard><ApplicantReviewPlaceholder /></ApplicantEligibilityGuard>}</Route>
-      <Route path="/apply/business-development-officer/submitted">{() => <ApplicantEligibilityGuard><ApplicantSubmitted /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/business-development-officer/submitted">{() => <ApplicantSubmissionOutcome />}</Route>
       <Route path="/apply/business-development-manager/assessment/complete"><Redirect to="/apply/business-development-officer/assessment/complete" /></Route>
       <Route path="/apply/business-development-manager/assessment/questions"><Redirect to="/apply/business-development-officer/assessment/questions" /></Route>
       <Route path="/apply/business-development-manager/assessment"><Redirect to="/apply/business-development-officer/assessment" /></Route>
