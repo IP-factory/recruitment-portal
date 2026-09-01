@@ -12,7 +12,7 @@ import { useLocation } from "wouter";
 export default function ApplicantSubmitted() {
   const [, setLocation] = useLocation();
   return (
-    <ApplicationShell activeStep={2} submitted>
+    <ApplicationShell activeStep={3} submitted>
       <section className="mx-auto max-w-[620px] py-10 text-center sm:py-14">
         <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-portal-blue-soft text-primary"><CheckCircle2 className="size-5" /></div>
         <p className="section-kicker mt-5">Application submitted</p>

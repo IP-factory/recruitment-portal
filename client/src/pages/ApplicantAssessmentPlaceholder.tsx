@@ -48,9 +48,9 @@ export default function ApplicantAssessmentPlaceholder() {
   }, [setLocation]);
 
   return (
-    <ApplicationShell activeStep={1} showSummary>
+    <ApplicationShell activeStep={2} showSummary>
       <section>
-        <p className="section-kicker">Step 2 of 3</p>
+        <p className="section-kicker">Step 3 of 4</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">Business Development Assessment</h1>
         <p className="mt-3 max-w-2xl text-[15px] leading-7 text-muted-foreground">This short role-specific assessment helps us understand your experience, commercial judgement and approach to common Business Development situations.</p>
         <div className="mt-8 rounded-xl border border-border bg-white p-7 shadow-none sm:p-8">

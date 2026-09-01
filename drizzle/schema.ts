@@ -258,6 +258,42 @@ export const applicationShortlist = mysqlTable("application_shortlist", {
   applicationUnique: uniqueIndex("shortlist_app_unique").on(table.applicationId),
 }));
 
+// ── Task 24G: CV upload metadata and manual CV review ────────────────────────
+// CV file bytes live in object/file storage (never TiDB); the database stores
+// only the metadata/reference. The CV review is a separate application-level
+// record — it is intentionally NOT part of the assessment evaluation tables
+// so the scoring engine never sees it.
+
+export const applicationCvFiles = mysqlTable("application_cv_files", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
+  storageKey: varchar("storage_key", { length: 256 }).notNull(),
+  originalFilename: varchar("original_filename", { length: 320 }).notNull(),
+  mimeType: varchar("mime_type", { length: 120 }).notNull(),
+  fileSize: int("file_size").notNull(),
+  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  applicationUnique: uniqueIndex("cv_files_app_unique").on(table.applicationId),
+}));
+
+export const applicationCvReviews = mysqlTable("application_cv_reviews", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
+  score: decimal("score", { precision: 5, scale: 1 }).notNull(),
+  reviewNote: text("review_note"),
+  reviewedBy: varchar("reviewed_by", { length: 64 }).references(() => adminProfiles.id, { onDelete: "set null" }),
+  reviewedAt: timestamp("reviewed_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  applicationUnique: uniqueIndex("cv_reviews_app_unique").on(table.applicationId),
+}));
+
+export type ApplicationCvFile = typeof applicationCvFiles.$inferSelect;
+export type ApplicationCvReview = typeof applicationCvReviews.$inferSelect;
+
 export type RecruitmentRole = typeof recruitmentRoles.$inferSelect;
 export type AssessmentDimension = typeof assessmentDimensions.$inferSelect;
 export type AssessmentQuestion = typeof assessmentQuestions.$inferSelect;

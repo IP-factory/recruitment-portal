@@ -43,6 +43,13 @@
       "when": 1788537600000,
       "tag": "0005_task24e_configurable_eligibility",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1788710400000,
+      "tag": "0006_task24g_cv_upload_review",
+      "breakpoints": true
     }
   ]
 }

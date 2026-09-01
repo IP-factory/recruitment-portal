@@ -441,7 +441,7 @@ export default function AdminAssessmentPreview() {
     return (
       <div className="min-h-screen bg-portal-surface">
         <PreviewBanner name="Assessment Preview" slug={exitSlug} onExit={() => setLocation(`/admin/assessments/${exitSlug}`)} />
-        <ApplicationShell activeStep={2}>
+        <ApplicationShell activeStep={3}>
           <section className="mx-auto max-w-[800px] py-12">
             <DataLoadingState label="Loading assessment preview" />
           </section>
@@ -455,7 +455,7 @@ export default function AdminAssessmentPreview() {
     return (
       <div className="min-h-screen bg-portal-surface">
         <PreviewBanner name="Assessment Preview" slug={exitSlug} onExit={() => setLocation(`/admin/assessments/${exitSlug}`)} />
-        <ApplicationShell activeStep={2}>
+        <ApplicationShell activeStep={3}>
           <section className="mx-auto max-w-[800px] py-12">
             <DataErrorState
               message={previewState.error ?? "Unable to load this assessment."}
@@ -472,7 +472,7 @@ export default function AdminAssessmentPreview() {
     return (
       <div className="min-h-screen bg-portal-surface">
         <PreviewBanner name="Assessment Preview" slug={exitSlug} onExit={() => setLocation(`/admin/assessments/${exitSlug}`)} />
-        <ApplicationShell activeStep={2}>
+        <ApplicationShell activeStep={3}>
           <section className="mx-auto max-w-[800px] py-6">
             <div className="rounded-xl border border-border bg-white p-6">
               <h1 className="text-2xl font-semibold text-primary">Assessment not found</h1>
@@ -491,7 +491,7 @@ export default function AdminAssessmentPreview() {
     return (
       <div className="min-h-screen bg-portal-surface">
         <PreviewBanner name={assessmentName} slug={exitSlug} onExit={() => setLocation(`/admin/assessments/${exitSlug}`)} />
-        <ApplicationShell activeStep={2}>
+        <ApplicationShell activeStep={3}>
           <section className="mx-auto max-w-[800px] py-6">
             <div className="rounded-xl border border-border bg-white p-6">
               <h1 className="text-2xl font-semibold text-primary">Preview unavailable</h1>
@@ -510,7 +510,7 @@ export default function AdminAssessmentPreview() {
     return (
       <div className="min-h-screen bg-portal-surface">
         <PreviewBanner name={assessmentName} slug={exitSlug} onExit={() => setLocation(`/admin/assessments/${exitSlug}`)} />
-        <ApplicationShell activeStep={2}>
+        <ApplicationShell activeStep={3}>
           <section className="mx-auto max-w-[900px] space-y-6 py-6">
             <div className="rounded-xl border border-border bg-white p-6 text-center sm:p-10">
               <p className="section-kicker">Preview complete</p>
@@ -562,7 +562,7 @@ export default function AdminAssessmentPreview() {
   return (
     <div className="min-h-screen bg-portal-surface text-foreground">
       <PreviewBanner name={assessmentName} slug={exitSlug} onExit={() => setLocation(`/admin/assessments/${exitSlug}`)} />
-      <ApplicationShell activeStep={2}>
+      <ApplicationShell activeStep={3}>
         <section className="mx-auto max-w-[800px] py-3 sm:py-6">
           <div className="flex items-center justify-between gap-4 border-b border-border pb-4">
             <p className="text-sm font-semibold text-primary">{assessmentName}</p>

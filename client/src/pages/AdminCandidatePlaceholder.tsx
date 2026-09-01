@@ -8,7 +8,9 @@
  *
  * Everything renders from the application's real database records; nothing
  * assumes a fixed gate set, dimension set, or question count.
- * CV tabs are deferred and not shown for real applications.
+  * The CV Review tab records a manual 0–100 CV score; the CV Score and
+  * Overall Candidate Score shown here are derived outside the scoring engine,
+  * so saving a CV review never affects the assessment evaluation.
  */
 import { AdminShell } from "@/components/admin/AdminShell";
 import { FoundationButton, FoundationInput, FoundationSelect, StatusBadge } from "@/components/foundation/ui";
@@ -20,6 +22,9 @@ import {
   updateBonus,
   updateShortlist,
   updateApplicationStatus,
+  adminCvFileUrl,
+  saveCvReview,
+  resetCvReview,
   ADMIN_APPLICATION_STATUSES,
   BONUS_TYPES,
   DIMENSION_FLOORS,
@@ -27,7 +32,9 @@ import {
   type AdminEvaluationDetail,
 } from "@/lib/adminApplicationApi";
 import { applicationStatusDisplayLabel, eligibilityDisplayLabel } from "@/lib/adminDisplay";
-import { AlertTriangle, ArrowLeft, Check, MapPin, Star } from "lucide-react";
+import { calculateOverallCandidateScore, describeCvScore, describeOverallCandidateScore, formatScore, validateCvScoreInput } from "@shared/candidateScore";
+import { formatFileSize } from "@shared/cvApi";
+import { AlertTriangle, ArrowLeft, Check, Download, Eye, FileText, MapPin, Star } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation, useRoute } from "wouter";
@@ -100,6 +107,127 @@ function ReviewedOpenCard({ review }: { review: AdminEvaluationDetail["openRevie
   </article>;
 }
 
+/**
+ * Task 24G (Part D) — Candidate Evaluation: the three candidate scores shown
+ * separately. The Assessment Score stays the engine's Final Screening Score;
+ * the CV Score and Overall Score are derived outside the scoring engine.
+ */
+function CandidateEvaluationCard({ data }: { data: AdminApplicationDetailResponse }) {
+  const { application, evaluation } = data;
+  const assessmentScore = evaluation.finalScreeningScore;
+  const cvScore = application.cvReview?.score ?? null;
+  const overall = calculateOverallCandidateScore(assessmentScore, cvScore);
+  const assessmentLabel = evaluation.evaluationStatus === "Pending Assessment" ? "Pending assessment" : evaluation.evaluationStatus === "Pending OPEN Review" ? "Pending OPEN review" : assessmentScore !== null ? formatScore(assessmentScore) : "—";
+  return <article className="rounded-xl border border-border bg-white p-5">
+    <h3 className="text-lg font-semibold text-primary">Candidate Evaluation</h3>
+    <div className="mt-4 divide-y divide-border">
+      <div className="flex items-baseline justify-between gap-4 py-3"><p className="text-[13px] font-semibold text-primary">Assessment Score</p><p className="text-[13px] font-semibold text-primary">{assessmentLabel}</p></div>
+      <div className="flex items-baseline justify-between gap-4 py-3"><p className="text-[13px] font-semibold text-primary">CV Score</p><p className="text-[13px] font-semibold text-primary">{describeCvScore(cvScore, Boolean(application.cv))}</p></div>
+      <div className="flex items-baseline justify-between gap-4 py-3"><p className="text-[13px] font-semibold text-primary">Overall Score</p><p className="text-[13px] font-semibold text-primary">{overall !== null ? formatScore(overall) : describeOverallCandidateScore(assessmentScore, cvScore)}</p></div>
+    </div>
+    <p className="mt-3 border-t border-border pt-3 text-[12px] leading-5 text-muted-foreground">Overall = (Assessment + CV) ÷ 2 once both scores exist. The CV score never feeds into the assessment engine.</p>
+  </article>;
+}
+
+/**
+ * Task 24G (Part B) — CV Review tab. Secure view/download through the
+ * authenticated proxy route and the manual 0–100 CV score. Saving a score
+ * only writes the CV review record — it never triggers assessment recalculation.
+ */
+function CvReviewTab({ data, onRefresh }: { data: AdminApplicationDetailResponse; onRefresh: () => void }) {
+  const { application } = data;
+  const cv = application.cv;
+  const review = application.cvReview;
+  const [scoreInput, setScoreInput] = useState(review ? String(review.score) : "");
+  const [noteInput, setNoteInput] = useState(review?.reviewNote ?? "");
+  const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    // Server is authoritative; this mirror validation gives instant feedback.
+    const validated = validateCvScoreInput(scoreInput);
+    if ("error" in validated) { setFormError(validated.error); return; }
+    setFormError(null);
+    setSaving(true);
+    try {
+      await saveCvReview(application.id, { score: validated.score, note: noteInput.trim() || undefined });
+      toast.success("CV score saved.");
+      onRefresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to save the CV score.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = async () => {
+    setResetting(true);
+    try {
+      await resetCvReview(application.id);
+      setScoreInput("");
+      setNoteInput("");
+      toast.success("CV score removed.");
+      onRefresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to remove the CV score.");
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  if (!cv) {
+    return <article className="rounded-xl border border-border bg-white p-6">
+      <h3 className="text-lg font-semibold text-primary">CV Review</h3>
+      <p className="mt-2 text-sm text-muted-foreground">No CV has been uploaded for this application. The CV score shows <span className="font-medium text-primary">Not uploaded</span> and the Overall Score shows <span className="font-medium text-primary">Pending CV review</span> until a CV is provided and reviewed.</p>
+    </article>;
+  }
+
+  return <div className="grid gap-6 lg:grid-cols-[minmax(0,68fr)_minmax(260px,32fr)]">
+    <article className="rounded-xl border border-border bg-white p-5 shadow-none sm:p-6">
+      <h3 className="text-lg font-semibold tracking-[-0.02em] text-primary">CV file</h3>
+      <div className="mt-5 rounded-xl border border-border bg-portal-surface px-5 py-4">
+        <div className="flex items-start gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white text-primary"><FileText className="size-4" /></div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-primary" title={cv.originalFilename}>{cv.originalFilename}</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">{formatFileSize(cv.fileSize)} · Uploaded {new Date(cv.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} by {application.fullName}</p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-3 border-t border-border pt-4">
+          <a className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-3.5 py-2 text-[13px] font-medium text-primary transition-colors hover:bg-portal-surface" href={adminCvFileUrl(application.id)} rel="noopener noreferrer" target="_blank"><Eye className="size-3.5" />View CV</a>
+          <a className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-3.5 py-2 text-[13px] font-medium text-primary transition-colors hover:bg-portal-surface" download={cv.originalFilename} href={adminCvFileUrl(application.id, true)}><Download className="size-3.5" />Download CV</a>
+        </div>
+        <p className="mt-3 text-[12px] leading-5 text-muted-foreground">CV files are served through this authenticated Admin route only — never through a public or permanent URL.</p>
+      </div>
+      {review ? <div className="mt-5 border-t border-border pt-4">
+        <p className="text-[12px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">Current review</p>
+        <p className="mt-2 text-sm text-primary">CV Score: <span className="font-semibold">{formatScore(review.score)}</span></p>
+        {review.reviewNote ? <p className="mt-1 text-[13px] text-muted-foreground">{review.reviewNote}</p> : null}
+        <p className="mt-1 text-[12px] text-muted-foreground">Reviewed {new Date(review.reviewedAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+      </div> : null}
+    </article>
+
+    <article className="h-fit rounded-xl border border-border bg-white p-5 shadow-none">
+      <h3 className="text-lg font-semibold text-primary">CV Score</h3>
+      <p className="mt-2 text-[13px] leading-5 text-muted-foreground">Manual score from 0 to 100 based on your review of the CV. This never changes the assessment score.</p>
+      <div className="mt-4">
+        <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="cv-score-input">Score (0–100)</label>
+        <FoundationInput id="cv-score-input" inputMode="decimal" onChange={(e) => { setScoreInput(e.target.value); setFormError(null); }} placeholder="e.g. 82.5" value={scoreInput} />
+      </div>
+      <div className="mt-3">
+        <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="cv-note-input">Note (optional)</label>
+        <FoundationInput id="cv-note-input" onChange={(e) => setNoteInput(e.target.value)} placeholder="Internal review note" value={noteInput} />
+      </div>
+      {formError ? <p className="mt-3 text-[13px] text-status-error-strong">{formError}</p> : null}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <FoundationButton disabled={saving || scoreInput.trim() === ""} onClick={() => { void handleSave(); }} size="sm">{saving ? "Saving…" : review ? "Update CV score" : "Save CV score"}</FoundationButton>
+        {review ? <FoundationButton disabled={resetting} onClick={() => { void handleReset(); }} size="sm" variant="secondary">{resetting ? "Removing…" : "Remove score"}</FoundationButton> : null}
+      </div>
+    </article>
+  </div>;
+}
+
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
 function OverviewTab({ data }: { data: AdminApplicationDetailResponse }) {
@@ -124,6 +252,7 @@ function OverviewTab({ data }: { data: AdminApplicationDetailResponse }) {
         </dl>
       </article>
       <ScreeningEvaluationCard evaluation={evaluation} />
+      <CandidateEvaluationCard data={data} />
     </div>
   </div>;
 }
@@ -265,9 +394,10 @@ export default function AdminCandidatePlaceholder() {
     </article>
 
     <Tabs className="mt-6" defaultValue="overview">
-      <div className="overflow-x-auto pb-1"><TabsList><TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="assessment">Assessment</TabsTrigger><TabsTrigger value="integrity">Integrity & Bonus</TabsTrigger></TabsList></div>
+      <div className="overflow-x-auto pb-1"><TabsList><TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="assessment">Assessment</TabsTrigger><TabsTrigger value="cv">CV Review</TabsTrigger><TabsTrigger value="integrity">Integrity & Bonus</TabsTrigger></TabsList></div>
       <TabsContent value="overview"><OverviewTab data={data} /></TabsContent>
       <TabsContent value="assessment"><AssessmentTab data={data} onRefresh={load} /></TabsContent>
+      <TabsContent value="cv"><CvReviewTab data={data} onRefresh={load} /></TabsContent>
       <TabsContent value="integrity"><IntegrityBonusTab data={data} onRefresh={load} /></TabsContent>
     </Tabs>
   </AdminShell>;

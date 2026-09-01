@@ -69,7 +69,7 @@ export default function ApplicantReviewPlaceholder() {
       })
       .catch((err) => {
         if (err instanceof ApplicationApiError && (err.status === 401 || err.status === 403)) {
-          setLocation("/apply/business-development-officer");
+          setLocation("/apply/business-development-officer/information");
           return;
         }
         setError(err instanceof Error ? err.message : "Unable to load your application for review.");
@@ -94,11 +94,11 @@ export default function ApplicantReviewPlaceholder() {
   };
 
   if (loading) {
-    return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="flex items-center gap-2 py-12 text-muted-foreground"><Loader2 className="size-5 animate-spin" />Loading your review...</div></section></ApplicationShell>;
+    return <ApplicationShell activeStep={3}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="flex items-center gap-2 py-12 text-muted-foreground"><Loader2 className="size-5 animate-spin" />Loading your review...</div></section></ApplicationShell>;
   }
 
   if (error && !reviewData) {
-    return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="text-status-error-strong">{error}</p></div></section></ApplicationShell>;
+    return <ApplicationShell activeStep={3}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="text-status-error-strong">{error}</p></div></section></ApplicationShell>;
   }
 
   const applicant = reviewData?.applicant;
@@ -106,9 +106,9 @@ export default function ApplicantReviewPlaceholder() {
   const responseEntries = Object.entries(assessmentResponses);
 
   return (
-    <ApplicationShell activeStep={2} showSummary submitted={submitted}>
+    <ApplicationShell activeStep={3} showSummary submitted={submitted}>
       <section>
-        <p className="section-kicker">Step 3 of 3</p>
+        <p className="section-kicker">Step 4 of 4</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">{submitted ? "Completed application" : "Review your application"}</h1>
         <p className="mt-3 max-w-2xl text-[15px] leading-7 text-muted-foreground">{submitted ? "This application has been submitted." : "Check the information below before submitting your application for the Business Development Officer role."}</p>
         {submitted ? (
@@ -119,7 +119,7 @@ export default function ApplicantReviewPlaceholder() {
 
         <div className="mt-8 space-y-5">
           {/* Applicant Information */}
-          <ReviewCard actionLabel="Edit" completed={submitted} onAction={() => setLocation("/apply/business-development-officer")} title="Applicant information">
+          <ReviewCard actionLabel="Edit" completed={submitted} onAction={() => setLocation("/apply/business-development-officer/information")} title="Applicant information">
             {applicant ? (
               <dl className="mt-5 grid gap-x-8 gap-y-5 sm:grid-cols-2">
                 <DefinitionItem label="Full name" value={valueOrNotProvided(applicant.fullName)} />

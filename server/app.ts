@@ -18,6 +18,7 @@ import { createAdminAuthRouter } from "./adminAuth";
 import { createAdminApplicationApiRouter } from "./adminApplicationApi";
 import { createApplicationApiRouter } from "./applicationApi";
 import { createAssessmentApiRouter } from "./assessmentApi";
+import { createCvApiRouter } from "./cvApi";
 import { createQuestionBankApiRouter } from "./questionBankApi";
 import { createRecruitmentApiRouter } from "./recruitmentApi";
 
@@ -33,8 +34,8 @@ if (process.env.TRUST_PROXY) {
 }
 // ── Middleware ────────────────────────────────────────────────────────────────
 // 100 KB JSON body limit — sufficient for OPEN review notes, eligibility
-// payloads, and admin mutations. CV/file upload is out of MVP scope; when
-// that arrives, a multipart parser with a separate per-route limit is needed.
+// payloads, and admin mutations. CV uploads use a separate raw-body route
+// with its own 11 MB limit inside the CV router (Task 24G).
 app.use(express.json({ limit: "100kb" }));
 
 // ── Health check ──────────────────────────────────────────────────────────────
@@ -94,6 +95,11 @@ app.use(createAssessmentApiRouter());
 // server-side eligibility, assessment responses, completion and submission.
 // Uses applicant token, not Admin authorization.
 app.use(createApplicationApiRouter());
+
+// CV upload & manual CV review API (Task 24G): applicant upload/replace/
+// remove (applicant token) plus authenticated Admin CV view/download and
+// 0–100 manual scoring. CV bytes live in file storage, never TiDB.
+app.use(createCvApiRouter());
 
 // Admin Application & Scoring API (Task 24D-2): real applications list,
 // candidate detail, OPEN review, integrity flags, bonuses, shortlisting,

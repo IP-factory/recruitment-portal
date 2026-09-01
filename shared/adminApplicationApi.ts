@@ -95,9 +95,28 @@ export interface AdminApplicationSummary {
   finalScore: number | null;
   appliedBand: ScreeningBand | null;
   evaluationStatus: EvaluationStatus | null;
+  /** Task 24G — manually assigned CV score (0–100); null until reviewed. */
+  cvScore: number | null;
+  /** Task 24G — whether the applicant uploaded a CV. */
+  cvUploaded: boolean;
   shortlisted: boolean;
   submittedAt: string | null;
   createdAt: string;
+}
+
+/** Task 24G — applicant-safe CV metadata surfaced to Admin (no storage key). */
+export interface AdminCvFileDetail {
+  originalFilename: string;
+  mimeType: string;
+  fileSize: number;
+  uploadedAt: string;
+}
+
+/** Task 24G — manual CV review record (never part of the assessment engine). */
+export interface AdminCvReviewDetail {
+  score: number;
+  reviewNote: string | null;
+  reviewedAt: string;
 }
 
 export interface AdminApplicationDetail extends AdminApplicationSummary {
@@ -121,6 +140,10 @@ export interface AdminApplicationDetail extends AdminApplicationSummary {
     responsePayload: unknown;
     elapsedSeconds: number | null;
   }>;
+  /** Task 24G — uploaded CV metadata, or null when no CV was uploaded. */
+  cv: AdminCvFileDetail | null;
+  /** Task 24G — saved manual CV review, or null until reviewed. */
+  cvReview: AdminCvReviewDetail | null;
 }
 
 export interface AdminEvaluationDetail {

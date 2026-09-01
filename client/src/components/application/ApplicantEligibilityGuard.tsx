@@ -13,7 +13,7 @@ export function ApplicantEligibilityGuard({ children }: { children: ReactNode })
   useEffect(() => {
     const session = loadApplicantSession();
     if (!session) {
-      setLocation("/apply/business-development-officer");
+      setLocation("/apply/business-development-officer/information");
       return;
     }
     fetchApplication()
@@ -28,7 +28,7 @@ export function ApplicantEligibilityGuard({ children }: { children: ReactNode })
       })
       .catch((error) => {
         if (error instanceof ApplicationApiError && (error.status === 401 || error.status === 403)) {
-          setLocation("/apply/business-development-officer");
+          setLocation("/apply/business-development-officer/information");
         } else {
           // Allow the page to render — it will handle its own error state
           setAllowed(true);

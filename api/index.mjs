@@ -10,7 +10,7 @@ var __export = (target, all) => {
 
 // drizzle/schema.ts
 import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, tinyint, uniqueIndex, index } from "drizzle-orm/mysql-core";
-var users, adminProfiles, authSessions, recruitmentRoles, eligibilityGates, assessmentDimensions, assessmentQuestions, questionOptions, questionTypeConfigs, numericQuestionConfigs, numericScoringBands, openQuestionConfigs, openRubricAnchors, questionEvidenceLinks, assessmentCrossChecks, assessments, assessmentQuestionAssignments, screeningConfigurations, screeningVerificationMultipliers, screeningBonusCriteria, screeningBands, dimensionFloorRules, applications, applicationEligibilityResponses, assessmentAttempts, assessmentResponses, openResponseReviews, applicationIntegrityFlags, applicationBonusReviews, applicationEvaluations, applicationDimensionScores, applicationShortlist;
+var users, adminProfiles, authSessions, recruitmentRoles, eligibilityGates, assessmentDimensions, assessmentQuestions, questionOptions, questionTypeConfigs, numericQuestionConfigs, numericScoringBands, openQuestionConfigs, openRubricAnchors, questionEvidenceLinks, assessmentCrossChecks, assessments, assessmentQuestionAssignments, screeningConfigurations, screeningVerificationMultipliers, screeningBonusCriteria, screeningBands, dimensionFloorRules, applications, applicationEligibilityResponses, assessmentAttempts, assessmentResponses, openResponseReviews, applicationIntegrityFlags, applicationBonusReviews, applicationEvaluations, applicationDimensionScores, applicationShortlist, applicationCvFiles, applicationCvReviews;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -391,6 +391,31 @@ var init_schema = __esm({
       updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
     }, (table) => ({
       applicationUnique: uniqueIndex("shortlist_app_unique").on(table.applicationId)
+    }));
+    applicationCvFiles = mysqlTable("application_cv_files", {
+      id: varchar("id", { length: 64 }).primaryKey(),
+      applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
+      storageKey: varchar("storage_key", { length: 256 }).notNull(),
+      originalFilename: varchar("original_filename", { length: 320 }).notNull(),
+      mimeType: varchar("mime_type", { length: 120 }).notNull(),
+      fileSize: int("file_size").notNull(),
+      uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+    }, (table) => ({
+      applicationUnique: uniqueIndex("cv_files_app_unique").on(table.applicationId)
+    }));
+    applicationCvReviews = mysqlTable("application_cv_reviews", {
+      id: varchar("id", { length: 64 }).primaryKey(),
+      applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
+      score: decimal("score", { precision: 5, scale: 1 }).notNull(),
+      reviewNote: text("review_note"),
+      reviewedBy: varchar("reviewed_by", { length: 64 }).references(() => adminProfiles.id, { onDelete: "set null" }),
+      reviewedAt: timestamp("reviewed_at").defaultNow().notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
+    }, (table) => ({
+      applicationUnique: uniqueIndex("cv_reviews_app_unique").on(table.applicationId)
     }));
   }
 });
@@ -1558,7 +1583,7 @@ var init_db = __esm({
 
 // server/app.ts
 import mysql2 from "mysql2/promise";
-import express6 from "express";
+import express7 from "express";
 
 // server/adminAuth.ts
 init_schema();
@@ -2569,17 +2594,22 @@ function createAdminApplicationApiRouter() {
         roleTitle: recruitmentRoles.title
       }).from(applications).innerJoin(recruitmentRoles, eq5(applications.roleId, recruitmentRoles.id)).orderBy(desc2(applications.createdAt));
       const appIds = allApps.map((a) => a.id);
-      const [evaluations, shortlists] = appIds.length > 0 ? await Promise.all([
+      const [evaluations, shortlists, cvReviews, cvFiles] = appIds.length > 0 ? await Promise.all([
         db.select().from(applicationEvaluations).where(sql5`${applicationEvaluations.applicationId} IN (${sql5.join(appIds.map((id) => sql5`${id}`), sql5`, `)})`),
-        db.select().from(applicationShortlist).where(sql5`${applicationShortlist.applicationId} IN (${sql5.join(appIds.map((id) => sql5`${id}`), sql5`, `)})`)
-      ]) : [[], []];
+        db.select().from(applicationShortlist).where(sql5`${applicationShortlist.applicationId} IN (${sql5.join(appIds.map((id) => sql5`${id}`), sql5`, `)})`),
+        db.select().from(applicationCvReviews).where(sql5`${applicationCvReviews.applicationId} IN (${sql5.join(appIds.map((id) => sql5`${id}`), sql5`, `)})`),
+        db.select({ applicationId: applicationCvFiles.applicationId }).from(applicationCvFiles).where(sql5`${applicationCvFiles.applicationId} IN (${sql5.join(appIds.map((id) => sql5`${id}`), sql5`, `)})`)
+      ]) : [[], [], [], []];
       const evalMap = new Map(evaluations.map((e) => [e.applicationId, e]));
       const shortlistMap = new Map(shortlists.map((s) => [s.applicationId, s]));
+      const cvReviewMap = new Map(cvReviews.map((r) => [r.applicationId, r]));
+      const cvUploadedSet = new Set(cvFiles.map((f) => f.applicationId));
       const attempts = appIds.length > 0 ? await db.select({ applicationId: assessmentAttempts.applicationId, status: assessmentAttempts.status }).from(assessmentAttempts).where(sql5`${assessmentAttempts.applicationId} IN (${sql5.join(appIds.map((id) => sql5`${id}`), sql5`, `)})`) : [];
       const attemptMap = new Map(attempts.map((a) => [a.applicationId, a.status]));
       const summaryApps = allApps.map((app2) => {
         const evaluation = evalMap.get(app2.id);
         const shortlist = shortlistMap.get(app2.id);
+        const cvReview = cvReviewMap.get(app2.id);
         const attemptStatus = attemptMap.get(app2.id);
         const assessmentStatus = !attemptStatus ? "Pending" : attemptStatus === "Complete" ? "Complete" : "In Progress";
         return {
@@ -2593,6 +2623,8 @@ function createAdminApplicationApiRouter() {
           finalScore: evaluation?.finalScreeningScore ? Number(evaluation.finalScreeningScore) : null,
           appliedBand: evaluation?.appliedBand ?? null,
           evaluationStatus: evaluation?.evaluationStatus ?? null,
+          cvScore: cvReview ? Number(cvReview.score) : null,
+          cvUploaded: cvUploadedSet.has(app2.id),
           shortlisted: shortlist ? shortlist.shortlisted === 1 : false,
           submittedAt: app2.submittedAt?.toISOString() ?? null,
           createdAt: app2.createdAt.toISOString()
@@ -2620,7 +2652,7 @@ function createAdminApplicationApiRouter() {
       }).from(applications).innerJoin(recruitmentRoles, eq5(applications.roleId, recruitmentRoles.id)).where(eq5(applications.id, applicationId)).limit(1);
       if (!appRows) return fail(response, 404, "Application not found.");
       const app2 = appRows.app;
-      const [eligResponses, attempts, evaluation, dimScores, openRevs, intFlags, bonusRevs, shortlistRows] = await Promise.all([
+      const [eligResponses, attempts, evaluation, dimScores, openRevs, intFlags, bonusRevs, shortlistRows, cvFileRows, cvReviewRows] = await Promise.all([
         db.select().from(applicationEligibilityResponses).where(eq5(applicationEligibilityResponses.applicationId, applicationId)).orderBy(asc5(applicationEligibilityResponses.gateReference)),
         db.select().from(assessmentAttempts).where(eq5(assessmentAttempts.applicationId, applicationId)).limit(1),
         db.select().from(applicationEvaluations).where(eq5(applicationEvaluations.applicationId, applicationId)).limit(1),
@@ -2628,7 +2660,9 @@ function createAdminApplicationApiRouter() {
         db.select().from(openResponseReviews).where(eq5(openResponseReviews.applicationId, applicationId)),
         db.select().from(applicationIntegrityFlags).where(eq5(applicationIntegrityFlags.applicationId, applicationId)),
         db.select().from(applicationBonusReviews).where(eq5(applicationBonusReviews.applicationId, applicationId)),
-        db.select().from(applicationShortlist).where(eq5(applicationShortlist.applicationId, applicationId)).limit(1)
+        db.select().from(applicationShortlist).where(eq5(applicationShortlist.applicationId, applicationId)).limit(1),
+        db.select().from(applicationCvFiles).where(eq5(applicationCvFiles.applicationId, applicationId)).limit(1),
+        db.select().from(applicationCvReviews).where(eq5(applicationCvReviews.applicationId, applicationId)).limit(1)
       ]);
       const attempt = attempts[0];
       let candidateResponses = [];
@@ -2760,7 +2794,19 @@ function createAdminApplicationApiRouter() {
           finalScore: evalData?.finalScreeningScore ? Number(evalData.finalScreeningScore) : null,
           appliedBand: evalData?.appliedBand ?? null,
           evaluationStatus: evalData?.evaluationStatus ?? null,
-          shortlisted: shortlistRows.length > 0 && shortlistRows[0].shortlisted === 1
+          shortlisted: shortlistRows.length > 0 && shortlistRows[0].shortlisted === 1,
+          // Task 24G — CV state is separate from the assessment evaluation.
+          cv: cvFileRows[0] ? {
+            originalFilename: cvFileRows[0].originalFilename,
+            mimeType: cvFileRows[0].mimeType,
+            fileSize: cvFileRows[0].fileSize,
+            uploadedAt: cvFileRows[0].uploadedAt.toISOString()
+          } : null,
+          cvReview: cvReviewRows[0] ? {
+            score: Number(cvReviewRows[0].score),
+            reviewNote: cvReviewRows[0].reviewNote,
+            reviewedAt: cvReviewRows[0].reviewedAt.toISOString()
+          } : null
         },
         evaluation: {
           applicationId: app2.id,
@@ -4362,8 +4408,391 @@ function createAssessmentApiRouter() {
   return router;
 }
 
-// server/questionBankApi.ts
+// server/cvApi.ts
+init_schema();
 import express5 from "express";
+import { eq as eq9 } from "drizzle-orm";
+import { randomBytes as randomBytes8 } from "node:crypto";
+
+// shared/cvApi.ts
+var CV_MAX_FILE_SIZE = 10 * 1024 * 1024;
+var CV_ACCEPTED_EXTENSIONS = [".pdf", ".doc", ".docx"];
+var CV_MIME_TYPES = {
+  ".pdf": "application/pdf",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+};
+function cvExtensionOf(filename) {
+  const trimmed = filename.trim().toLowerCase();
+  const dot = trimmed.lastIndexOf(".");
+  if (dot < 0) return "";
+  return trimmed.slice(dot);
+}
+
+// server/cvFileValidation.ts
+var PDF_MAGIC = Buffer.from([37, 80, 68, 70]);
+var OLE2_MAGIC = Buffer.from([208, 207, 17, 224, 161, 177, 26, 225]);
+var ZIP_MAGIC = Buffer.from([80, 75, 3, 4]);
+var EXTENSION_BY_TYPE = {
+  pdf: ".pdf",
+  doc: ".doc",
+  docx: ".docx"
+};
+function detectCvFileType(buffer) {
+  if (buffer.length >= PDF_MAGIC.length && buffer.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC)) return "pdf";
+  if (buffer.length >= OLE2_MAGIC.length && buffer.subarray(0, OLE2_MAGIC.length).equals(OLE2_MAGIC)) return "doc";
+  if (buffer.length >= ZIP_MAGIC.length && buffer.subarray(0, ZIP_MAGIC.length).equals(ZIP_MAGIC)) {
+    const head = buffer.subarray(0, Math.min(buffer.length, 512 * 1024));
+    if (head.includes(Buffer.from("[Content_Types].xml"))) return "docx";
+    return null;
+  }
+  return null;
+}
+function validateCvUpload(buffer, filename) {
+  const cleanName = filename.replace(/^.*[\\/]/, "").trim();
+  if (!cleanName) return { ok: false, error: "The file name is missing." };
+  if (cleanName.length > 320) return { ok: false, error: "The file name is too long." };
+  if (buffer.length === 0) return { ok: false, error: "The selected file is empty." };
+  if (buffer.length > CV_MAX_FILE_SIZE) {
+    return { ok: false, error: "The file is too large. CVs must be 10 MB or smaller." };
+  }
+  const extension = cvExtensionOf(cleanName);
+  if (!CV_ACCEPTED_EXTENSIONS.includes(extension)) {
+    return { ok: false, error: "Unsupported file type. Please upload a PDF, DOC or DOCX file." };
+  }
+  const detected = detectCvFileType(buffer);
+  if (!detected) {
+    return { ok: false, error: "The file contents could not be recognised as a valid CV document." };
+  }
+  if (EXTENSION_BY_TYPE[detected] !== extension) {
+    return { ok: false, error: "The file contents do not match its extension. Please upload a genuine PDF, DOC or DOCX file." };
+  }
+  return { ok: true, mimeType: CV_MIME_TYPES[extension], extension, sanitizedFilename: cleanName };
+}
+
+// server/cvStorage.ts
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+function createLocalCvStorage(directory) {
+  const baseDir = path.resolve(directory ?? process.env.CV_STORAGE_DIR ?? "data/cv-uploads");
+  const resolveKey = (key) => {
+    const resolved = path.resolve(baseDir, key);
+    if (!resolved.startsWith(baseDir + path.sep)) throw new Error("Invalid storage key.");
+    return resolved;
+  };
+  return {
+    async save(key, bytes) {
+      const target = resolveKey(key);
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, bytes);
+    },
+    async read(key) {
+      try {
+        return await readFile(resolveKey(key));
+      } catch (error) {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      }
+    },
+    async remove(key) {
+      await rm(resolveKey(key), { force: true });
+    }
+  };
+}
+function createVercelBlobCvStorage(token) {
+  return {
+    async save(key, bytes) {
+      const { put } = await import("@vercel/blob");
+      await put(key, bytes, { access: "private", token, addRandomSuffix: false });
+    },
+    async read(key) {
+      const { get } = await import("@vercel/blob");
+      try {
+        const result = await get(key, { token, access: "private" });
+        if (!result || !result.stream) return null;
+        const chunks = [];
+        const reader = result.stream.getReader();
+        for (; ; ) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) chunks.push(Buffer.from(value));
+        }
+        return Buffer.concat(chunks);
+      } catch (error) {
+        if (error instanceof Error && error.name === "BlobNotFoundError") return null;
+        throw error;
+      }
+    },
+    async remove(key) {
+      const { del } = await import("@vercel/blob");
+      await del(key, { token });
+    }
+  };
+}
+var cached = null;
+function getCvStorage() {
+  if (cached) return cached;
+  const token = process.env.BLOB_READ_WRITE_TOKEN;
+  cached = token ? createVercelBlobCvStorage(token) : createLocalCvStorage();
+  return cached;
+}
+
+// shared/candidateScore.ts
+function validateCvScoreInput(candidate) {
+  const value = typeof candidate === "string" && candidate.trim() !== "" ? Number(candidate.trim()) : typeof candidate === "number" ? candidate : NaN;
+  if (!Number.isFinite(value)) return { error: "Enter a numeric CV score." };
+  if (value < 0 || value > 100) return { error: "The CV score must be between 0 and 100." };
+  const rounded = Math.round(value * 10) / 10;
+  if (Math.abs(value - rounded) > 1e-9) return { error: "The CV score may have at most one decimal place." };
+  return { score: rounded };
+}
+
+// server/cvApi.ts
+function databaseConfigured5() {
+  return Boolean(process.env.DATABASE_URL);
+}
+function fail4(response, status, error) {
+  response.status(status).json({ ok: false, error });
+}
+function handleRouteError3(context) {
+  return (error, response) => {
+    console.error(`[cv] ${context} failed:`, error instanceof Error ? error.message : String(error));
+    fail4(response, 503, "Unable to process your request.");
+  };
+}
+function generateId3() {
+  return randomBytes8(12).toString("hex");
+}
+async function getDb() {
+  return (await Promise.resolve().then(() => (init_db(), db_exports))).getDatabase();
+}
+async function resolveApplicantApplication(request, response) {
+  const header = request.headers["x-application-token"];
+  const token = typeof header === "string" && header.trim() ? header.trim() : null;
+  if (!token) {
+    fail4(response, 401, "Application access is required.");
+    return null;
+  }
+  try {
+    const application = await findApplicationByToken(token);
+    if (!application) {
+      fail4(response, 403, "Unable to access your application.");
+      return null;
+    }
+    return application;
+  } catch (error) {
+    console.error("[cv] token resolution failed:", error instanceof Error ? error.message : String(error));
+    fail4(response, 503, "Unable to access your application.");
+    return null;
+  }
+}
+function cvChangeAllowed(applicationStatus) {
+  return applicationStatus === "In Progress" || applicationStatus === "Assessment In Progress" || applicationStatus === "Assessment Complete";
+}
+async function loadCvFileRow(applicationId) {
+  const db = await getDb();
+  return (await db.select().from(applicationCvFiles).where(eq9(applicationCvFiles.applicationId, applicationId)).limit(1))[0] ?? null;
+}
+async function loadCvReviewRow(applicationId) {
+  const db = await getDb();
+  return (await db.select().from(applicationCvReviews).where(eq9(applicationCvReviews.applicationId, applicationId)).limit(1))[0] ?? null;
+}
+function toCvMetadata(row) {
+  return {
+    originalFilename: row.originalFilename,
+    mimeType: row.mimeType,
+    fileSize: row.fileSize,
+    uploadedAt: row.uploadedAt.toISOString()
+  };
+}
+function toCvReview(row) {
+  return { score: Number(row.score), reviewNote: row.reviewNote, reviewedAt: row.reviewedAt.toISOString() };
+}
+async function requireAuthorizedAdmin3(request, response) {
+  if (!databaseConfigured5()) {
+    fail4(response, 503, "Unable to load CV data.");
+    return null;
+  }
+  try {
+    const token = readSessionToken(request);
+    const session = token ? await resolveSession(token) : null;
+    const profile = session ? await findAdminProfileForUser(session.user.id) : null;
+    if (!session || !isAdminAuthorized(session.user, profile)) {
+      fail4(response, 401, "Admin authorization is required.");
+      return null;
+    }
+    return profile.id;
+  } catch (error) {
+    console.error("[cv] admin authorization failed:", error instanceof Error ? error.message : String(error));
+    fail4(response, 503, "Unable to load CV data.");
+    return null;
+  }
+}
+function createCvApiRouter() {
+  const router = express5.Router();
+  router.put(
+    "/api/public/applications/me/cv",
+    express5.raw({ type: () => true, limit: "11mb" }),
+    async (request, response) => {
+      if (!databaseConfigured5()) return fail4(response, 503, "Unable to upload your CV.");
+      try {
+        const application = await resolveApplicantApplication(request, response);
+        if (!application) return;
+        if (!cvChangeAllowed(application.applicationStatus)) {
+          return fail4(response, 403, "Your CV can no longer be changed because the application has been submitted.");
+        }
+        const body = request.body;
+        if (!Buffer.isBuffer(body) || body.length === 0) {
+          return fail4(response, 400, "No file was received.");
+        }
+        const filenameHeader = request.headers["x-cv-filename"];
+        const filename = typeof filenameHeader === "string" ? decodeURIComponent(filenameHeader) : "";
+        const validation = validateCvUpload(body, filename);
+        if (!validation.ok) return fail4(response, 400, validation.error);
+        const storage = getCvStorage();
+        const existing = await loadCvFileRow(application.id);
+        const storageKey = `cv/${application.id}/${generateId3()}${validation.extension}`;
+        await storage.save(storageKey, body);
+        const db = await getDb();
+        try {
+          if (existing) {
+            await db.update(applicationCvFiles).set({ storageKey, originalFilename: validation.sanitizedFilename, mimeType: validation.mimeType, fileSize: body.length, uploadedAt: /* @__PURE__ */ new Date() }).where(eq9(applicationCvFiles.id, existing.id));
+            if (existing.storageKey !== storageKey) await storage.remove(existing.storageKey).catch(() => void 0);
+          } else {
+            await db.insert(applicationCvFiles).values({
+              id: generateId3(),
+              applicationId: application.id,
+              storageKey,
+              originalFilename: validation.sanitizedFilename,
+              mimeType: validation.mimeType,
+              fileSize: body.length
+            });
+          }
+        } catch (error) {
+          await storage.remove(storageKey).catch(() => void 0);
+          throw error;
+        }
+        const row = await loadCvFileRow(application.id);
+        if (!row) return fail4(response, 503, "Unable to upload your CV.");
+        response.json({ ok: true, cv: toCvMetadata(row) });
+      } catch (error) {
+        handleRouteError3("upload CV")(error, response);
+      }
+    }
+  );
+  router.get("/api/public/applications/me/cv", async (request, response) => {
+    if (!databaseConfigured5()) return fail4(response, 503, "Unable to load your CV.");
+    try {
+      const application = await resolveApplicantApplication(request, response);
+      if (!application) return;
+      const row = await loadCvFileRow(application.id);
+      response.json({ ok: true, cv: row ? toCvMetadata(row) : null });
+    } catch (error) {
+      handleRouteError3("load CV metadata")(error, response);
+    }
+  });
+  router.delete("/api/public/applications/me/cv", async (request, response) => {
+    if (!databaseConfigured5()) return fail4(response, 503, "Unable to remove your CV.");
+    try {
+      const application = await resolveApplicantApplication(request, response);
+      if (!application) return;
+      if (!cvChangeAllowed(application.applicationStatus)) {
+        return fail4(response, 403, "Your CV can no longer be changed because the application has been submitted.");
+      }
+      const db = await getDb();
+      const existing = await loadCvFileRow(application.id);
+      if (existing) {
+        await db.delete(applicationCvFiles).where(eq9(applicationCvFiles.id, existing.id));
+        await getCvStorage().remove(existing.storageKey).catch(() => void 0);
+      }
+      response.json({ ok: true, cv: null });
+    } catch (error) {
+      handleRouteError3("remove CV")(error, response);
+    }
+  });
+  router.get("/api/admin/applications/:id/cv", async (request, response) => {
+    const adminProfileId = await requireAuthorizedAdmin3(request, response);
+    if (!adminProfileId) return;
+    try {
+      const [cvRow, reviewRow] = await Promise.all([
+        loadCvFileRow(request.params.id),
+        loadCvReviewRow(request.params.id)
+      ]);
+      response.json({
+        ok: true,
+        cv: cvRow ? toCvMetadata(cvRow) : null,
+        review: reviewRow ? toCvReview(reviewRow) : null
+      });
+    } catch (error) {
+      handleRouteError3("admin CV detail")(error, response);
+    }
+  });
+  router.get("/api/admin/applications/:id/cv/file", async (request, response) => {
+    const adminProfileId = await requireAuthorizedAdmin3(request, response);
+    if (!adminProfileId) return;
+    try {
+      const row = await loadCvFileRow(request.params.id);
+      if (!row) return fail4(response, 404, "No CV has been uploaded for this application.");
+      const bytes = await getCvStorage().read(row.storageKey);
+      if (!bytes) return fail4(response, 404, "The CV file could not be found in storage.");
+      const disposition = request.query.download === "1" ? "attachment" : "inline";
+      const asciiName = row.originalFilename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "");
+      response.setHeader("Content-Type", row.mimeType);
+      response.setHeader("Content-Length", bytes.length);
+      response.setHeader("Content-Disposition", `${disposition}; filename="${asciiName}"`);
+      response.setHeader("Cache-Control", "no-store");
+      response.end(bytes);
+    } catch (error) {
+      handleRouteError3("admin CV file")(error, response);
+    }
+  });
+  router.put("/api/admin/applications/:id/cv-review", async (request, response) => {
+    const adminProfileId = await requireAuthorizedAdmin3(request, response);
+    if (!adminProfileId) return;
+    try {
+      const applicationId = request.params.id;
+      const db = await getDb();
+      const application = (await db.select({ id: applications.id }).from(applications).where(eq9(applications.id, applicationId)).limit(1))[0];
+      if (!application) return fail4(response, 404, "Application not found.");
+      const validated = validateCvScoreInput(request.body?.score);
+      if ("error" in validated) return fail4(response, 400, validated.error);
+      const noteRaw = request.body?.note;
+      const note = typeof noteRaw === "string" && noteRaw.trim() ? noteRaw.trim().slice(0, 2e3) : null;
+      const existing = await loadCvReviewRow(applicationId);
+      if (existing) {
+        await db.update(applicationCvReviews).set({ score: String(validated.score), reviewNote: note, reviewedBy: adminProfileId, reviewedAt: /* @__PURE__ */ new Date() }).where(eq9(applicationCvReviews.id, existing.id));
+      } else {
+        await db.insert(applicationCvReviews).values({
+          id: generateId3(),
+          applicationId,
+          score: String(validated.score),
+          reviewNote: note,
+          reviewedBy: adminProfileId
+        });
+      }
+      const row = await loadCvReviewRow(applicationId);
+      if (!row) return fail4(response, 503, "Unable to save the CV review.");
+      response.json({ ok: true, review: toCvReview(row) });
+    } catch (error) {
+      handleRouteError3("save CV review")(error, response);
+    }
+  });
+  router.delete("/api/admin/applications/:id/cv-review", async (request, response) => {
+    const adminProfileId = await requireAuthorizedAdmin3(request, response);
+    if (!adminProfileId) return;
+    try {
+      const db = await getDb();
+      await db.delete(applicationCvReviews).where(eq9(applicationCvReviews.applicationId, request.params.id));
+      response.json({ ok: true, review: null });
+    } catch (error) {
+      handleRouteError3("reset CV review")(error, response);
+    }
+  });
+  return router;
+}
+
+// server/questionBankApi.ts
+import express6 from "express";
 init_questionBankRepository();
 init_questionBankApi();
 var SORT_KEYS = ["reference", "dimension", "type", "qWeight", "status"];
@@ -4372,7 +4801,7 @@ function toPositiveInt(value, fallback) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 function createQuestionBankApiRouter() {
-  const router = express5.Router();
+  const router = express6.Router();
   router.get("/api/admin/questions", requireAuthorizedAdmin2, async (request, response) => {
     try {
       const query = request.query;
@@ -4430,11 +4859,11 @@ function createQuestionBankApiRouter() {
 }
 
 // server/app.ts
-var app = express6();
+var app = express7();
 if (process.env.TRUST_PROXY) {
   app.set("trust proxy", process.env.TRUST_PROXY);
 }
-app.use(express6.json({ limit: "100kb" }));
+app.use(express7.json({ limit: "100kb" }));
 app.get("/api/health/database", async (_req, res) => {
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -4458,6 +4887,7 @@ app.use(createRecruitmentApiRouter());
 app.use(createQuestionBankApiRouter());
 app.use(createAssessmentApiRouter());
 app.use(createApplicationApiRouter());
+app.use(createCvApiRouter());
 app.use(createAdminApplicationApiRouter());
 var app_default = app;
 export {

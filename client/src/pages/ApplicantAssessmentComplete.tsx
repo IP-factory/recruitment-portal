@@ -12,7 +12,7 @@ import { useLocation } from "wouter";
 export default function ApplicantAssessmentComplete() {
   const [, setLocation] = useLocation();
   return (
-    <ApplicationShell activeStep={1}>
+    <ApplicationShell activeStep={2}>
       <section className="mx-auto max-w-[620px] py-10 text-center sm:py-14">
         <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-portal-blue-soft text-primary"><CheckCircle2 className="size-5" /></div>
         <p className="section-kicker mt-5">Assessment complete</p>

@@ -83,7 +83,8 @@ export default function ApplicantInformation() {
           } else if (state.applicationStatus === "Assessment Complete") {
             setLocation(`/apply/${roleSlug}/review`);
           } else {
-            setLocation(`/apply/${roleSlug}/assessment`);
+            // Task 24G — the CV step now sits between Information and Assessment.
+            setLocation(`/apply/${roleSlug}/cv`);
           }
         })
         .catch((err) => {
@@ -153,7 +154,8 @@ export default function ApplicantInformation() {
       if (result.nextStep === "eligibility-closed") {
         setLocation(`/apply/${roleSlug}/eligibility`);
       } else {
-        setLocation(`/apply/${roleSlug}/assessment`);
+        // Task 24G — continue to the CV step before the assessment.
+        setLocation(`/apply/${roleSlug}/cv`);
       }
     } catch (err) {
       if (err instanceof ApplicationApiError) {
@@ -168,7 +170,7 @@ export default function ApplicantInformation() {
 
   return <ApplicationShell activeStep={0} showSummary>
     <section>
-      <p className="section-kicker">Step 1 of 3</p>
+      <p className="section-kicker">Step 1 of 4</p>
       <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">Tell us about yourself</h1>
       <p className="mt-3 max-w-2xl text-[15px] leading-7 text-muted-foreground">Provide the basic contact and professional information we need to begin your application.</p>
       <form className="mt-8 rounded-xl border border-border bg-white p-7 shadow-none sm:p-8" onSubmit={(event) => { event.preventDefault(); continueToAssessment(); }} noValidate>
@@ -198,7 +200,7 @@ export default function ApplicantInformation() {
         {configurationUnavailable ? (
           <div className="mt-9 border-t border-border pt-6"><DataErrorState message={gateConfiguration.error ?? "The role eligibility configuration could not be loaded."} onRetry={gateConfiguration.reload} /></div>
         ) : (
-          <div className="mt-9 flex justify-end border-t border-border pt-6"><FoundationButton className="w-full sm:w-auto" disabled={!hydrated || submitting || gateConfiguration.status === "loading" || eligibilityGates.length === 0} size="lg" type="submit">{submitting ? "Submitting..." : "Continue to Assessment"}</FoundationButton></div>
+          <div className="mt-9 flex justify-end border-t border-border pt-6"><FoundationButton className="w-full sm:w-auto" disabled={!hydrated || submitting || gateConfiguration.status === "loading" || eligibilityGates.length === 0} size="lg" type="submit">{submitting ? "Submitting..." : "Continue to CV"}</FoundationButton></div>
         )}
       </form>
     </section>

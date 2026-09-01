@@ -26,6 +26,8 @@ export type {
   AdminApplicationListResponse,
   AdminApplicationSummary,
   AdminApplicationStatus,
+  AdminCvFileDetail,
+  AdminCvReviewDetail,
   AdminEvaluationDetail,
   EvaluationStatus,
   IntegrityFlagStatus,
@@ -155,5 +157,31 @@ export async function updateApplicationStatus(applicationId: string, input: Upda
   await request<{ ok: true }>(
     `/api/admin/applications/${encodeURIComponent(applicationId)}/status`,
     { ...jsonBody(input), method: "PUT" },
+  );
+}
+
+// ── CV review (Task 24G) ─────────────────────────────────────────────────────────
+// CV scoring is fully separate from the assessment engine: these calls only
+// read/write the application_cv_reviews record.
+
+import type { CvReviewRecord } from "@shared/cvApi";
+
+/** Authenticated proxied CV file URL — never a public/permanent storage URL. */
+export function adminCvFileUrl(applicationId: string, download = false): string {
+  return `/api/admin/applications/${encodeURIComponent(applicationId)}/cv/file${download ? "?download=1" : ""}`;
+}
+
+export async function saveCvReview(applicationId: string, input: { score: number; note?: string }): Promise<CvReviewRecord> {
+  const payload = await request<{ ok: true; review: CvReviewRecord }>(
+    `/api/admin/applications/${encodeURIComponent(applicationId)}/cv-review`,
+    { ...jsonBody(input), method: "PUT" },
+  );
+  return payload.review;
+}
+
+export async function resetCvReview(applicationId: string): Promise<void> {
+  await request<{ ok: true }>(
+    `/api/admin/applications/${encodeURIComponent(applicationId)}/cv-review`,
+    { method: "DELETE" },
   );
 }

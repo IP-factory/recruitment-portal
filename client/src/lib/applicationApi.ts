@@ -189,3 +189,40 @@ export async function fetchReviewData(): Promise<{
 }> {
   return applicationRequest("/api/public/applications/me/review");
 }
+
+// ── CV upload (Task 24G) ──────────────────────────────────────────────────────
+// The file body is sent as raw bytes with the applicant token header; the
+// filename travels in an `x-cv-filename` header because the body is the file.
+
+import type { ApplicantCvResponse } from "@shared/cvApi";
+
+export type { CvFileMetadata as ApplicantCvFileMetadata } from "@shared/cvApi";
+
+export async function fetchApplicantCv(): Promise<ApplicantCvResponse> {
+  return applicationRequest<ApplicantCvResponse>("/api/public/applications/me/cv");
+}
+
+export async function uploadApplicantCv(file: File): Promise<ApplicantCvResponse> {
+  const token = readApplicantToken();
+  if (!token) throw new ApplicationApiError(401, "No active application session.");
+  const response = await fetch("/api/public/applications/me/cv", {
+    method: "PUT",
+    headers: {
+      "X-Application-Token": token,
+      "Content-Type": "application/octet-stream",
+      "x-cv-filename": encodeURIComponent(file.name),
+    },
+    body: file,
+  });
+  let body: unknown = null;
+  try { body = await response.json(); } catch { body = null; }
+  if (!response.ok) {
+    const serverMessage = body && typeof body === "object" && typeof (body as { error?: unknown }).error === "string" ? (body as { error: string }).error : null;
+    throw new ApplicationApiError(response.status, serverMessage ?? "Unable to upload your CV.");
+  }
+  return body as ApplicantCvResponse;
+}
+
+export async function removeApplicantCv(): Promise<ApplicantCvResponse> {
+  return applicationRequest<ApplicantCvResponse>("/api/public/applications/me/cv", { method: "DELETE" });
+}

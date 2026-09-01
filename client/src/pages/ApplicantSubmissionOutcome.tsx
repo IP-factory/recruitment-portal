@@ -32,7 +32,7 @@ export default function ApplicantSubmissionOutcome() {
     setError(null);
     const hasSession = Boolean(loadApplicantSession());
     if (!hasSession) {
-      setLocation("/apply/business-development-officer");
+      setLocation("/apply/business-development-officer/information");
       return;
     }
     let cancelled = false;
@@ -54,7 +54,7 @@ export default function ApplicantSubmissionOutcome() {
       .catch((err) => {
         if (cancelled) return;
         if (err instanceof ApplicationApiError && (err.status === 401 || err.status === 403)) {
-          setLocation("/apply/business-development-officer");
+          setLocation("/apply/business-development-officer/information");
           return;
         }
         setError(err instanceof Error ? err.message : "Unable to load your application status.");
@@ -66,11 +66,11 @@ export default function ApplicantSubmissionOutcome() {
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   if (loading) {
-    return <ApplicationShell activeStep={2} submitted><section className="mx-auto max-w-[620px] py-10 sm:py-14"><DataLoadingState label="Checking your application status" /></section></ApplicationShell>;
+    return <ApplicationShell activeStep={3} submitted><section className="mx-auto max-w-[620px] py-10 sm:py-14"><DataLoadingState label="Checking your application status" /></section></ApplicationShell>;
   }
 
   if (error) {
-    return <ApplicationShell activeStep={2} submitted><section className="mx-auto max-w-[620px] py-10 sm:py-14"><DataErrorState message={error} onRetry={retry} /></section></ApplicationShell>;
+    return <ApplicationShell activeStep={3} submitted><section className="mx-auto max-w-[620px] py-10 sm:py-14"><DataErrorState message={error} onRetry={retry} /></section></ApplicationShell>;
   }
 
   if (outcome === "submitted") return <ApplicantSubmitted />;

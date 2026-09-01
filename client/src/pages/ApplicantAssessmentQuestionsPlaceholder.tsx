@@ -73,7 +73,7 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
       })
       .catch((err) => {
         if (err instanceof ApplicationApiError && (err.status === 401 || err.status === 403)) {
-          setLocation("/apply/business-development-officer");
+          setLocation("/apply/business-development-officer/information");
           return;
         }
         setError(err instanceof Error ? err.message : "Unable to load your assessment.");
@@ -202,21 +202,21 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   if (loading) {
-    return <ApplicationShell activeStep={1}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="flex items-center gap-2 py-12 text-muted-foreground"><Loader2 className="size-5 animate-spin" />Loading your assessment...</div></section></ApplicationShell>;
+    return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="flex items-center gap-2 py-12 text-muted-foreground"><Loader2 className="size-5 animate-spin" />Loading your assessment...</div></section></ApplicationShell>;
   }
 
   if (error) {
-    return <ApplicationShell activeStep={1}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><div className="flex items-center gap-2 text-status-error-strong"><AlertCircle className="size-5" /><p>{error}</p></div><FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer/assessment")} variant="secondary">Back to assessment</FoundationButton></div></section></ApplicationShell>;
+    return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><div className="flex items-center gap-2 text-status-error-strong"><AlertCircle className="size-5" /><p>{error}</p></div><FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer/assessment")} variant="secondary">Back to assessment</FoundationButton></div></section></ApplicationShell>;
   }
 
   if (!question) {
-    return <ApplicationShell activeStep={1}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="section-kicker">Assessment</p><h1 className="mt-3 text-2xl font-semibold tracking-[-0.025em] text-primary">Assessment questions are not available</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">There are no questions assigned to this assessment at present.</p><FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer")} variant="secondary">Return to application</FoundationButton></div></section></ApplicationShell>;
+    return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="section-kicker">Assessment</p><h1 className="mt-3 text-2xl font-semibold tracking-[-0.025em] text-primary">Assessment questions are not available</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">There are no questions assigned to this assessment at present.</p><FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer/information")} variant="secondary">Return to application</FoundationButton></div></section></ApplicationShell>;
   }
 
   const progressPercent = ((currentIndex + 1) / totalQuestions) * 100;
   const timerExpired = question.type === "OPEN" && question.timeLimitSec && timerRemaining !== null && timerRemaining <= 0;
 
-  return <ApplicationShell activeStep={1}>
+  return <ApplicationShell activeStep={2}>
     <section className="mx-auto max-w-[800px] py-3 sm:py-6">
       <div className="flex items-center justify-between gap-4 border-b border-border pb-4">
         <p className="text-sm font-semibold text-primary">Business Development Assessment</p>

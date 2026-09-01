@@ -27,6 +27,7 @@ import AdminAssessmentBuilder from "@/pages/AdminAssessmentBuilder";
 import AdminAssessmentPreview from "@/pages/AdminAssessmentPreview";
 import AdminScreening from "@/pages/AdminScreening";
 import ApplicantInformation from "@/pages/ApplicantInformation";
+import ApplicantRoleIntroduction from "@/pages/ApplicantRoleIntroduction";
 import ApplicantEligibilityCloseout from "@/pages/ApplicantEligibilityCloseout";
 import { ApplicantEligibilityGuard } from "@/components/application/ApplicantEligibilityGuard";
 import Auth from "@/pages/Auth";
@@ -73,9 +74,11 @@ function Router() {
       <Route path="/admin/questions">{() => <AdminRoute><AdminQuestionBank /></AdminRoute>}</Route>
       <Route path="/admin/settings">{() => <AdminRoute><AdminPlaceholder title="Settings" /></AdminRoute>}</Route>
       <Route component={Apply} path="/apply" />
-      <Route component={ApplicantInformation} path="/apply/business-development-officer" />
+      {/* Task 24G — the DB-driven role introduction page precedes the information step. */}
+      <Route component={ApplicantRoleIntroduction} path="/apply/business-development-officer" />
+      <Route component={ApplicantInformation} path="/apply/business-development-officer/information" />
       <Route component={ApplicantEligibilityCloseout} path="/apply/business-development-officer/eligibility" />
-      <Route path="/apply/business-development-officer/cv">{() => <ApplicantEligibilityGuard><Redirect to="/apply/business-development-officer/assessment" /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/business-development-officer/cv">{() => <ApplicantEligibilityGuard><ApplicantCvPlaceholder /></ApplicantEligibilityGuard>}</Route>
       <Route path="/apply/business-development-officer/assessment">{() => <ApplicantEligibilityGuard><ApplicantAssessmentPlaceholder /></ApplicantEligibilityGuard>}</Route>
       <Route path="/apply/business-development-officer/assessment/questions">{() => <ApplicantEligibilityGuard><ApplicantAssessmentQuestionsPlaceholder /></ApplicantEligibilityGuard>}</Route>
       <Route path="/apply/business-development-officer/assessment/complete">{() => <ApplicantEligibilityGuard><ApplicantAssessmentComplete /></ApplicantEligibilityGuard>}</Route>
@@ -87,7 +90,18 @@ function Router() {
       <Route path="/apply/business-development-manager/review"><Redirect to="/apply/business-development-officer/review" /></Route>
       <Route path="/apply/business-development-manager/submitted"><Redirect to="/apply/business-development-officer/submitted" /></Route>
       <Route path="/apply/business-development-manager/cv"><Redirect to="/apply/business-development-officer/cv" /></Route>
+      <Route path="/apply/business-development-manager/information"><Redirect to="/apply/business-development-officer/information" /></Route>
       <Route path="/apply/business-development-manager"><Redirect to="/apply/business-development-officer" /></Route>
+      {/* Task 24G — generic applicant flow for any DB-driven role slug. */}
+      <Route path="/apply/:roleSlug/information">{() => <ApplicantInformation />}</Route>
+      <Route path="/apply/:roleSlug/eligibility">{() => <ApplicantEligibilityCloseout />}</Route>
+      <Route path="/apply/:roleSlug/cv">{() => <ApplicantEligibilityGuard><ApplicantCvPlaceholder /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/:roleSlug/assessment">{() => <ApplicantEligibilityGuard><ApplicantAssessmentPlaceholder /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/:roleSlug/assessment/questions">{() => <ApplicantEligibilityGuard><ApplicantAssessmentQuestionsPlaceholder /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/:roleSlug/assessment/complete">{() => <ApplicantEligibilityGuard><ApplicantAssessmentComplete /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/:roleSlug/review">{() => <ApplicantEligibilityGuard><ApplicantReviewPlaceholder /></ApplicantEligibilityGuard>}</Route>
+      <Route path="/apply/:roleSlug/submitted">{() => <ApplicantSubmissionOutcome />}</Route>
+      <Route path="/apply/:roleSlug">{() => <ApplicantRoleIntroduction />}</Route>
       <Route component={Auth} path="/auth" />
       <Route component={AuthSignIn} path="/auth/sign-in" />
       <Route component={AuthCreateAccount} path="/auth/create-account" />

@@ -15,6 +15,8 @@ import { isAdminAuthorized } from "../shared/adminAuth";
 import {
   applications,
   applicationBonusReviews,
+  applicationCvFiles,
+  applicationCvReviews,
   applicationDimensionScores,
   applicationEvaluations,
   applicationIntegrityFlags,
@@ -152,13 +154,17 @@ export function createAdminApplicationApiRouter(): Router {
 
       // Load evaluations and shortlist status
       const appIds = allApps.map((a) => a.id);
-      const [evaluations, shortlists] = appIds.length > 0 ? await Promise.all([
+      const [evaluations, shortlists, cvReviews, cvFiles] = appIds.length > 0 ? await Promise.all([
         db.select().from(applicationEvaluations).where(sql`${applicationEvaluations.applicationId} IN (${sql.join(appIds.map((id) => sql`${id}`), sql`, `)})`),
         db.select().from(applicationShortlist).where(sql`${applicationShortlist.applicationId} IN (${sql.join(appIds.map((id) => sql`${id}`), sql`, `)})`),
-      ]) : [[], []];
+        db.select().from(applicationCvReviews).where(sql`${applicationCvReviews.applicationId} IN (${sql.join(appIds.map((id) => sql`${id}`), sql`, `)})`),
+        db.select({ applicationId: applicationCvFiles.applicationId }).from(applicationCvFiles).where(sql`${applicationCvFiles.applicationId} IN (${sql.join(appIds.map((id) => sql`${id}`), sql`, `)})`),
+      ]) : [[], [], [], []];
 
       const evalMap = new Map(evaluations.map((e) => [e.applicationId, e]));
       const shortlistMap = new Map(shortlists.map((s) => [s.applicationId, s]));
+      const cvReviewMap = new Map(cvReviews.map((r) => [r.applicationId, r]));
+      const cvUploadedSet = new Set(cvFiles.map((f) => f.applicationId));
 
       // Determine assessment status per application
       const attempts = appIds.length > 0 ? await db
@@ -171,6 +177,7 @@ export function createAdminApplicationApiRouter(): Router {
       const summaryApps: AdminApplicationSummary[] = allApps.map((app) => {
         const evaluation = evalMap.get(app.id);
         const shortlist = shortlistMap.get(app.id);
+        const cvReview = cvReviewMap.get(app.id);
         const attemptStatus = attemptMap.get(app.id);
         const assessmentStatus = !attemptStatus ? "Pending" : attemptStatus === "Complete" ? "Complete" : "In Progress";
         return {
@@ -184,6 +191,8 @@ export function createAdminApplicationApiRouter(): Router {
           finalScore: evaluation?.finalScreeningScore ? Number(evaluation.finalScreeningScore) : null,
           appliedBand: (evaluation?.appliedBand as ScreeningBand | null) ?? null,
           evaluationStatus: (evaluation?.evaluationStatus as EvaluationStatus | null) ?? null,
+          cvScore: cvReview ? Number(cvReview.score) : null,
+          cvUploaded: cvUploadedSet.has(app.id),
           shortlisted: shortlist ? shortlist.shortlisted === 1 : false,
           submittedAt: app.submittedAt?.toISOString() ?? null,
           createdAt: app.createdAt.toISOString(),
@@ -225,7 +234,7 @@ export function createAdminApplicationApiRouter(): Router {
       const app = appRows.app;
 
       // Load related data
-      const [eligResponses, attempts, evaluation, dimScores, openRevs, intFlags, bonusRevs, shortlistRows] = await Promise.all([
+      const [eligResponses, attempts, evaluation, dimScores, openRevs, intFlags, bonusRevs, shortlistRows, cvFileRows, cvReviewRows] = await Promise.all([
         db.select().from(applicationEligibilityResponses).where(eq(applicationEligibilityResponses.applicationId, applicationId)).orderBy(asc(applicationEligibilityResponses.gateReference)),
         db.select().from(assessmentAttempts).where(eq(assessmentAttempts.applicationId, applicationId)).limit(1),
         db.select().from(applicationEvaluations).where(eq(applicationEvaluations.applicationId, applicationId)).limit(1),
@@ -234,6 +243,8 @@ export function createAdminApplicationApiRouter(): Router {
         db.select().from(applicationIntegrityFlags).where(eq(applicationIntegrityFlags.applicationId, applicationId)),
         db.select().from(applicationBonusReviews).where(eq(applicationBonusReviews.applicationId, applicationId)),
         db.select().from(applicationShortlist).where(eq(applicationShortlist.applicationId, applicationId)).limit(1),
+        db.select().from(applicationCvFiles).where(eq(applicationCvFiles.applicationId, applicationId)).limit(1),
+        db.select().from(applicationCvReviews).where(eq(applicationCvReviews.applicationId, applicationId)).limit(1),
       ]);
 
       // Load assessment responses with question info
@@ -402,6 +413,22 @@ export function createAdminApplicationApiRouter(): Router {
           appliedBand: (evalData?.appliedBand as ScreeningBand | null) ?? null,
           evaluationStatus: (evalData?.evaluationStatus as EvaluationStatus | null) ?? null,
           shortlisted: shortlistRows.length > 0 && shortlistRows[0].shortlisted === 1,
+          // Task 24G — CV state is separate from the assessment evaluation.
+          cv: cvFileRows[0]
+            ? {
+                originalFilename: cvFileRows[0].originalFilename,
+                mimeType: cvFileRows[0].mimeType,
+                fileSize: cvFileRows[0].fileSize,
+                uploadedAt: cvFileRows[0].uploadedAt.toISOString(),
+              }
+            : null,
+          cvReview: cvReviewRows[0]
+            ? {
+                score: Number(cvReviewRows[0].score),
+                reviewNote: cvReviewRows[0].reviewNote,
+                reviewedAt: cvReviewRows[0].reviewedAt.toISOString(),
+              }
+            : null,
         },
         evaluation: {
           applicationId: app.id,

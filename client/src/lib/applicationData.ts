@@ -4,7 +4,8 @@
 export const BUSINESS_DEVELOPMENT_OFFICER = "Business Development Officer";
 /** Legacy export retained for existing imports while visible copy migrates to Officer. */
 export const BUSINESS_DEVELOPMENT_MANAGER = BUSINESS_DEVELOPMENT_OFFICER;
-export const APPLICATION_STEPS = ["Information", "Assessment", "Review"] as const;
+/** Task 24G — the CV step sits between Information and Assessment. */
+export const APPLICATION_STEPS = ["Information", "CV", "Assessment", "Review"] as const;
 export const APPLICATION_INFORMATION_STORAGE_KEY = "recruitment-portal:bdm:applicant-information";
 export const CV_FILE_METADATA_STORAGE_KEY = "recruitment-portal:bdm:cv-file-metadata";
 import type { ApplicantEligibilityAnswers } from "@shared/applicationApi";
