@@ -1,7 +1,7 @@
 /**
  * Quiet Authority application shell: a focused, rule-led workspace that deliberately replaces public-site chrome during an active application.
  */
-import { AlignmentMark } from "@/components/foundation/navigation";
+import { AlignmentMark, BrandLogo } from "@/components/foundation/navigation";
 import { ProgressStepper, StatusBadge } from "@/components/foundation/ui";
 import { APPLICATION_STEPS, BUSINESS_DEVELOPMENT_MANAGER } from "@/lib/applicationData";
 import { Check, ChevronLeft } from "lucide-react";
@@ -11,7 +11,7 @@ function ApplicationHeader() {
   return (
     <header className="h-[72px] border-b border-border bg-white">
       <div className="portal-container flex h-full items-center justify-between">
-        <div className="flex min-w-0 items-center gap-3 text-primary"><a aria-label="Recruitment Portal home" className="flex items-center gap-2.5" href="/"><AlignmentMark /><span className="whitespace-nowrap text-[15px] font-semibold tracking-[-0.02em]">Recruitment Portal</span></a><span className="hidden h-5 w-px bg-border sm:block" /><span className="hidden truncate text-sm text-muted-foreground sm:block">{BUSINESS_DEVELOPMENT_MANAGER}</span></div>
+        <div className="flex min-w-0 items-center gap-3"><a aria-label="Xceptional by IPFactory home" className="flex items-center" href="/"><BrandLogo className="max-h-8" /></a><span className="hidden h-5 w-px bg-border sm:block" /><span className="hidden truncate text-sm text-muted-foreground sm:block">{BUSINESS_DEVELOPMENT_MANAGER}</span></div>
         <a className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary" href="/apply"><ChevronLeft className="size-4" />Exit application</a>
       </div>
     </header>

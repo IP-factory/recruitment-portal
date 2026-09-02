@@ -31,7 +31,7 @@ export default function AdminRoles() {
   const resetFilters = () => { setSearch(""); setStatusFilter("all"); };
   const openRoles = roles.filter((role) => role.status === "Open").length;
   const draftRoles = roles.filter((role) => role.status === "Draft").length;
-  return <AdminShell title="Recruitment Roles"><section className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[12px] font-medium text-muted-foreground">Recruitment setup</p><h2 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-primary">Recruitment Roles</h2><p className="mt-2 max-w-2xl text-[15px] leading-6 text-muted-foreground">Create and manage the roles applicants can apply for through the recruitment portal.</p></div><FoundationButton onClick={() => setLocation("/admin/roles/new")}>Create role</FoundationButton></section>
+  return <AdminShell title="Recruitment Roles"><section className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[12px] font-medium text-muted-foreground">Recruitment setup</p><h2 className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-primary">Recruitment Roles</h2><p className="mt-2 max-w-2xl text-[15px] leading-6 text-muted-foreground">Create and manage the roles applicants can apply for through this platform.</p></div><FoundationButton onClick={() => setLocation("/admin/roles/new")}>Create role</FoundationButton></section>
     {status === "loading" ? <div className="mt-6"><DataLoadingState label="Loading recruitment roles" /></div>
       : status === "error" ? <div className="mt-6"><DataErrorState message={error ?? "Unable to load recruitment roles."} onRetry={reload} /></div>
       : <>

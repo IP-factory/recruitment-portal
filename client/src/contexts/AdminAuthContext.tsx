@@ -5,7 +5,7 @@
  * resolves the real server session before rendering anything protected, so
  * protected content never flashes while the session is unresolved.
  */
-import { AlignmentMark } from "@/components/foundation/navigation";
+import { AlignmentMark, BrandLogo } from "@/components/foundation/navigation";
 import { FoundationButton } from "@/components/foundation/ui";
 import { isAdminProtectedPath, resolveAdminLoginRedirect, resolveAdminRouteAccess, sanitizeAdminReturnPath } from "@/lib/adminAuthGuards";
 import { clearLegacyDemoSession, fetchAdminSessionPayload, invalidateAdminSessionCache, LOADING_ADMIN_SESSION, requestAdminSignIn, requestAdminSignOut, toAdminSessionState, UNAUTHENTICATED_ADMIN_SESSION, type AdminSessionState } from "@/lib/adminSession";
@@ -64,8 +64,8 @@ export function useAdminSession(): AdminAuthContextValue {
 function AdminSessionResolving() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-portal-surface p-5">
-      <div className="flex flex-col items-center gap-3 text-primary" role="status">
-        <AlignmentMark />
+      <div className="flex flex-col items-center gap-4" role="status">
+        <BrandLogo className="max-h-9" />
         <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Verifying session</p>
       </div>
     </main>
@@ -79,9 +79,9 @@ function AdminAccessUnavailable() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-portal-surface p-5 sm:p-8">
       <section className="w-full max-w-[450px] rounded-xl border border-border bg-white p-7 shadow-[0_2px_10px_rgba(16,24,40,0.04)] sm:p-8">
-        <div className="flex items-center gap-2.5 text-primary"><AlignmentMark /><span className="text-[15px] font-semibold tracking-[-0.02em]">Recruitment Portal</span></div>
+        <div className="flex items-center gap-2.5"><BrandLogo className="max-h-8" /></div>
         <h1 className="mt-7 text-3xl font-semibold tracking-[-0.035em] text-primary">Access unavailable</h1>
-        <p className="mt-3 text-[15px] leading-7 text-muted-foreground">Your account does not currently have access to the recruitment administration portal.</p>
+        <p className="mt-3 text-[15px] leading-7 text-muted-foreground">Your account does not currently have access to the Xceptional by IPFactory administration workspace.</p>
         <FoundationButton className="mt-8 w-full" onClick={() => { void signOut().then(() => setLocation("/admin/login")); }} size="lg" type="button">Sign out</FoundationButton>
       </section>
     </main>

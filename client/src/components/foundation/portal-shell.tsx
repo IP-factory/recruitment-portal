@@ -3,7 +3,7 @@
  */
 import { Bell, BriefcaseBusiness, ChevronDown, LayoutDashboard, Settings } from "lucide-react";
 import { toast } from "sonner";
-import { AlignmentMark } from "./navigation";
+import { AlignmentMark, BrandLogo } from "./navigation";
 
 const processAccent = "/manus-storage/recruitment-portal-process-accent_d92d6697.png";
 
@@ -19,7 +19,7 @@ export function PortalShell() {
     <div className="min-h-screen bg-portal-surface lg:flex">
       <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-white lg:flex">
         <div className="flex h-[72px] items-center border-b border-border px-6">
-          <a className="flex items-center gap-2.5 text-primary" href="/ui-kit"><AlignmentMark /><span className="text-[15px] font-semibold tracking-[-0.02em]">Recruitment Portal</span></a>
+          <a className="flex items-center" href="/ui-kit"><BrandLogo className="max-h-8" /></a>
         </div>
         <nav className="flex-1 px-3 py-5" aria-label="Internal portal navigation">
           <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Workspace</p>
@@ -28,14 +28,14 @@ export function PortalShell() {
           </div>
         </nav>
         <button className="m-3 flex items-center gap-3 rounded-lg border border-border p-3 text-left hover:bg-portal-surface" onClick={() => placeholder("Profile settings")} type="button">
-          <span className="flex size-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">RP</span>
+          <span className="flex size-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">XP</span>
           <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-foreground">Portal User</span><span className="block truncate text-xs text-muted-foreground">user@company.com</span></span>
           <ChevronDown className="size-4 text-muted-foreground" />
         </button>
       </aside>
       <div className="min-w-0 flex-1">
         <header className="flex h-[72px] items-center justify-between border-b border-border bg-white px-5 sm:px-8">
-          <div className="flex items-center gap-3 lg:hidden"><AlignmentMark /><span className="text-[15px] font-semibold text-primary">Recruitment Portal</span></div>
+          <div className="flex items-center gap-3 lg:hidden"><BrandLogo className="max-h-8" /></div>
           <p className="hidden text-sm font-medium text-muted-foreground lg:block">Portal workspace</p>
           <button aria-label="Notifications" className="rounded-lg p-2 text-muted-foreground hover:bg-portal-surface hover:text-primary" onClick={() => placeholder("Notifications")} type="button"><Bell className="size-5" /></button>
         </header>

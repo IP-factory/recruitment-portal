@@ -1,5 +1,5 @@
 /**
- * Quiet Authority UI kit: an asymmetrical dossier-style review page for reusable recruitment portal components.
+ * Quiet Authority UI kit: an asymmetrical dossier-style review page for reusable Xceptional by IPFactory components.
  */
 import { PublicFooter, PublicNavigation } from "@/components/foundation/navigation";
 import {
@@ -55,7 +55,7 @@ export default function UiKit() {
           <div className="portal-container relative grid min-h-[260px] items-end gap-8 py-12 sm:py-14 lg:grid-cols-[145px_minmax(0,1fr)] lg:py-16">
             <aside className="hidden self-stretch border-r border-border pr-6 lg:block"><span className="section-kicker">Design reference</span></aside>
             <div className="max-w-3xl">
-              <span className="section-kicker">Recruitment Portal / v0.1</span>
+              <span className="section-kicker">Xceptional by IPFactory / v0.1</span>
               <h1 className="mt-3 text-[38px] font-semibold leading-[1.08] tracking-[-0.045em] text-primary sm:text-[42px]">Platform Foundation</h1>
               <p className="mt-4 max-w-2xl text-[15px] leading-7 text-muted-foreground">A reusable visual system for a structured recruitment application and assessment platform. This review page contains presentation-only component examples; no applicant or platform functionality is included.</p>
               <div className="mt-7 flex flex-wrap gap-3"><FoundationButton onClick={() => notify("Start Application")}>Start Application <ChevronRight className="size-4" /></FoundationButton><FoundationButton onClick={() => notify("Component reference")} variant="secondary">Component reference</FoundationButton><a className="inline-flex items-center gap-1.5 self-center text-sm font-medium text-portal-blue hover:text-primary hover:underline" href="/portal">View portal shell <ExternalLink className="size-3.5" /></a></div>

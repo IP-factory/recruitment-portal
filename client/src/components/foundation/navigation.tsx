@@ -7,6 +7,32 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { FoundationButton } from "./ui";
 
+const BRAND_NAME = "Xceptional by IPFactory";
+const LOGO_SRC = "/IPF_logo_transparent_original_size.png";
+
+/**
+ * IPFactory logo mark. Falls back to the text brand name if the image fails
+ * to load so the header/layout never breaks due to a missing asset.
+ */
+export function BrandLogo({ className = "" }: { className?: string }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  if (imgFailed) {
+    return (
+      <span className={`text-[15px] font-semibold tracking-[-0.02em] text-primary ${className}`}>
+        {BRAND_NAME}
+      </span>
+    );
+  }
+  return (
+    <img
+      alt={BRAND_NAME}
+      className={`max-h-8 w-auto shrink-0 object-contain ${className}`}
+      onError={() => setImgFailed(true)}
+      src={LOGO_SRC}
+    />
+  );
+}
+
 export function AlignmentMark({ className = "" }: { className?: string }) {
   return (
     <span aria-hidden="true" className={`relative block size-7 shrink-0 text-primary ${className}`}>
@@ -26,9 +52,8 @@ export function PublicNavigation() {
   return (
     <header className="border-b border-border bg-white">
       <div className="portal-container flex h-[72px] items-center justify-between">
-        <a aria-label="Recruitment Portal home" className="flex items-center gap-2.5 text-primary" href="/">
-          <AlignmentMark />
-          <span className="text-[15px] font-semibold tracking-[-0.02em]">Recruitment Portal</span>
+        <a aria-label={`${BRAND_NAME} home`} className="flex items-center" href="/">
+          <BrandLogo />
         </a>
         <nav aria-label="Public navigation" className="hidden items-center gap-6 md:flex">
           <a className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary" href="/">Home</a>
@@ -58,14 +83,14 @@ export function PublicFooter() {
       <div className="portal-container py-12 sm:py-14">
         <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div className="flex items-center gap-2.5 text-primary"><AlignmentMark className="size-6" /><span className="text-sm font-semibold">Recruitment Portal</span></div>
+            <BrandLogo className="max-h-7" />
             <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">A structured recruitment application and assessment platform.</p>
           </div>
           <nav aria-label="Footer navigation" className="flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-muted-foreground">
             {['Privacy', 'Terms', 'Contact'].map((item) => <button className="hover:text-primary" key={item} onClick={() => placeholder(item)} type="button">{item}</button>)}
           </nav>
         </div>
-        <div className="mt-10 border-t border-border pt-5 text-[13px] text-muted-foreground">© 2026 Recruitment Portal. All rights reserved.</div>
+        <div className="mt-10 border-t border-border pt-5 text-[13px] text-muted-foreground">© 2026 {BRAND_NAME}. All rights reserved.</div>
       </div>
     </footer>
   );

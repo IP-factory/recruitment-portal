@@ -1,7 +1,7 @@
 /**
  * Quiet Authority admin shell: a structured, desktop-sidebar workspace that contracts into a deliberate mobile navigation drawer.
  */
-import { AlignmentMark } from "@/components/foundation/navigation";
+import { AlignmentMark, BrandLogo } from "@/components/foundation/navigation";
 import { FoundationButton } from "@/components/foundation/ui";
 import { useAdminSession } from "@/contexts/AdminAuthContext";
 import { resolveAdminDisplayEmail, resolveAdminDisplayName } from "@/lib/adminSession";
@@ -20,7 +20,14 @@ const navigation = [
 ] as const;
 
 function BrandLockup() {
-  return <div className="flex items-center gap-2.5 text-primary"><AlignmentMark /><div><p className="text-[15px] font-semibold tracking-[-0.02em]">Recruitment Portal</p><p className="mt-0.5 text-[12px] text-muted-foreground">Admin Workspace</p></div></div>;
+  return (
+    <div className="flex items-center gap-2.5">
+      <BrandLogo className="max-h-8" />
+      <div>
+        <p className="mt-0.5 text-[12px] text-muted-foreground">Admin Workspace</p>
+      </div>
+    </div>
+  );
 }
 
 function NavigationList({ location, navigate, close }: { location: string; navigate: (href: string) => void; close?: () => void }) {

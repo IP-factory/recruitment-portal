@@ -1,7 +1,7 @@
 /**
  * Quiet Authority auth shell: a focused, form-led applicant access layout using quiet process context rather than the public navigation.
  */
-import { AlignmentMark } from "@/components/foundation/navigation";
+import { AlignmentMark, BrandLogo } from "@/components/foundation/navigation";
 import { Check, ChevronLeft, FileCheck2, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -15,7 +15,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-white text-foreground lg:flex">
       <aside className="hidden min-h-screen w-[42%] flex-col bg-portal-surface px-10 py-9 lg:flex xl:px-14">
-        <a aria-label="Recruitment Portal home" className="flex items-center gap-2.5 text-primary" href="/"><AlignmentMark /><span className="text-[15px] font-semibold tracking-[-0.02em]">Recruitment Portal</span></a>
+        <a aria-label="Xceptional by IPFactory home" className="flex items-center" href="/"><BrandLogo className="max-h-8" /></a>
         <div className="flex flex-1 items-center">
           <div className="max-w-sm">
             <p className="section-kicker">Application Portal</p>
@@ -29,7 +29,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
       </aside>
       <main className="min-h-screen flex-1 bg-white">
         <header className="flex items-center justify-between px-5 py-5 sm:px-8 lg:px-10 lg:py-8">
-          <a aria-label="Recruitment Portal home" className="flex items-center gap-2.5 text-primary lg:hidden" href="/"><AlignmentMark /><span className="text-[15px] font-semibold tracking-[-0.02em]">Recruitment Portal</span></a>
+          <a aria-label="Xceptional by IPFactory home" className="flex items-center lg:hidden" href="/"><BrandLogo className="max-h-8" /></a>
           <span className="hidden lg:block" />
           <a className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary" href="/apply"><ChevronLeft className="size-4" />Back to opportunities</a>
         </header>
