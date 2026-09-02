@@ -196,10 +196,17 @@ export async function createApplication(
     email: normalizeEmail(input.email),
     phone: input.phone,
     city: input.city,
-    recentRole: input.recentRole,
-    recentEmployer: input.recentEmployer || null,
+    // currentStatus is stored in the recentRole column for backward-compat.
+    // The recentRole column is NOT NULL so new applications always write a value.
+    recentRole: input.currentStatus,
+    // currentStatusOther (only set when status is "Other") goes into recentEmployer.
+    // The column is nullable so it is fine to store null for non-Other statuses.
+    recentEmployer: input.currentStatusOther || null,
     totalExperience: input.totalExperience,
-    relevantExperience: input.relevantExperience,
+    // relevantExperience is no longer collected from the form; the BD experience
+    // gate is now answered directly in the eligibility section. Pass the empty
+    // string through for new applications; historical values are preserved.
+    relevantExperience: input.relevantExperience || "",
     linkedinUrl: input.linkedinUrl || null,
     eligibilityStatus,
     applicationStatus,
@@ -289,11 +296,19 @@ export async function buildApplicationState(application: typeof applications.$in
       email: application.email,
       phone: application.phone,
       city: application.city,
+      // currentStatus / currentStatusOther are the new fields for applications
+      // created after this change. The recentRole / recentEmployer columns
+      // continue to hold the data; we surface both shapes so consumers can
+      // display whichever is appropriate for the record's era.
+      currentStatus: application.recentRole,
+      currentStatusOther: application.recentEmployer ?? "",
+      totalExperience: application.totalExperience,
+      linkedinUrl: application.linkedinUrl ?? "",
+      // Legacy fields — populated from the same columns for backward-compat
+      // so that historical records and the review page still render correctly.
       recentRole: application.recentRole,
       recentEmployer: application.recentEmployer ?? "",
-      totalExperience: application.totalExperience,
       relevantExperience: application.relevantExperience,
-      linkedinUrl: application.linkedinUrl ?? "",
     },
     eligibility: {
       gates: eligibilityRows.map((row) => ({

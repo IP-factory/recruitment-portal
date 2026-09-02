@@ -122,9 +122,26 @@ export interface AdminCvReviewDetail {
 export interface AdminApplicationDetail extends AdminApplicationSummary {
   phone: string;
   city: string;
+  /**
+   * New: current employment/career status (stored in the recent_role column).
+   * For applications created after the form update this holds a status option
+   * such as "Currently employed". For historical records it holds the old
+   * freetext job title. Use currentStatus for display; fall back to recentRole
+   * for compatibility when rendering historical records.
+   */
+  currentStatus: string;
+  /**
+   * New: free-text detail when currentStatus is "Other" (stored in
+   * recent_employer column). For historical records recentEmployer holds the
+   * old employer name. Both are surfaced so consumers can decide which to show.
+   */
+  currentStatusOther: string | null;
+  /** Legacy alias — same value as currentStatus; retained for backward-compat. */
   recentRole: string;
+  /** Legacy alias — same value as currentStatusOther; retained for backward-compat. */
   recentEmployer: string | null;
   totalExperience: string;
+  /** Historical BD experience field — no longer collected for new applications. */
   relevantExperience: string;
   linkedinUrl: string | null;
   eligibilityResponses: Array<{

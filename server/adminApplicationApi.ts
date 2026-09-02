@@ -392,8 +392,13 @@ export function createAdminApplicationApiRouter(): Router {
           email: app.email,
           phone: app.phone,
           city: app.city,
+          // currentStatus / currentStatusOther are the new field names.
+          // The underlying DB columns are recent_role / recent_employer —
+          // both aliases are returned so the UI can render either era correctly.
+          currentStatus: app.recentRole,
+          currentStatusOther: app.recentEmployer ?? null,
           recentRole: app.recentRole,
-          recentEmployer: app.recentEmployer,
+          recentEmployer: app.recentEmployer ?? null,
           totalExperience: app.totalExperience,
           relevantExperience: app.relevantExperience,
           linkedinUrl: app.linkedinUrl,

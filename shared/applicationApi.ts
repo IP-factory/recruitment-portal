@@ -34,11 +34,27 @@ export interface CreateApplicationInput {
   email: string;
   phone: string;
   city: string;
-  recentRole: string;
-  recentEmployer: string;
+  /**
+   * Current employment/career status. Replaces the old freetext job-title
+   * field. Must be one of the configured status options or "Other".
+   * Stored in the `recent_role` column for backward-compatibility.
+   */
+  currentStatus: string;
+  /**
+   * Free-text specification when currentStatus is "Other".
+   * Optional — only collected when currentStatus === "Other".
+   * Stored in the `recent_employer` column for backward-compatibility.
+   */
+  currentStatusOther: string;
   totalExperience: string;
-  relevantExperience: string;
   linkedinUrl: string;
+  /**
+   * The `relevant_experience` column is no longer collected via the
+   * Professional Information form; BD experience is now a live eligibility
+   * gate answer. Pass an empty string for new applications; the column is
+   * kept in the DB so historical records remain readable.
+   */
+  relevantExperience: string;
   /** Generic per-gate answers keyed by gate reference (e.g. "G1"). */
   eligibility: ApplicantEligibilityAnswers;
 }
@@ -95,11 +111,20 @@ export interface ApplicationState {
     email: string;
     phone: string;
     city: string;
-    recentRole: string;
-    recentEmployer: string;
+    /** New: current employment/career status (written to recent_role column). */
+    currentStatus: string;
+    /** New: free-text detail when currentStatus is "Other" (written to recent_employer column). */
+    currentStatusOther: string;
     totalExperience: string;
-    relevantExperience: string;
     linkedinUrl: string;
+    /**
+     * Legacy: populated for historical records that used the old job-title field.
+     * New applications write currentStatus into this slot and currentStatusOther
+     * into recentEmployer. Consumers should prefer currentStatus for display.
+     */
+    recentRole?: string;
+    recentEmployer?: string;
+    relevantExperience?: string;
   };
   eligibility: {
     gates: ServerEligibilityGateResult[];
@@ -166,15 +191,20 @@ export function validateCreateApplicationInput(candidate: unknown): { input: Cre
   const city = typeof value.city === "string" ? value.city.trim() : "";
   if (!city) errors.push("Enter your current location.");
 
-  const recentRole = typeof value.recentRole === "string" ? value.recentRole.trim() : "";
-  if (!recentRole) errors.push("Enter your current or most recent job title.");
+  const currentStatus = typeof value.currentStatus === "string" ? value.currentStatus.trim() : "";
+  if (!currentStatus) errors.push("Select your current status.");
+  else if (currentStatus.length > 180) errors.push("Current status is too long.");
 
-  const recentEmployer = typeof value.recentEmployer === "string" ? value.recentEmployer.trim() : "";
+  const currentStatusOther = typeof value.currentStatusOther === "string" ? value.currentStatusOther.trim() : "";
+  if (currentStatus === "Other" && !currentStatusOther) errors.push("Specify your current status.");
+
   const totalExperience = typeof value.totalExperience === "string" ? value.totalExperience.trim() : "";
   if (!totalExperience) errors.push("Select your total experience level.");
 
+  // relevantExperience is no longer collected via the form — BD experience
+  // is now a live eligibility gate answer. Accept an empty string for new
+  // applications; the column is retained in the DB for historical records.
   const relevantExperience = typeof value.relevantExperience === "string" ? value.relevantExperience.trim() : "";
-  if (!relevantExperience) errors.push("Select your relevant experience level.");
 
   const linkedinUrl = typeof value.linkedinUrl === "string" ? value.linkedinUrl.trim() : "";
   if (linkedinUrl && linkedinUrl.length > 512) errors.push("LinkedIn URL is too long.");
@@ -210,8 +240,8 @@ export function validateCreateApplicationInput(candidate: unknown): { input: Cre
       email,
       phone,
       city,
-      recentRole,
-      recentEmployer,
+      currentStatus,
+      currentStatusOther,
       totalExperience,
       relevantExperience,
       linkedinUrl,

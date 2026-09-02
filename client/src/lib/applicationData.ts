@@ -16,22 +16,36 @@ export type ApplicantInformation = {
   email: string;
   phoneNumber: string;
   location: string;
-  jobTitle: string;
-  employer: string;
+  /** Replaces the old freetext job title. Generic across roles. */
+  currentStatus: string;
+  /**
+   * Free-text specification used only when currentStatus === "Other".
+   * Not collected or required for any other selection.
+   */
+  otherStatusText: string;
   totalExperience: string;
-  businessDevelopmentExperience: string;
   linkedInProfile: string;
 };
+
+export const CURRENT_STATUS_OPTIONS = [
+  "Currently employed",
+  "In transition / seeking opportunities",
+  "Self-employed / running a business",
+  "Freelance / consulting",
+  "Not currently employed",
+  "Other",
+] as const;
+
+export type CurrentStatusOption = (typeof CURRENT_STATUS_OPTIONS)[number];
 
 export const emptyApplicantInformation: ApplicantInformation = {
   fullName: "",
   email: "",
   phoneNumber: "",
   location: "",
-  jobTitle: "",
-  employer: "",
+  currentStatus: "",
+  otherStatusText: "",
   totalExperience: "",
-  businessDevelopmentExperience: "",
   linkedInProfile: "",
 };
 

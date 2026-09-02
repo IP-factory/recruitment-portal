@@ -29,7 +29,15 @@ export function saveApplicationSubmissionState(state: ApplicationSubmissionState
 
 export function getApplicationReadiness(): ApplicationReadiness {
   const applicant = loadApplicantInformation();
-  const applicantInformationComplete = Boolean(applicant.fullName.trim() && applicant.email.trim() && applicant.phoneNumber.trim() && applicant.location.trim() && applicant.jobTitle.trim() && applicant.totalExperience && applicant.businessDevelopmentExperience);
+  const applicantInformationComplete = Boolean(
+    applicant.fullName.trim() &&
+    applicant.email.trim() &&
+    applicant.phoneNumber.trim() &&
+    applicant.location.trim() &&
+    applicant.currentStatus &&
+    (applicant.currentStatus !== "Other" || applicant.otherStatusText.trim()) &&
+    applicant.totalExperience,
+  );
   const cvComplete = Boolean(loadCvFileMetadata());
   const answers = loadAssessmentResponseState().answers;
   const questions = getApplicantBusinessDevelopmentAssessmentQuestions();

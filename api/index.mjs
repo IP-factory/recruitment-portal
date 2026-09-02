@@ -2774,8 +2774,13 @@ function createAdminApplicationApiRouter() {
           email: app2.email,
           phone: app2.phone,
           city: app2.city,
+          // currentStatus / currentStatusOther are the new field names.
+          // The underlying DB columns are recent_role / recent_employer —
+          // both aliases are returned so the UI can render either era correctly.
+          currentStatus: app2.recentRole,
+          currentStatusOther: app2.recentEmployer ?? null,
           recentRole: app2.recentRole,
-          recentEmployer: app2.recentEmployer,
+          recentEmployer: app2.recentEmployer ?? null,
           totalExperience: app2.totalExperience,
           relevantExperience: app2.relevantExperience,
           linkedinUrl: app2.linkedinUrl,
@@ -3025,13 +3030,14 @@ function validateCreateApplicationInput(candidate) {
   if (!phone) errors.push("Enter your phone number.");
   const city = typeof value.city === "string" ? value.city.trim() : "";
   if (!city) errors.push("Enter your current location.");
-  const recentRole = typeof value.recentRole === "string" ? value.recentRole.trim() : "";
-  if (!recentRole) errors.push("Enter your current or most recent job title.");
-  const recentEmployer = typeof value.recentEmployer === "string" ? value.recentEmployer.trim() : "";
+  const currentStatus = typeof value.currentStatus === "string" ? value.currentStatus.trim() : "";
+  if (!currentStatus) errors.push("Select your current status.");
+  else if (currentStatus.length > 180) errors.push("Current status is too long.");
+  const currentStatusOther = typeof value.currentStatusOther === "string" ? value.currentStatusOther.trim() : "";
+  if (currentStatus === "Other" && !currentStatusOther) errors.push("Specify your current status.");
   const totalExperience = typeof value.totalExperience === "string" ? value.totalExperience.trim() : "";
   if (!totalExperience) errors.push("Select your total experience level.");
   const relevantExperience = typeof value.relevantExperience === "string" ? value.relevantExperience.trim() : "";
-  if (!relevantExperience) errors.push("Select your relevant experience level.");
   const linkedinUrl = typeof value.linkedinUrl === "string" ? value.linkedinUrl.trim() : "";
   if (linkedinUrl && linkedinUrl.length > 512) errors.push("LinkedIn URL is too long.");
   const eligibilityRaw = value.eligibility;
@@ -3063,8 +3069,8 @@ function validateCreateApplicationInput(candidate) {
       email,
       phone,
       city,
-      recentRole,
-      recentEmployer,
+      currentStatus,
+      currentStatusOther,
       totalExperience,
       relevantExperience,
       linkedinUrl,
@@ -3210,10 +3216,17 @@ async function createApplication(input, role, eligibilityResult, activeAssessmen
     email: normalizeEmail(input.email),
     phone: input.phone,
     city: input.city,
-    recentRole: input.recentRole,
-    recentEmployer: input.recentEmployer || null,
+    // currentStatus is stored in the recentRole column for backward-compat.
+    // The recentRole column is NOT NULL so new applications always write a value.
+    recentRole: input.currentStatus,
+    // currentStatusOther (only set when status is "Other") goes into recentEmployer.
+    // The column is nullable so it is fine to store null for non-Other statuses.
+    recentEmployer: input.currentStatusOther || null,
     totalExperience: input.totalExperience,
-    relevantExperience: input.relevantExperience,
+    // relevantExperience is no longer collected from the form; the BD experience
+    // gate is now answered directly in the eligibility section. Pass the empty
+    // string through for new applications; historical values are preserved.
+    relevantExperience: input.relevantExperience || "",
     linkedinUrl: input.linkedinUrl || null,
     eligibilityStatus,
     applicationStatus,
@@ -3281,11 +3294,19 @@ async function buildApplicationState(application) {
       email: application.email,
       phone: application.phone,
       city: application.city,
+      // currentStatus / currentStatusOther are the new fields for applications
+      // created after this change. The recentRole / recentEmployer columns
+      // continue to hold the data; we surface both shapes so consumers can
+      // display whichever is appropriate for the record's era.
+      currentStatus: application.recentRole,
+      currentStatusOther: application.recentEmployer ?? "",
+      totalExperience: application.totalExperience,
+      linkedinUrl: application.linkedinUrl ?? "",
+      // Legacy fields — populated from the same columns for backward-compat
+      // so that historical records and the review page still render correctly.
       recentRole: application.recentRole,
       recentEmployer: application.recentEmployer ?? "",
-      totalExperience: application.totalExperience,
-      relevantExperience: application.relevantExperience,
-      linkedinUrl: application.linkedinUrl ?? ""
+      relevantExperience: application.relevantExperience
     },
     eligibility: {
       gates: eligibilityRows.map((row) => ({

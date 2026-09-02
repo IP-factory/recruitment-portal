@@ -272,7 +272,20 @@ function OverviewTab({ data }: { data: AdminApplicationDetailResponse }) {
       <h3 className="text-lg font-semibold tracking-[-0.02em] text-primary">Applicant information</h3>
       <div className="mt-6 divide-y divide-border">
         <DetailRows title="Contact" rows={[{ label: "Full name", value: application.fullName }, { label: "Email address", value: application.email }, { label: "Phone number", value: application.phone }, { label: "Current city", value: application.city }]} />
-        <DetailRows title="Professional" rows={[{ label: "Recent role", value: application.recentRole }, { label: "Recent employer", value: application.recentEmployer }, { label: "Total experience", value: application.totalExperience }, { label: "BD experience", value: application.relevantExperience }, { label: "LinkedIn", value: application.linkedinUrl }]} />
+        <DetailRows title="Professional" rows={[
+          // For new applications currentStatus holds the career status (e.g.
+          // "Currently employed"). For historical records recentRole held the
+          // old freetext job title — both are the same column; display label
+          // depends on whether the value looks like a status option or a title.
+          { label: "Current status", value: application.currentStatus || application.recentRole },
+          // currentStatusOther is only set when the applicant selected "Other".
+          // For historical records recentEmployer holds the old employer name;
+          // suppress it here to avoid double-rendering — the legacy employer
+          // showed in the old label and won't match any status-option text.
+          ...(application.currentStatusOther ? [{ label: "Status detail", value: application.currentStatusOther }] : []),
+          { label: "Total experience", value: application.totalExperience },
+          ...(application.linkedinUrl ? [{ label: "LinkedIn", value: application.linkedinUrl }] : []),
+        ]} />
       </div>
       {application.eligibilityResponses.length > 0 && <section className="border-t border-border pt-5 mt-5"><h4 className="text-[12px] font-semibold uppercase tracking-[0.09em] text-muted-foreground">Eligibility</h4><span className={`mt-2 inline-flex w-fit rounded-full border px-3 py-1 text-[12px] font-semibold ${application.eligibilityStatus === "Eligible" ? "border-status-success/30 bg-status-success/5 text-status-success-strong" : application.eligibilityStatus === "Closed" ? "border-status-error/30 bg-status-error/5 text-status-error-strong" : "border-[#eadfbd] bg-[#fbf8ef] text-[#765d22]"}`}>{eligibilityDisplayLabel(application.eligibilityStatus)}</span><div className="mt-4 divide-y divide-border">{application.eligibilityResponses.map((g) => <div className="flex items-center justify-between gap-4 py-2" key={g.gateReference}><p className="text-[13px] text-primary"><span className="mr-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{g.gateReference}</span>{g.outcome}{g.internalFlag ? ` · ${g.internalFlag}` : ""}</p></div>)}</div></section>}
     </article>

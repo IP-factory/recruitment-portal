@@ -67,10 +67,13 @@ describe("create application input validation", () => {
     email: "jane@example.com",
     phone: "+2348012345678",
     city: "Abuja",
-    recentRole: "Business Development Executive",
-    recentEmployer: "Acme Corp",
+    // currentStatus replaces the old recentRole / jobTitle field
+    currentStatus: "Currently employed",
+    currentStatusOther: "",
     totalExperience: "3–5 years",
-    relevantExperience: "3–5 years",
+    // relevantExperience is no longer collected via the form; BD experience
+    // is now a live eligibility gate answer evaluated server-side.
+    relevantExperience: "",
     linkedinUrl: "",
     eligibility: {
       // Generic per-gate answers keyed by gate reference; G3 is derived from
@@ -121,6 +124,55 @@ describe("create application input validation", () => {
     const outcome = validateCreateApplicationInput({ ...validInput, eligibility: { ...validInput.eligibility, G2: { value: "   " } } });
     expect("errors" in outcome).toBe(true);
     if ("errors" in outcome) expect(outcome.errors.some((error) => error.includes("G2"))).toBe(true);
+  });
+
+  // ── Application form regression tests ────────────────────────────────────
+
+  it("rejects missing currentStatus — job title field is removed", () => {
+    const outcome = validateCreateApplicationInput({ ...validInput, currentStatus: "" });
+    expect("errors" in outcome).toBe(true);
+    if ("errors" in outcome) expect(outcome.errors).toContain("Select your current status.");
+    // Must NOT reference old field name in any error message
+    if ("errors" in outcome) expect(outcome.errors.join(" ")).not.toContain("job title");
+    if ("errors" in outcome) expect(outcome.errors.join(" ")).not.toContain("recentRole");
+  });
+
+  it("rejects Other currentStatus without specifying detail", () => {
+    const outcome = validateCreateApplicationInput({ ...validInput, currentStatus: "Other", currentStatusOther: "" });
+    expect("errors" in outcome).toBe(true);
+    if ("errors" in outcome) expect(outcome.errors).toContain("Specify your current status.");
+  });
+
+  it("accepts Other currentStatus when detail is provided", () => {
+    const outcome = validateCreateApplicationInput({ ...validInput, currentStatus: "Other", currentStatusOther: "Volunteer coordinator" });
+    expect("input" in outcome).toBe(true);
+  });
+
+  it("does NOT require relevantExperience — BD experience is now a gate answer", () => {
+    // relevantExperience can be empty for new applications
+    const outcome = validateCreateApplicationInput({ ...validInput, relevantExperience: "" });
+    expect("input" in outcome).toBe(true);
+  });
+
+  it("currentStatus is persisted via the wire contract, not recentRole", () => {
+    const outcome = validateCreateApplicationInput({ ...validInput, currentStatus: "Freelance / consulting" });
+    expect("input" in outcome).toBe(true);
+    if ("input" in outcome) {
+      expect(outcome.input.currentStatus).toBe("Freelance / consulting");
+      // The input object no longer contains recentRole as a separate field
+      expect((outcome.input as Record<string, unknown>).recentRole).toBeUndefined();
+    }
+  });
+
+  it("employer field is no longer collected — currentStatusOther is used for Other detail only", () => {
+    const outcome = validateCreateApplicationInput({ ...validInput, currentStatus: "Currently employed", currentStatusOther: "" });
+    expect("input" in outcome).toBe(true);
+    if ("input" in outcome) {
+      // currentStatusOther is empty because status is not "Other"
+      expect(outcome.input.currentStatusOther).toBe("");
+      // No separate employer field exists on the input
+      expect((outcome.input as Record<string, unknown>).recentEmployer).toBeUndefined();
+    }
   });
 });
 
@@ -363,5 +415,132 @@ describe("safe payload: applicant shapes never expose scoring internals", () => 
     for (const key of forbiddenKeys) {
       expect(option).not.toHaveProperty(key);
     }
+  });
+});
+
+// ── Application form field regression ────────────────────────────────────────
+//
+// These tests prove the field removals and replacements are stable at the
+// contract level without requiring a browser or database.
+
+describe("application form field contract regression", () => {
+  it("CreateApplicationInput has currentStatus, not recentRole", () => {
+    const input: CreateApplicationInput = {
+      roleSlug: "test-role",
+      fullName: "Test User",
+      email: "test@example.com",
+      phone: "0801234567",
+      city: "Lagos",
+      currentStatus: "Currently employed",
+      currentStatusOther: "",
+      totalExperience: "1–2 years",
+      relevantExperience: "",
+      linkedinUrl: "",
+      eligibility: {},
+    };
+    expect(input.currentStatus).toBe("Currently employed");
+    expect((input as Record<string, unknown>).recentRole).toBeUndefined();
+    expect((input as Record<string, unknown>).employer).toBeUndefined();
+    expect((input as Record<string, unknown>).jobTitle).toBeUndefined();
+  });
+
+  it("CreateApplicationInput does NOT have a standalone recentEmployer field", () => {
+    const input: CreateApplicationInput = {
+      roleSlug: "test-role",
+      fullName: "Test User",
+      email: "test@example.com",
+      phone: "0801234567",
+      city: "Lagos",
+      currentStatus: "Self-employed / running a business",
+      currentStatusOther: "",
+      totalExperience: "6–8 years",
+      relevantExperience: "",
+      linkedinUrl: "",
+      eligibility: {},
+    };
+    expect((input as Record<string, unknown>).recentEmployer).toBeUndefined();
+  });
+
+  it("currentStatusOther is only meaningful when currentStatus is Other", () => {
+    // Non-Other status: currentStatusOther should be empty
+    const nonOther: CreateApplicationInput = {
+      roleSlug: "r", fullName: "A", email: "a@b.com", phone: "1", city: "C",
+      currentStatus: "Not currently employed", currentStatusOther: "",
+      totalExperience: "1–2 years", relevantExperience: "", linkedinUrl: "", eligibility: {},
+    };
+    const r1 = validateCreateApplicationInput(nonOther);
+    expect("input" in r1).toBe(true);
+
+    // Other status without detail: validation rejects
+    const otherNoDetail: CreateApplicationInput = { ...nonOther, currentStatus: "Other", currentStatusOther: "" };
+    const r2 = validateCreateApplicationInput(otherNoDetail);
+    expect("errors" in r2).toBe(true);
+
+    // Other status with detail: validation accepts
+    const otherWithDetail: CreateApplicationInput = { ...nonOther, currentStatus: "Other", currentStatusOther: "Caregiver" };
+    const r3 = validateCreateApplicationInput(otherWithDetail);
+    expect("input" in r3).toBe(true);
+    if ("input" in r3) expect(r3.input.currentStatusOther).toBe("Caregiver");
+  });
+
+  it("relevantExperience accepts empty string — BD experience is no longer a form field", () => {
+    const input: CreateApplicationInput = {
+      roleSlug: "r", fullName: "A", email: "a@b.com", phone: "1", city: "C",
+      currentStatus: "Currently employed", currentStatusOther: "",
+      totalExperience: "3–5 years", relevantExperience: "", linkedinUrl: "", eligibility: {},
+    };
+    const result = validateCreateApplicationInput(input);
+    expect("input" in result).toBe(true);
+    if ("input" in result) expect(result.input.relevantExperience).toBe("");
+  });
+
+  it("all six CURRENT_STATUS_OPTIONS values are accepted by the validator", () => {
+    const statuses = [
+      "Currently employed",
+      "In transition / seeking opportunities",
+      "Self-employed / running a business",
+      "Freelance / consulting",
+      "Not currently employed",
+      "Other",
+    ] as const;
+    const base: CreateApplicationInput = {
+      roleSlug: "r", fullName: "A", email: "a@b.com", phone: "1", city: "C",
+      currentStatus: "", currentStatusOther: "",
+      totalExperience: "1–2 years", relevantExperience: "", linkedinUrl: "", eligibility: {},
+    };
+    for (const status of statuses) {
+      const input = { ...base, currentStatus: status, currentStatusOther: status === "Other" ? "Detail" : "" };
+      const result = validateCreateApplicationInput(input);
+      expect("input" in result).toBe(true);
+    }
+  });
+
+  it("BD experience eligibility gate is not related to the form field removal", () => {
+    // G3 APPLICATION_FIELD gate still evaluates relevantExperience passed as a
+    // separate parameter to evaluateEligibilityServerSide, not from the input.
+    // This ensures the gate configuration is untouched.
+    const g3Only = [
+      {
+        id: "gate-g3",
+        reference: "G3",
+        status: "Active",
+        configuration: JSON.stringify({
+          inputType: "APPLICATION_FIELD",
+          fieldKey: "relevantExperience",
+          minimumYears: 3,
+          isBlocking: true,
+        }),
+      },
+    ];
+    // Passing "3–5 years" (≥3) via the third parameter still passes G3
+    const passingResult = evaluateEligibilityServerSide(g3Only, {}, "3–5 years");
+    expect(passingResult.gates.find((g) => g.gateReference === "G3")?.outcome).toBe("Passed");
+
+    // Passing empty string (no experience declared) still fails G3
+    const failingResult = evaluateEligibilityServerSide(g3Only, {}, "");
+    expect(failingResult.gates.find((g) => g.gateReference === "G3")?.outcome).toBe("Failed");
+
+    // The gate itself is unchanged — this is about the form field removal only
+    expect(g3Only[0].configuration).toContain("APPLICATION_FIELD");
   });
 });

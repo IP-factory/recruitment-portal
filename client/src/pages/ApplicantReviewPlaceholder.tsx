@@ -35,11 +35,16 @@ interface ReviewData {
     email: string;
     phone: string;
     city: string;
-    recentRole: string;
-    recentEmployer: string;
+    /** New field: current employment/career status. */
+    currentStatus?: string;
+    /** New field: free-text when currentStatus is "Other". */
+    currentStatusOther?: string;
     totalExperience: string;
-    relevantExperience: string;
     linkedinUrl: string;
+    /** Legacy fields — populated for older records only. */
+    recentRole?: string;
+    recentEmployer?: string;
+    relevantExperience?: string;
   };
   eligibility: {
     gates: Array<{ gateReference: string; outcome: string }>;
@@ -126,11 +131,21 @@ export default function ApplicantReviewPlaceholder() {
                 <DefinitionItem label="Email address" value={valueOrNotProvided(applicant.email)} />
                 <DefinitionItem label="Phone number" value={valueOrNotProvided(applicant.phone)} />
                 <DefinitionItem label="Current city / location" value={valueOrNotProvided(applicant.city)} />
-                <DefinitionItem label="Current or most recent job title" value={valueOrNotProvided(applicant.recentRole)} />
-                <DefinitionItem label="Current or most recent employer" value={valueOrNotProvided(applicant.recentEmployer)} />
+                {/* New field — shown for applications created after the form update */}
+                {applicant.currentStatus ? (
+                  <DefinitionItem label="Current status" value={applicant.currentStatus === "Other" && applicant.currentStatusOther ? `${applicant.currentStatus} — ${applicant.currentStatusOther}` : applicant.currentStatus} />
+                ) : applicant.recentRole ? (
+                  /* Legacy fallback — shown for historical records only */
+                  <DefinitionItem label="Most recent role" value={applicant.recentRole} />
+                ) : null}
+                {/* Legacy employer — only shown if the record has a value */}
+                {applicant.recentEmployer ? (
+                  <DefinitionItem label="Most recent employer" value={applicant.recentEmployer} />
+                ) : null}
                 <DefinitionItem label="Total professional experience" value={valueOrNotProvided(applicant.totalExperience)} />
-                <DefinitionItem label="Business Development experience" value={valueOrNotProvided(applicant.relevantExperience)} />
-                <DefinitionItem label="LinkedIn profile" value={valueOrNotProvided(applicant.linkedinUrl)} />
+                {applicant.linkedinUrl ? (
+                  <DefinitionItem label="LinkedIn profile" value={applicant.linkedinUrl} />
+                ) : null}
               </dl>
             ) : null}
           </ReviewCard>
