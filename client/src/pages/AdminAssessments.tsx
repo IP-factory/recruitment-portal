@@ -10,12 +10,11 @@ import { DataErrorState, DataLoadingState } from "@/components/AsyncStates";
 import { StatusBadge } from "@/components/foundation/ui";
 import { useAdminAssessments } from "@/hooks/useRecruitmentData";
 import type { AdminAssessmentListItem } from "@/lib/recruitmentApi";
-import { ArrowRight } from "lucide-react";
 import { useLocation } from "wouter";
 
 function AssessmentRow({ assessment, onView }: { assessment: AdminAssessmentListItem; onView: () => void }) {
   return (
-    <tr>
+    <tr className="cursor-pointer transition-colors hover:bg-portal-surface" onClick={onView}>
       <td className="px-3 py-4">
         <p className="text-sm font-medium text-primary">{assessment.name}</p>
         <p className="mt-1 max-w-[300px] truncate text-[12px] text-muted-foreground" title={assessment.description}>
@@ -36,22 +35,13 @@ function AssessmentRow({ assessment, onView }: { assessment: AdminAssessmentList
           timeZone: "UTC",
         })}
       </td>
-      <td className="px-3 py-4 text-right">
-        <button
-          className="inline-flex items-center gap-1 text-[13px] font-medium text-portal-blue transition-colors hover:text-primary hover:underline"
-          onClick={onView}
-          type="button"
-        >
-          View<ArrowRight className="size-3.5" />
-        </button>
-      </td>
     </tr>
   );
 }
 
 function AssessmentCard({ assessment, onView }: { assessment: AdminAssessmentListItem; onView: () => void }) {
   return (
-    <article className="py-5">
+    <article className="cursor-pointer py-5 transition-colors hover:bg-portal-surface" onClick={onView} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onView(); }}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-primary">{assessment.name}</h3>
@@ -80,13 +70,6 @@ function AssessmentCard({ assessment, onView }: { assessment: AdminAssessmentLis
           </dd>
         </div>
       </dl>
-      <button
-        className="mt-5 inline-flex items-center gap-1 text-[13px] font-medium text-portal-blue transition-colors hover:text-primary hover:underline"
-        onClick={onView}
-        type="button"
-      >
-        View assessment<ArrowRight className="size-3.5" />
-      </button>
     </article>
   );
 }
@@ -166,7 +149,7 @@ export default function AdminAssessments() {
                   <table className="w-full min-w-[860px] text-left">
                     <thead className="border-b border-border">
                       <tr>
-                        {["Assessment", "Role", "Version", "Questions", "Status", "Last updated", "Action"].map(
+                        {["Assessment", "Role", "Version", "Questions", "Status", "Last updated"].map(
                           (heading) => (
                             <th
                               className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground last:text-right"

@@ -387,14 +387,21 @@ export default function AdminCandidatePlaceholder() {
   const [data, setData] = useState<AdminApplicationDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Controlled tab state — persists across silent refreshes so sub-tab
+  // operations (save OPEN review, confirm bonus, etc.) never jump back to Overview.
+  const [activeTab, setActiveTab] = useState<"overview" | "assessment" | "cv" | "integrity">("overview");
 
   const load = useCallback(() => {
     if (!params?.candidateId) return;
-    setLoading(true);
+    // Show full-page loader only on the initial load (data === null).
+    // Subsequent refreshes triggered by sub-tab operations run silently;
+    // the Tabs component stays mounted and the active tab is preserved.
+    if (!data) setLoading(true);
     fetchAdminApplicationDetail(params.candidateId)
       .then((d) => { setData(d); setError(null); })
       .catch((err) => setError(err instanceof Error ? err.message : "Unable to load application."))
       .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params?.candidateId]);
 
   useEffect(() => { load(); }, [load]);
@@ -441,7 +448,7 @@ export default function AdminCandidatePlaceholder() {
       </div>
     </article>
 
-    <Tabs className="mt-6" defaultValue="overview">
+    <Tabs className="mt-6" value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
       <div className="overflow-x-auto pb-1"><TabsList><TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="assessment">Assessment</TabsTrigger><TabsTrigger value="cv">CV Review</TabsTrigger><TabsTrigger value="integrity">Integrity & Bonus</TabsTrigger></TabsList></div>
       <TabsContent value="overview"><OverviewTab data={data} /></TabsContent>
       <TabsContent value="assessment"><AssessmentTab data={data} onRefresh={load} /></TabsContent>

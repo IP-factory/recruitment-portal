@@ -146,10 +146,9 @@ export default function AdminApplications() {
               <th className="px-3 py-3"><SortControl column="appliedBand" direction={sortDirection} label="Applied Band" onSort={sort} sortKey={sortKey} /></th>
               <th className="px-3 py-3"><SortControl column="applicationStatus" direction={sortDirection} label="Status" onSort={sort} sortKey={sortKey} /></th>
               <th className="px-3 py-3"><SortControl column="appliedDate" direction={sortDirection} label="Applied" onSort={sort} sortKey={sortKey} /></th>
-              <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Action</th>
             </tr></thead>
             <tbody className="divide-y divide-border">
-              {visibleApplications.map((app) => <tr key={app.id}>
+              {visibleApplications.map((app) => <tr key={app.id} className="cursor-pointer transition-colors hover:bg-portal-surface" onClick={() => setLocation(`/admin/applications/${app.id}`)}>
                 <td className="px-3 py-4 text-sm"><CandidateCell app={app} /></td>
                 <td className="max-w-[170px] px-3 py-4 text-[13px] leading-5 text-muted-foreground">{app.roleTitle}</td>
                 <td className="px-3 py-4"><EligibilityCell status={app.eligibilityStatus} /></td>
@@ -158,13 +157,12 @@ export default function AdminApplications() {
                 <td className="px-3 py-4"><BandCell band={app.appliedBand} /></td>
                 <td className="px-3 py-4"><StatusBadge status={applicationStatusDisplayLabel(app.applicationStatus)} /></td>
                 <td className="whitespace-nowrap px-3 py-4 text-[13px] text-muted-foreground">{new Date(app.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
-                <td className="px-3 py-4 text-right"><button className="text-[13px] font-medium text-portal-blue transition-colors hover:text-primary hover:underline" onClick={() => setLocation(`/admin/applications/${app.id}`)} type="button">View</button></td>
               </tr>)}
             </tbody>
           </table>
         </div>
         <div className="mt-3 divide-y divide-border md:hidden">
-          {visibleApplications.map((app) => <article className="py-4" key={app.id}>
+          {visibleApplications.map((app) => <article className="cursor-pointer py-4 transition-colors hover:bg-portal-surface" key={app.id} onClick={() => setLocation(`/admin/applications/${app.id}`)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setLocation(`/admin/applications/${app.id}`); }}>
             <CandidateCell app={app} />
             <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4">
               <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Role</p><p className="mt-1 text-[13px] text-primary">{app.roleTitle}</p></div>
@@ -174,7 +172,6 @@ export default function AdminApplications() {
               <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Status</p><div className="mt-1.5"><StatusBadge status={applicationStatusDisplayLabel(app.applicationStatus)} /></div></div>
               <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Applied</p><p className="mt-1 text-[13px] text-primary">{new Date(app.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p></div>
             </div>
-            <button className="mt-4 text-[13px] font-medium text-portal-blue transition-colors hover:text-primary hover:underline" onClick={() => setLocation(`/admin/applications/${app.id}`)} type="button">View application</button>
           </article>)}
         </div>
         <Pagination className="mt-6 justify-end border-t border-border pt-4">

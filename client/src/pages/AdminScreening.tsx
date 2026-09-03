@@ -178,8 +178,7 @@ export default function AdminScreening() {
           <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Integrity</th>
           <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Status</th>
           <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Shortlist</th>
-          <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Action</th>
-        </tr></thead><tbody className="divide-y divide-border">{filteredRecords.map((app) => <tr key={app.id}>
+        </tr></thead><tbody className="divide-y divide-border">{filteredRecords.map((app) => <tr key={app.id} className="cursor-pointer transition-colors hover:bg-portal-surface" onClick={() => setLocation(`/admin/applications/${app.id}`)}>
           <td className="px-3 py-4"><div className="flex items-center gap-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-portal-surface text-[11px] font-semibold text-primary">{initials(app.fullName)}</span><div><p className="text-sm font-medium text-primary">{app.fullName}</p><p className="mt-1 text-[12px] text-muted-foreground">{app.email}</p></div></div></td>
           <td className="px-3 py-4"><EligibilityValue value={app.eligibilityStatus} /></td>
           <td className="px-3 py-4"><ScoreValue score={app.finalScore} status={app.evaluationStatus} /></td>
@@ -188,11 +187,10 @@ export default function AdminScreening() {
           <td className="px-3 py-4"><BandValue band={app.appliedBand} /></td>
           <td className="px-3 py-4"><IntegrityValue shortlisted={app.shortlisted} /></td>
           <td className="px-3 py-4"><StatusBadge status={applicationStatusDisplayLabel(app.applicationStatus)} /></td>
-          <td className="px-3 py-4">{app.shortlisted ? <StatusBadge status="Shortlisted" /> : <FoundationButton onClick={() => setPendingAction({ type: "shortlist", app })} size="sm" variant="secondary">Shortlist</FoundationButton>}</td>
-          <td className="px-3 py-4 text-right"><button className="text-[13px] font-medium text-portal-blue transition-colors hover:text-primary hover:underline" onClick={() => setLocation(`/admin/applications/${app.id}`)} type="button">View</button></td>
+          <td className="px-3 py-4" onClick={(e) => e.stopPropagation()}>{app.shortlisted ? <StatusBadge status="Shortlisted" /> : <FoundationButton onClick={() => setPendingAction({ type: "shortlist", app })} size="sm" variant="secondary">Shortlist</FoundationButton>}</td>
         </tr>)}</tbody></table></div>
 
-        <div className="mt-3 divide-y divide-border md:hidden">{filteredRecords.map((app) => <article className="py-4" key={app.id}>
+        <div className="mt-3 divide-y divide-border md:hidden">{filteredRecords.map((app) => <article className="cursor-pointer py-4 transition-colors hover:bg-portal-surface" key={app.id} onClick={() => setLocation(`/admin/applications/${app.id}`)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setLocation(`/admin/applications/${app.id}`); }}>
           <div className="flex items-start gap-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-portal-surface text-[11px] font-semibold text-primary">{initials(app.fullName)}</span><div><p className="text-sm font-medium text-primary">{app.fullName}</p><p className="mt-1 text-[12px] text-muted-foreground">{app.email}</p></div></div>
           <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4">
             <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Eligibility</p><p className="mt-1"><EligibilityValue value={app.eligibilityStatus} /></p></div>
@@ -202,10 +200,9 @@ export default function AdminScreening() {
             <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Applied Band</p><p className="mt-1"><BandValue band={app.appliedBand} /></p></div>
             <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Status</p><div className="mt-1.5"><StatusBadge status={applicationStatusDisplayLabel(app.applicationStatus)} /></div></div>
           </div>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-3" onClick={(e) => e.stopPropagation()}>
             {!app.shortlisted && <FoundationButton onClick={() => setPendingAction({ type: "shortlist", app })} size="sm" variant="secondary">Shortlist</FoundationButton>}
             <button className="text-[13px] font-medium text-portal-blue hover:underline" onClick={() => setPendingAction({ type: "hold", app })} type="button">Hold</button>
-            <button className="text-[13px] font-medium text-portal-blue hover:underline" onClick={() => setLocation(`/admin/applications/${app.id}`)} type="button">View</button>
           </div>
         </article>)}</div>
       </> : <div className="py-14 text-center"><h3 className="text-base font-semibold text-primary">No candidates found</h3><p className="mt-2 text-sm text-muted-foreground">Try changing your search or filters.</p>{hasFilters ? <button className="mt-4 text-[13px] font-medium text-portal-blue hover:underline" onClick={clearFilters} type="button">Clear filters</button> : null}</div>}
