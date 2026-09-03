@@ -35,8 +35,6 @@ import {
 import {
   BONUS_CAP,
   BONUS_TYPES,
-  DIMENSION_FLOORS,
-  DIMENSION_WEIGHTS,
   INTEGRITY_PENALTY_PER_FLAG,
   calculateFinalScore,
   resolveBand,

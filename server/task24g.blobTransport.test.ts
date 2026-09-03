@@ -151,6 +151,7 @@ suite("Task 24G CV Blob transport", () => {
           email: `task24g-blob-${suffix}-${marker}@example.com`,
           phone: "+234 800 0000",
           city: "Abuja",
+          currentStatus: "Employed",
           recentRole: "Test Associate",
           totalExperience: "1-3 years",
           relevantExperience: "1-3 years",

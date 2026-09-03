@@ -53,7 +53,7 @@ function slugify(name: string): string {
 }
 
 /** Generate a slug unique within (slug, version) without needing a second round-trip for typical cases. */
-async function buildUniqueSlug(name: string, version: number, excludeId?: string): Promise<string> {
+export async function buildUniqueSlug(name: string, version: number, excludeId?: string): Promise<string> {
   const db = getDatabase();
   const base = slugify(name);
   const slug = base || "assessment";
@@ -330,6 +330,31 @@ export async function updateAssessment(idOrSlug: string, input: AssessmentUpdate
   await db
     .update(assessments)
     .set({ name: input.name, description: input.description })
+    .where(eq(assessments.id, existing.id));
+
+  return getAssessment(existing.id);
+}
+
+/**
+ * Change only the status of an assessment.
+ * Allowed transitions: Draft → Active, Active → Inactive, Inactive → Active.
+ * Archived assessments cannot be reactivated through this endpoint.
+ */
+export async function updateAssessmentStatus(
+  idOrSlug: string,
+  status: "Active" | "Inactive" | "Draft",
+): Promise<AdminAssessmentDetail | null> {
+  const db = getDatabase();
+  const existing = await getAssessmentByIdOrSlug(idOrSlug);
+  if (!existing) return null;
+
+  if (existing.status === "Archived") {
+    throw new AssessmentValidationError("Archived assessments cannot be reactivated.");
+  }
+
+  await db
+    .update(assessments)
+    .set({ status })
     .where(eq(assessments.id, existing.id));
 
   return getAssessment(existing.id);

@@ -20,7 +20,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["client/src/**/*.test.ts", "server/**/*.test.ts"],
+    include: ["client/src/**/*.test.ts", "server/**/*.test.ts", "shared/**/*.test.ts"],
     // Remote database integration tests need headroom for network latency.
     // Multi-step lifecycle tests (create → read → update → verify) can require
     // 5–8 sequential TiDB round-trips and need more than 20s over a remote

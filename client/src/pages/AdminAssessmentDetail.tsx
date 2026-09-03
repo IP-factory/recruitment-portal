@@ -11,8 +11,10 @@ import { DataErrorState, DataLoadingState } from "@/components/AsyncStates";
 import { FoundationButton, StatusBadge } from "@/components/foundation/ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAdminAssessment } from "@/hooks/useRecruitmentData";
+import { updateAssessmentStatus } from "@/lib/recruitmentApi";
 import type { AdminAssessmentDetail, AssignedQuestionSummary } from "@/lib/recruitmentApi";
-import { AlertTriangle, ArrowLeft, Eye, Pencil } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, Eye, Pencil, XCircle } from "lucide-react";
+import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
 
 function ScoringState({ configured }: { configured: boolean }) {
@@ -83,7 +85,9 @@ function OverviewTab({ assessment }: { assessment: AdminAssessmentDetail }) {
                   ? "Draft — not visible to applicants."
                   : assessment.status === "Active"
                     ? "Active — live for applicants."
-                    : `${assessment.status}`}
+                    : assessment.status === "Inactive"
+                      ? "Inactive — not currently accepting applications."
+                      : `${assessment.status}`}
               </span>
             </Definition>
           </dl>
@@ -200,9 +204,24 @@ export default function AdminAssessmentDetail() {
   const slug = params?.assessmentSlug ?? "";
 
   const assessmentState = useAdminAssessment(slug || undefined);
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   const initialTab =
     typeof window !== "undefined" && window.location.hash === "#questions" ? "questions" : "overview";
+
+  const handleStatusChange = async (newStatus: "Active" | "Inactive" | "Draft") => {
+    setStatusBusy(true);
+    setStatusError(null);
+    try {
+      await updateAssessmentStatus(slug, newStatus);
+      assessmentState.reload();
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : "Unable to update the assessment status.");
+    } finally {
+      setStatusBusy(false);
+    }
+  };
 
   if (assessmentState.status === "loading") {
     return (
@@ -259,6 +278,8 @@ export default function AdminAssessmentDetail() {
 
   const assessment: AdminAssessmentDetail = assessmentState.data;
   const isDraft = assessment.status === "Draft";
+  const isActive = assessment.status === "Active";
+  const isInactive = assessment.status === "Inactive";
 
   return (
     <AdminShell title="Assessments">
@@ -291,13 +312,36 @@ export default function AdminAssessmentDetail() {
             >
               <Pencil className="size-4" />Edit assessment
             </FoundationButton>
-            {isDraft && (
-              <FoundationButton onClick={() => setLocation(`/admin/assessments/${assessment.slug}/preview`)}>
-                <Eye className="size-4" />Preview candidate experience
+            {(isDraft || isInactive) && (
+              <FoundationButton
+                disabled={statusBusy || assessment.questionCount === 0}
+                onClick={() => handleStatusChange("Active")}
+                title={assessment.questionCount === 0 ? "Add questions before activating" : undefined}
+              >
+                <CheckCircle2 className="size-4" />
+                {statusBusy ? "Activating…" : "Activate"}
+              </FoundationButton>
+            )}
+            {isActive && (
+              <FoundationButton
+                disabled={statusBusy}
+                onClick={() => handleStatusChange("Inactive")}
+                variant="secondary"
+              >
+                <XCircle className="size-4" />
+                {statusBusy ? "Deactivating…" : "Deactivate"}
+              </FoundationButton>
+            )}
+            {(isDraft || isInactive) && (
+              <FoundationButton onClick={() => setLocation(`/admin/assessments/${assessment.slug}/preview`)} variant="secondary">
+                <Eye className="size-4" />Preview
               </FoundationButton>
             )}
           </div>
         </div>
+        {statusError && (
+          <p className="mt-3 text-[13px] font-medium text-status-error-strong">{statusError}</p>
+        )}
       </article>
 
       <Tabs className="mt-6" defaultValue={initialTab}>

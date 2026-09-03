@@ -50,6 +50,13 @@
       "when": 1788710400000,
       "tag": "0006_task24g_cv_upload_review",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1788883200000,
+      "tag": "0007_csv_import_scope",
+      "breakpoints": true
     }
   ]
 }

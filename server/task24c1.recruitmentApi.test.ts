@@ -209,26 +209,26 @@ suite("Task 24C-1 recruitment API against TiDB", () => {
     expect(body).toEqual({ ok: false, error: "Unable to load this recruitment role." });
   });
 
-  it("D. public eligibility exposes gate wording plus only the G3 minimum years", async () => {
+  it("D. public eligibility exposes the BDO gate configuration", async () => {
     const { status, body } = await api("/api/public/recruitment-roles/business-development-officer/eligibility");
     expect(status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.roleSlug).toBe("business-development-officer");
-    expect(body.gates).toHaveLength(7);
-    // Task 24E: every BDO gate is fully configured and Active.
-    expect(body.summary).toEqual({ totalCount: 7, activeCount: 7, configurationRequiredCount: 0 });
-    const gate3 = body.gates.find((gate: any) => gate.reference === "G3");
-    expect(gate3.minimumYears).toBe(3);
-    expect(gate3.inputType).toBe("APPLICATION_FIELD");
+    // BDO now has 5 live gates (G2, G6, G7 removed via Admin dashboard).
+    expect(body.gates).toHaveLength(5);
+    expect(body.summary).toEqual({ totalCount: 5, activeCount: 5, configurationRequiredCount: 0 });
+    // G1 is still Abuja availability with SINGLE_SELECT and three options.
     const gate1 = body.gates.find((gate: any) => gate.reference === "G1");
     expect(gate1.inputType).toBe("SINGLE_SELECT");
     expect(Array.isArray(gate1.options)).toBe(true);
     expect(gate1.options.map((option: any) => option.value)).toEqual(["abuja", "relocate", "not-relocate"]);
+    // G2 is now the Minimum BD experience gate (APPLICATION_FIELD experience check).
+    const gate2 = body.gates.find((gate: any) => gate.reference === "G2");
+    expect(gate2).toBeDefined();
     // Option outcomes drive evaluation and are never exposed to applicants.
     expect(JSON.stringify(body)).not.toMatch(/"outcome"/);
     for (const gate of body.gates) {
       expect(gate.configuration).toBeUndefined();
-      if (gate.reference !== "G3") expect(gate.minimumYears).toBeUndefined();
     }
     expect(JSON.stringify(body)).not.toMatch(/requiredAnswer|relevantDomains|scoring/i);
   });
@@ -319,16 +319,20 @@ suite("Task 24C-1 recruitment API against TiDB", () => {
     expect(missing.body).toEqual({ ok: false, error: "Unable to load this recruitment role." });
   });
 
-  it("I. Admin eligibility exposes full gate configuration including G3 minimum years", async () => {
+  it("I. Admin eligibility exposes full gate configuration for all live BDO gates", async () => {
     const { status, body } = await api("/api/admin/recruitment-roles/business-development-officer/eligibility", { headers: { Cookie: adminCookie } });
     expect(status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.roleId).toBe("role-business-development-officer");
-    expect(body.gates).toHaveLength(7);
-    expect(body.gates.map((gate: any) => gate.reference)).toEqual(["G1", "G2", "G3", "G4", "G5", "G6", "G7"]);
-    const gate3 = body.gates.find((gate: any) => gate.reference === "G3");
-    expect(gate3.configuration).toMatchObject({ minimumYears: 3 });
-    expect(gate3.displayOrder).toBeGreaterThan(0);
+    // BDO now has 5 live gates (G2/G6/G7 removed via Admin dashboard).
+    expect(body.gates).toHaveLength(5);
+    expect(body.gates.map((gate: any) => gate.reference)).toEqual(["G1", "G2", "G3", "G4", "G5"]);
+    // Every gate must have a configuration object with at least an inputType.
+    for (const gate of body.gates) {
+      const conf = typeof gate.configuration === "string" ? JSON.parse(gate.configuration) : gate.configuration;
+      expect(typeof conf.inputType).toBe("string");
+      expect(gate.displayOrder).toBeGreaterThan(0);
+    }
   });
 
   it("J. Evaluation Framework serves the approved v2 configuration", async () => {

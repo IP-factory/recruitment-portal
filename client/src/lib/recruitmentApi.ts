@@ -270,6 +270,17 @@ export async function updateAssessment(
   return payload.assessment;
 }
 
+export async function updateAssessmentStatus(
+  idOrSlug: string,
+  status: "Active" | "Inactive" | "Draft",
+): Promise<AdminAssessmentDetail> {
+  const payload = await request<{ assessment: AdminAssessmentDetail }>(
+    `/api/admin/assessments/${encodeURIComponent(idOrSlug)}/status`,
+    { ...jsonBody({ status }), method: "PATCH" },
+  );
+  return payload.assessment;
+}
+
 export async function fetchAssessmentPreview(idOrSlug: string): Promise<AdminAssessmentPreviewPayload> {
   const payload = await request<{ preview: AdminAssessmentPreviewPayload }>(
     `/api/admin/assessments/${encodeURIComponent(idOrSlug)}/preview`,

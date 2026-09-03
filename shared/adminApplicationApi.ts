@@ -52,12 +52,16 @@ export const INTEGRITY_PENALTY_PER_FLAG = 10;
 
 export type BonusTypeCode = (typeof BONUS_TYPES)[number]["code"];
 
-// ── Dimension floor rules ─────────────────────────────────────────────────────
+// ── Dimension floor rules (BDO reference — scorer reads from DB) ──────────────
+// The scoring engine loads weights and floors from the assessmentDimensions
+// table, so these constants are never used in production scoring. They
+// document the original BDO seed values only.
+// @deprecated — use assessmentDimensions table rows instead.
+export const DIMENSION_FLOORS: Record<string, number> = { D1: 50, D2: 40, D5: 50 };
 
-export const DIMENSION_FLOORS: Record<string, number> = {
-  D1: 50,
-  D2: 40,
-  D5: 50,
+// @deprecated — use assessmentDimensions table rows instead.
+export const DIMENSION_WEIGHTS: Record<string, number> = {
+  D1: 22, D2: 18, D3: 14, D4: 12, D5: 12, D6: 8, D7: 8, D8: 6,
 };
 
 // ── Band thresholds ───────────────────────────────────────────────────────────
@@ -68,21 +72,6 @@ export const BAND_THRESHOLDS = [
   { band: "C" as const, minimum: 50, label: "Hold / further review" },
   { band: "D" as const, minimum: 0, label: "Close-out review" },
 ];
-
-// ── Dimension weights (read from DB in production, reference here) ────────────
-
-export const DIMENSION_WEIGHTS: Record<string, number> = {
-  D1: 22,
-  D2: 18,
-  D3: 14,
-  D4: 12,
-  D5: 12,
-  D6: 8,
-  D7: 8,
-  D8: 6,
-};
-
-// ── DTOs ──────────────────────────────────────────────────────────────────────
 
 export interface AdminApplicationSummary {
   id: string;

@@ -112,6 +112,7 @@ suite("Task 24G CV upload, scoring and role detail against TiDB", () => {
           email: `task24g-${suffix}-${marker}@example.com`,
           phone: "+234 800 0000",
           city: "Abuja",
+          currentStatus: "Employed",
           recentRole: "Test Associate",
           totalExperience: "1-3 years",
           relevantExperience: "1-3 years",

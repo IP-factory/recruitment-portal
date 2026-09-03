@@ -49,7 +49,7 @@ export class QuestionBankValidationError extends Error {
   }
 }
 
-const newId = (prefix: string) => `${prefix}-${randomBytes(12).toString("hex")}`;
+export const newId = (prefix: string) => `${prefix}-${randomBytes(12).toString("hex")}`;
 
 function parseJson<T>(value: string | null, fallback: T): T {
   if (!value) return fallback;
@@ -91,6 +91,9 @@ export async function listQuestions(query: QuestionListQuery): Promise<AdminQues
   const search = query.search?.trim() ?? "";
 
   const conditions = [];
+  // Role-only imported questions are scoped to a single role and must never
+  // pollute the reusable Question Bank list.
+  conditions.push(eq(assessmentQuestions.scope, "QUESTION_BANK"));
   if (search) {
     const term = `%${search}%`;
     conditions.push(or(like(assessmentQuestions.reference, term), like(assessmentQuestions.prompt, term)));
@@ -141,8 +144,8 @@ export async function listQuestions(query: QuestionListQuery): Promise<AdminQues
 async function getQuestionBankSummary() {
   const db = getDatabase();
   const [totalRow, activeRow] = await Promise.all([
-    db.select({ value: count() }).from(assessmentQuestions),
-    db.select({ value: count() }).from(assessmentQuestions).where(eq(assessmentQuestions.status, "Active")),
+    db.select({ value: count() }).from(assessmentQuestions).where(eq(assessmentQuestions.scope, "QUESTION_BANK")),
+    db.select({ value: count() }).from(assessmentQuestions).where(and(eq(assessmentQuestions.scope, "QUESTION_BANK"), eq(assessmentQuestions.status, "Active"))),
   ]);
   const dimensions = await getQuestionDimensions();
   return { total: totalRow[0]?.value ?? 0, active: activeRow[0]?.value ?? 0, dimensionCount: dimensions.length };
@@ -395,7 +398,7 @@ function buildTypeConfigSnapshot(input: QuestionInput): string {
   return JSON.stringify({ evidenceConfig: { pairedQuestionRef: input.claimedQuestionReference, options } });
 }
 
-async function insertNestedConfiguration(tx: Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0], questionId: string, input: QuestionInput) {
+export async function insertNestedConfiguration(tx: Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0], questionId: string, input: QuestionInput) {
   const insertOptions = async (rows: Array<Partial<typeof questionOptions.$inferInsert> & { optionText: string }>) => {
     await rows.reduce(async (previous, row, index) => {
       await previous;

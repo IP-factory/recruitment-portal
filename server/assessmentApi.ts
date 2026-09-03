@@ -32,6 +32,7 @@ import {
   removeAssessmentQuestion,
   reorderAssessmentQuestions,
   updateAssessment,
+  updateAssessmentStatus,
 } from "./assessmentRepository";
 import {
   validateAssessmentCreateInput,
@@ -90,6 +91,23 @@ export function createAssessmentApiRouter(): Router {
     } catch (error) {
       if (error instanceof AssessmentValidationError) return fail(response, 400, error.message);
       handleRouteError("admin assessment update")(error, response);
+    }
+  });
+
+  // ── Update Assessment Status ───────────────────────────────────────────────
+
+  router.patch("/api/admin/assessments/:idOrSlug/status", requireAuthorizedAdmin, async (request: Request, response: Response) => {
+    try {
+      const { status } = request.body ?? {};
+      if (!status || !["Active", "Inactive", "Draft"].includes(status)) {
+        return fail(response, 400, "Status must be Active, Inactive or Draft.");
+      }
+      const assessment = await updateAssessmentStatus(request.params.idOrSlug ?? "", status as "Active" | "Inactive" | "Draft");
+      if (!assessment) return fail(response, 404, "Assessment not found.");
+      response.json({ ok: true, assessment });
+    } catch (error) {
+      if (error instanceof AssessmentValidationError) return fail(response, 400, error.message);
+      handleRouteError("admin assessment status update")(error, response);
     }
   });
 

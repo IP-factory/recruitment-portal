@@ -24,12 +24,13 @@ import {
   removeAssessmentQuestion,
   reorderAssessmentQuestions,
   updateAssessment,
+  QUESTION_TYPES,
   type AdminAssessmentDetail,
   type AdminQuestionListResponse,
   type AssignedQuestionSummary,
 } from "@/lib/recruitmentApi";
 import { useAdminAssessment, useQuestionBank } from "@/hooks/useRecruitmentData";
-import { AlertTriangle, ArrowLeft, ChevronDown, ChevronUp, Info, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ChevronDown, ChevronUp, Copy, Info, Search, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 
@@ -74,7 +75,7 @@ export default function AdminAssessmentBuilder() {
 
   // ── Server data ───────────────────────────────────────────────────────────
   const assessmentState = useAdminAssessment(slug || undefined);
-  const questionBankState = useQuestionBank({ pageSize: 50, status: "Active" });
+  const questionBankState = useQuestionBank({ pageSize: 100 });
 
   // ── Local working state (reorder only — mutations applied immediately) ────
   // The working order is a local copy of assignment IDs, reflecting any
@@ -84,6 +85,10 @@ export default function AdminAssessmentBuilder() {
   const [descriptionValue, setDescriptionValue] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [dimensionFilter, setDimensionFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("Active");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -128,9 +133,36 @@ export default function AdminAssessmentBuilder() {
         (q.dimension?.name ?? "").toLowerCase().includes(term);
       const matchesDimension =
         dimensionFilter === "all" || q.dimension?.reference === dimensionFilter;
-      return matchesSearch && matchesDimension;
+      const matchesType = typeFilter === "all" || q.type === typeFilter;
+      const matchesStatus = statusFilter === "all" || q.status === statusFilter;
+      return matchesSearch && matchesDimension && matchesType && matchesStatus;
     });
-  }, [allBankItems, search, dimensionFilter]);
+  }, [allBankItems, search, dimensionFilter, typeFilter, statusFilter]);
+
+  // Multi-select (task #18): only questions not already assigned are selectable.
+  const selectableIds = useMemo(
+    () => filteredQuestions.filter((q) => !assignedIds.has(q.id)).map((q) => q.id),
+    // assignedIds is rebuilt each render from the working order.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredQuestions, effectiveOrder],
+  );
+  const allVisibleSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) selectableIds.forEach((id) => next.delete(id));
+      else selectableIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [allVisibleSelected, selectableIds]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -169,6 +201,12 @@ export default function AdminAssessmentBuilder() {
       try {
         const updated = await addAssessmentQuestion(assessment.slug, questionId);
         setWorkingOrder(updated.map((a) => a.questionId));
+        setSelectedIds((current) => {
+          if (!current.has(questionId)) return current;
+          const next = new Set(current);
+          next.delete(questionId);
+          return next;
+        });
         assessmentState.reload();
       } catch (error) {
         setActionError(error instanceof Error ? error.message : "Unable to add this question.");
@@ -176,6 +214,30 @@ export default function AdminAssessmentBuilder() {
     },
     [assessment, assessmentState],
   );
+
+  // Bulk add (task #18): add every selected question sequentially, then reload
+  // once. The server appends each assignment after the current highest order.
+  const handleAddSelected = useCallback(async () => {
+    if (!assessment || selectedIds.size === 0) return;
+    setActionError(null);
+    setAdding(true);
+    try {
+      let latest: AssignedQuestionSummary[] | null = null;
+      for (const questionId of Array.from(selectedIds)) {
+        if (assignedIds.has(questionId)) continue;
+        latest = await addAssessmentQuestion(assessment.slug, questionId);
+      }
+      if (latest) setWorkingOrder(latest.map((a) => a.questionId));
+      setSelectedIds(new Set());
+      assessmentState.reload();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to add the selected questions.");
+    } finally {
+      setAdding(false);
+    }
+    // assignedIds derives from effectiveOrder; include it to avoid a stale skip-set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assessment, assessmentState, selectedIds, effectiveOrder]);
 
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -318,13 +380,13 @@ export default function AdminAssessmentBuilder() {
             </FieldFrame>
           </div>
 
-          {/* Activation is blocked in this phase */}
+          {/* Status indicator */}
           {isDraft && (
             <div className="mt-5 flex gap-3 rounded-lg border border-[#d9e5f0] bg-[#f3f8fc] px-4 py-3">
               <Info className="mt-0.5 size-4 shrink-0 text-portal-blue" />
               <p className="text-[13px] leading-6 text-primary">
-                <span className="font-semibold">Assessment status: Draft.</span> Activation will be enabled
-                when the assessment is ready for applicant use.
+                <span className="font-semibold">Assessment status: Draft.</span>{" "}
+                Save your changes, then use the Assessment detail page to activate it when it is ready.
               </p>
             </div>
           )}
@@ -431,7 +493,7 @@ export default function AdminAssessmentBuilder() {
                 Add Active questions to this assessment.
               </p>
             </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_190px]">
+            <div className="mt-5 space-y-3">
               <div className="relative">
                 <label className="sr-only" htmlFor="builder-question-search">
                   Search questions
@@ -445,23 +507,58 @@ export default function AdminAssessmentBuilder() {
                   value={search}
                 />
               </div>
-              <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="builder-dimension-filter">
-                  Dimension
-                </label>
-                <select
-                  className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm text-primary"
-                  id="builder-dimension-filter"
-                  onChange={(e) => setDimensionFilter(e.target.value)}
-                  value={dimensionFilter}
-                >
-                  <option value="all">All dimensions</option>
-                  {dimensions.map((d) => (
-                    <option key={d.reference} value={d.reference}>
-                      {d.reference} · {d.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="builder-dimension-filter">
+                    Dimension
+                  </label>
+                  <select
+                    className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm text-primary"
+                    id="builder-dimension-filter"
+                    onChange={(e) => setDimensionFilter(e.target.value)}
+                    value={dimensionFilter}
+                  >
+                    <option value="all">All dimensions</option>
+                    {dimensions.map((d) => (
+                      <option key={d.reference} value={d.reference}>
+                        {d.reference} · {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="builder-type-filter">
+                    Type
+                  </label>
+                  <select
+                    className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm text-primary"
+                    id="builder-type-filter"
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                    value={typeFilter}
+                  >
+                    <option value="all">All types</option>
+                    {QUESTION_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="builder-status-filter">
+                    Status
+                  </label>
+                  <select
+                    className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm text-primary"
+                    id="builder-status-filter"
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    value={statusFilter}
+                  >
+                    <option value="all">All statuses</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -481,47 +578,91 @@ export default function AdminAssessmentBuilder() {
             {questionBankState.status === "ready" && (
               <>
                 {filteredQuestions.length > 0 ? (
-                  <div className="mt-5 divide-y divide-border border-t border-border">
-                    {filteredQuestions.map((question) => {
-                      const added = assignedIds.has(question.id);
-                      return (
-                        <article className="flex gap-3 py-4" key={question.id}>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-                              <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                                {question.reference}
-                              </span>
-                              <span className="text-[12px] text-muted-foreground">{question.type}</span>
+                  <>
+                    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-portal-surface px-3 py-2.5">
+                      <label className="flex items-center gap-2 text-[13px] font-medium text-primary">
+                        <input
+                          checked={allVisibleSelected}
+                          className="size-4 accent-[#436C9E] disabled:opacity-30"
+                          disabled={selectableIds.length === 0}
+                          onChange={toggleSelectAll}
+                          type="checkbox"
+                        />
+                        Select all
+                      </label>
+                      <FoundationButton
+                        disabled={selectedIds.size === 0 || adding}
+                        onClick={handleAddSelected}
+                        size="sm"
+                        variant="tertiary"
+                      >
+                        {adding ? "Adding…" : `Add selected (${selectedIds.size})`}
+                      </FoundationButton>
+                    </div>
+                    <div className="mt-3 divide-y divide-border border-t border-border">
+                      {filteredQuestions.map((question) => {
+                        const added = assignedIds.has(question.id);
+                        const selected = selectedIds.has(question.id);
+                        return (
+                          <article className="flex gap-3 py-4" key={question.id}>
+                            <input
+                              aria-label={`Select ${question.reference}`}
+                              checked={selected}
+                              className="mt-1 size-4 shrink-0 accent-[#436C9E] disabled:opacity-30"
+                              disabled={added}
+                              onChange={() => toggleSelect(question.id)}
+                              type="checkbox"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+                                <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                                  {question.reference}
+                                </span>
+                                <span className="text-[12px] text-muted-foreground">{question.type}</span>
+                                {question.status === "Inactive" && (
+                                  <span className="inline-flex rounded-md bg-[#fff8e8] px-2 py-0.5 text-[11px] font-medium text-[#765d22]">
+                                    Inactive
+                                  </span>
+                                )}
+                              </div>
+                              <p
+                                className="mt-2 line-clamp-2 text-sm font-medium leading-5 text-primary"
+                                title={question.prompt}
+                              >
+                                {question.prompt}
+                              </p>
+                              <p className="mt-1 text-[13px] text-muted-foreground">
+                                {question.dimension
+                                  ? `${question.dimension.reference} · ${question.dimension.name}`
+                                  : "No dimension"}
+                              </p>
                             </div>
-                            <p
-                              className="mt-2 line-clamp-2 text-sm font-medium leading-5 text-primary"
-                              title={question.prompt}
-                            >
-                              {question.prompt}
-                            </p>
-                            <p className="mt-1 text-[13px] text-muted-foreground">
-                              {question.dimension
-                                ? `${question.dimension.reference} · ${question.dimension.name}`
-                                : "No dimension"}
-                            </p>
-                          </div>
-                          <FoundationButton
-                            disabled={added}
-                            onClick={() => !added && handleAdd(question.id)}
-                            size="sm"
-                            variant={added ? "secondary" : "tertiary"}
-                          >
-                            {added ? "Added" : "Add"}
-                          </FoundationButton>
-                        </article>
-                      );
-                    })}
-                  </div>
+                            <div className="flex shrink-0 items-start gap-1">
+                              <QuietAction
+                                label={`Duplicate and edit ${question.reference}`}
+                                onClick={() => setLocation(`/admin/questions/${question.id}/duplicate`)}
+                              >
+                                <Copy className="size-4" />
+                              </QuietAction>
+                              <FoundationButton
+                                disabled={added}
+                                onClick={() => !added && handleAdd(question.id)}
+                                size="sm"
+                                variant={added ? "secondary" : "tertiary"}
+                              >
+                                {added ? "Added" : "Add"}
+                              </FoundationButton>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </>
                 ) : (
                   <div className="py-14 text-center">
                     <h4 className="text-base font-semibold text-primary">No questions found</h4>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Try changing your search or dimension filter.
+                      Try changing your search or filters.
                     </p>
                   </div>
                 )}

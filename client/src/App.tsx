@@ -24,6 +24,7 @@ import AdminQuestionForm from "@/pages/AdminQuestionForm";
 import AdminAssessmentDetail from "@/pages/AdminAssessmentDetail";
 import AdminAssessments from "@/pages/AdminAssessments";
 import AdminAssessmentBuilder from "@/pages/AdminAssessmentBuilder";
+import AdminAssessmentCsvImport from "@/pages/AdminAssessmentCsvImport";
 import AdminAssessmentPreview from "@/pages/AdminAssessmentPreview";
 import AdminScreening from "@/pages/AdminScreening";
 import ApplicantInformation from "@/pages/ApplicantInformation";
@@ -62,6 +63,7 @@ function Router() {
       <Route path="/admin/applications">{() => <AdminRoute><AdminApplications /></AdminRoute>}</Route>
       <Route path="/admin/roles/new">{() => <AdminRoute><AdminRoleForm /></AdminRoute>}</Route>
       <Route path="/admin/roles/:roleSlug/edit">{(params) => <AdminRoute><AdminRoleForm roleSlug={params.roleSlug} /></AdminRoute>}</Route>
+      <Route path="/admin/roles/:roleSlug/assessment/import">{() => <AdminRoute><AdminAssessmentCsvImport /></AdminRoute>}</Route>
       <Route path="/admin/roles/:roleSlug">{() => <AdminRoute><AdminRoleDetail /></AdminRoute>}</Route>
       <Route path="/admin/roles">{() => <AdminRoute><AdminRoles /></AdminRoute>}</Route>
       <Route path="/admin/assessments/:assessmentSlug/edit">{() => <AdminRoute><AdminAssessmentBuilder /></AdminRoute>}</Route>
@@ -70,6 +72,7 @@ function Router() {
       <Route path="/admin/assessments">{() => <AdminRoute><AdminAssessments /></AdminRoute>}</Route>
       <Route path="/admin/questions/new">{() => <AdminRoute><AdminQuestionForm /></AdminRoute>}</Route>
       <Route path="/admin/questions/:questionId/edit">{(params) => <AdminRoute><AdminQuestionForm questionId={params.questionId} /></AdminRoute>}</Route>
+      <Route path="/admin/questions/:questionId/duplicate">{(params) => <AdminRoute><AdminQuestionForm duplicateFromId={params.questionId} /></AdminRoute>}</Route>
       <Route path="/admin/questions/:questionId">{() => <AdminRoute><AdminQuestionDetail /></AdminRoute>}</Route>
       <Route path="/admin/questions">{() => <AdminRoute><AdminQuestionBank /></AdminRoute>}</Route>
       <Route path="/admin/settings">{() => <AdminRoute><AdminPlaceholder title="Settings" /></AdminRoute>}</Route>
