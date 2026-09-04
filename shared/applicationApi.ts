@@ -103,6 +103,10 @@ export interface CreateApplicationResponse {
 
 export interface ApplicationState {
   applicationId: string;
+  /** The slug of the role this application belongs to. */
+  roleSlug: string;
+  /** The human-readable title of the role this application belongs to. */
+  roleTitle: string;
   currentStep: string;
   applicationStatus: ApplicationStatus;
   eligibilityStatus: EligibilityStatus;

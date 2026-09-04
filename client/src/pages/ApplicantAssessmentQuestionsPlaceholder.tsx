@@ -25,12 +25,21 @@ import { Check, Loader2, AlertCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 
+function useRoleSlug() {
+  return useMemo(() => {
+    if (typeof window === "undefined") return "business-development-officer";
+    const match = window.location.pathname.match(/^\/apply\/([^/]+)/);
+    return match?.[1] ?? "business-development-officer";
+  }, []);
+}
+
 // ── Response state ─────────────────────────────────────────────────────────
 
 type ResponseState = Record<string, unknown>;
 
 export default function ApplicantAssessmentQuestionsPlaceholder() {
   const [, setLocation] = useLocation();
+  const roleSlug = useRoleSlug();
   const [questions, setQuestions] = useState<ApplicantSafeQuestion[]>([]);
   const [responses, setResponses] = useState<ResponseState>({});
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -51,7 +60,7 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
       onPhaseChange: setSavePhase,
       save: async (questionId, payload) => {
         const result = await saveAssessmentResponse(questionId, payload as SaveAssessmentResponseInput);
-        if (result.closed) setLocation("/apply/business-development-officer/eligibility");
+        if (result.closed) setLocation(`/apply/${roleSlug}/eligibility`);
       },
     });
   }
@@ -64,7 +73,7 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
     fetchLiveAssessment()
       .then((data) => {
         if (data.completed) {
-          setLocation("/apply/business-development-officer/review");
+          setLocation(`/apply/${roleSlug}/review`);
           return;
         }
         setQuestions(data.questions);
@@ -73,7 +82,7 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
       })
       .catch((err) => {
         if (err instanceof ApplicationApiError && (err.status === 401 || err.status === 403)) {
-          setLocation("/apply/business-development-officer/information");
+          setLocation(`/apply/${roleSlug}/information`);
           return;
         }
         setError(err instanceof Error ? err.message : "Unable to load your assessment.");
@@ -188,7 +197,7 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
       setCompleting(true);
       try {
         await completeAssessment();
-        setLocation("/apply/business-development-officer/assessment/complete");
+        setLocation(`/apply/${roleSlug}/assessment/complete`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to complete your assessment.");
       } finally {
@@ -206,11 +215,11 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
   }
 
   if (error) {
-    return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><div className="flex items-center gap-2 text-status-error-strong"><AlertCircle className="size-5" /><p>{error}</p></div><FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer/assessment")} variant="secondary">Back to assessment</FoundationButton></div></section></ApplicationShell>;
+    return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><div className="flex items-center gap-2 text-status-error-strong"><AlertCircle className="size-5" /><p>{error}</p></div><FoundationButton className="mt-6" onClick={() => setLocation(`/apply/${roleSlug}/assessment`)} variant="secondary">Back to assessment</FoundationButton></div></section></ApplicationShell>;
   }
 
   if (!question) {
-    return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="section-kicker">Assessment</p><h1 className="mt-3 text-2xl font-semibold tracking-[-0.025em] text-primary">Assessment questions are not available</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">There are no questions assigned to this assessment at present.</p><FoundationButton className="mt-6" onClick={() => setLocation("/apply/business-development-officer/information")} variant="secondary">Return to application</FoundationButton></div></section></ApplicationShell>;
+    return <ApplicationShell activeStep={2}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="section-kicker">Assessment</p><h1 className="mt-3 text-2xl font-semibold tracking-[-0.025em] text-primary">Assessment questions are not available</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">There are no questions assigned to this assessment at present.</p><FoundationButton className="mt-6" onClick={() => setLocation(`/apply/${roleSlug}/information`)} variant="secondary">Return to application</FoundationButton></div></section></ApplicationShell>;
   }
 
   const progressPercent = ((currentIndex + 1) / totalQuestions) * 100;
@@ -219,7 +228,7 @@ export default function ApplicantAssessmentQuestionsPlaceholder() {
   return <ApplicationShell activeStep={2}>
     <section className="mx-auto max-w-[800px] py-3 sm:py-6">
       <div className="flex items-center justify-between gap-4 border-b border-border pb-4">
-        <p className="text-sm font-semibold text-primary">Business Development Assessment</p>
+        <p className="text-sm font-semibold text-primary">Assessment</p>
         <p className="shrink-0 text-sm font-medium text-muted-foreground">Question {currentIndex + 1} of {totalQuestions}</p>
       </div>
       <div aria-label={`Question ${currentIndex + 1} of ${totalQuestions}`} aria-valuemax={totalQuestions} aria-valuemin={1} aria-valuenow={currentIndex + 1} className="mt-4 h-1 overflow-hidden rounded-full bg-border" role="progressbar">

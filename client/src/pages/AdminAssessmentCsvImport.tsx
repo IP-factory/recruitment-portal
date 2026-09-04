@@ -19,6 +19,7 @@
  * v2ModifierScoring, evaluationScoring or any dimension-weight calculation.
  */
 import { AdminShell } from "@/components/admin/AdminShell";
+import { AssessmentBuilderGuidance } from "@/components/admin/AssessmentBuilderPrompt";
 import { FoundationButton } from "@/components/foundation/ui";
 import {
   confirmCsvImport,
@@ -288,6 +289,10 @@ function UploadStep({
           <Download className="size-4" />
           Download CSV Template
         </FoundationButton>
+
+        <div className="mt-6">
+          <AssessmentBuilderGuidance />
+        </div>
 
         <h3 className="mt-8 text-lg font-semibold tracking-[-0.02em] text-primary">2 · Upload the completed file</h3>
         <p className="mt-2 text-[13px] leading-6 text-muted-foreground">

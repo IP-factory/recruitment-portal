@@ -78,12 +78,20 @@ export default function ApplicantInformation() {
     setHydrated(true);
   }, []);
 
-  // Check for existing application session and resume
+  // Check for existing application session and resume only if it's for THIS role.
+  // If the existing session belongs to a different role, clear it so the user
+  // can start a fresh application for the role they're currently viewing.
   useEffect(() => {
     const session = loadApplicantSession();
     if (session) {
       fetchApplication()
         .then((state) => {
+          // Wrong role — clear stale session and let the user start fresh.
+          if (state.roleSlug && state.roleSlug !== roleSlug) {
+            clearApplicantSession();
+            return;
+          }
+          // Same role — resume at the appropriate step.
           if (state.eligibilityStatus === "Closed") {
             setLocation(`/apply/${roleSlug}/eligibility`);
           } else if (state.applicationStatus === "Submitted") {
@@ -91,7 +99,6 @@ export default function ApplicantInformation() {
           } else if (state.applicationStatus === "Assessment Complete") {
             setLocation(`/apply/${roleSlug}/review`);
           } else {
-            // Task 24G — the CV step sits between Information and Assessment.
             setLocation(`/apply/${roleSlug}/cv`);
           }
         })

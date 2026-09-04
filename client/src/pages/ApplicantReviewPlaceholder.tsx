@@ -8,8 +8,16 @@ import { ApplicationShell } from "@/components/application/ApplicationShell";
 import { FoundationButton, StatusBadge } from "@/components/foundation/ui";
 import { fetchReviewData, submitApplication, ApplicationApiError } from "@/lib/applicationApi";
 import { AlertTriangle, Check, CheckCircle2, Info, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+
+function useRoleSlug() {
+  return useMemo(() => {
+    if (typeof window === "undefined") return "business-development-officer";
+    const match = window.location.pathname.match(/^\/apply\/([^/]+)/);
+    return match?.[1] ?? "business-development-officer";
+  }, []);
+}
 
 function valueOrNotProvided(value: string | undefined | null) { return value?.trim() || "Not provided"; }
 
@@ -56,6 +64,7 @@ interface ReviewData {
 
 export default function ApplicantReviewPlaceholder() {
   const [, setLocation] = useLocation();
+  const roleSlug = useRoleSlug();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reviewData, setReviewData] = useState<ReviewData | null>(null);
@@ -74,8 +83,7 @@ export default function ApplicantReviewPlaceholder() {
       })
       .catch((err) => {
         if (err instanceof ApplicationApiError && (err.status === 401 || err.status === 403)) {
-          setLocation("/apply/business-development-officer/information");
-          return;
+          setLocation(`/apply/${roleSlug}/information`);
         }
         setError(err instanceof Error ? err.message : "Unable to load your application for review.");
         setLoading(false);
@@ -90,7 +98,7 @@ export default function ApplicantReviewPlaceholder() {
     try {
       await submitApplication();
       setSubmitted(true);
-      setLocation("/apply/business-development-officer/submitted");
+      setLocation(`/apply/${roleSlug}/submitted`);
     } catch (err) {
       setError(err instanceof ApplicationApiError ? err.message : "Unable to submit your application.");
     } finally {
@@ -115,7 +123,7 @@ export default function ApplicantReviewPlaceholder() {
       <section>
         <p className="section-kicker">Step 4 of 4</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">{submitted ? "Completed application" : "Review your application"}</h1>
-        <p className="mt-3 max-w-2xl text-[15px] leading-7 text-muted-foreground">{submitted ? "This application has been submitted." : "Check the information below before submitting your application for the Business Development Officer role."}</p>
+        <p className="mt-3 max-w-2xl text-[15px] leading-7 text-muted-foreground">{submitted ? "This application has been submitted." : "Check the information below before submitting your application."}</p>
         {submitted ? (
           <div className="alert-success mt-6 flex gap-3 rounded-lg border px-4 py-3.5"><CheckCircle2 className="mt-0.5 size-[18px] shrink-0" /><div><p className="text-sm font-semibold">Application submitted</p><p className="mt-0.5 text-[13px] leading-5 opacity-85">Your application has been submitted successfully.</p></div></div>
         ) : (
@@ -124,7 +132,7 @@ export default function ApplicantReviewPlaceholder() {
 
         <div className="mt-8 space-y-5">
           {/* Applicant Information */}
-          <ReviewCard actionLabel="Edit" completed={submitted} onAction={() => setLocation("/apply/business-development-officer/information")} title="Applicant information">
+          <ReviewCard actionLabel="Edit" completed={submitted} onAction={() => setLocation(`/apply/${roleSlug}/information`)} title="Applicant information">
             {applicant ? (
               <dl className="mt-5 grid gap-x-8 gap-y-5 sm:grid-cols-2">
                 <DefinitionItem label="Full name" value={valueOrNotProvided(applicant.fullName)} />
@@ -172,9 +180,9 @@ export default function ApplicantReviewPlaceholder() {
           </ReviewCard>
 
           {/* Assessment Responses */}
-          <ReviewCard actionLabel="Review responses" completed={submitted} onAction={() => setLocation("/apply/business-development-officer/assessment/questions")} title="Assessment">
+          <ReviewCard actionLabel="Review responses" completed={submitted} onAction={() => setLocation(`/apply/${roleSlug}/assessment/questions`)} title="Assessment">
             <div className="mt-5">
-              <p className="text-sm font-semibold text-primary">Business Development Assessment</p>
+              <p className="text-sm font-semibold text-primary">Assessment responses</p>
               <p className="mt-1 text-[13px] text-muted-foreground">{responseEntries.length} responses recorded</p>
             </div>
             {responseEntries.length > 0 ? (
@@ -208,7 +216,7 @@ export default function ApplicantReviewPlaceholder() {
             {error ? <p className="mt-4 text-[13px] text-status-error-strong">{error}</p> : null}
             {attempted && (!declarationOne || !declarationTwo) ? <p className="mt-4 text-[13px] text-status-error-strong">Confirm both declarations before submitting.</p> : null}
             <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
-              <FoundationButton className="w-full sm:w-auto" onClick={() => setLocation("/apply/business-development-officer/assessment/complete")} variant="secondary">Back to assessment</FoundationButton>
+              <FoundationButton className="w-full sm:w-auto" onClick={() => setLocation(`/apply/${roleSlug}/assessment/complete`)} variant="secondary">Back to assessment</FoundationButton>
               <FoundationButton className="w-full sm:w-auto" disabled={submitting || !declarationOne || !declarationTwo} onClick={handleSubmit} size="lg">{submitting ? "Submitting..." : "Submit application"}</FoundationButton>
             </div>
           </section>

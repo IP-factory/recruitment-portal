@@ -265,9 +265,10 @@ export async function getApplicationEligibilityResponses(applicationId: string) 
 
 export async function buildApplicationState(application: typeof applications.$inferSelect): Promise<ApplicationState | null> {
   const db = getDatabase();
-  const [eligibilityRows, attempt] = await Promise.all([
+  const [eligibilityRows, attempt, roleRow] = await Promise.all([
     db.select().from(applicationEligibilityResponses).where(eq(applicationEligibilityResponses.applicationId, application.id)),
     getActiveAttempt(application.id),
+    db.select({ slug: recruitmentRoles.slug, title: recruitmentRoles.title }).from(recruitmentRoles).where(eq(recruitmentRoles.id, application.roleId)).limit(1),
   ]);
 
   let assessmentState: ApplicantAssessmentState | null = null;
@@ -288,6 +289,8 @@ export async function buildApplicationState(application: typeof applications.$in
 
   return {
     applicationId: application.id,
+    roleSlug: roleRow[0]?.slug ?? "",
+    roleTitle: roleRow[0]?.title ?? "",
     currentStep: application.currentStep,
     applicationStatus: application.applicationStatus,
     eligibilityStatus: application.eligibilityStatus,

@@ -9,8 +9,16 @@ import { ApplicationShell } from "@/components/application/ApplicationShell";
 import { FoundationButton } from "@/components/foundation/ui";
 import { fetchLiveAssessment } from "@/lib/applicationApi";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+
+function useRoleSlug() {
+  return useMemo(() => {
+    if (typeof window === "undefined") return "business-development-officer";
+    const match = window.location.pathname.match(/^\/apply\/([^/]+)/);
+    return match?.[1] ?? "business-development-officer";
+  }, []);
+}
 
 const BEFORE_YOU_BEGIN = [
   `You will answer {count} role-related questions based on your experience and how you would approach common commercial situations.`,
@@ -21,6 +29,7 @@ const BEFORE_YOU_BEGIN = [
 
 export default function ApplicantAssessmentPlaceholder() {
   const [, setLocation] = useLocation();
+  const roleSlug = useRoleSlug();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [questionCount, setQuestionCount] = useState(0);
@@ -30,7 +39,7 @@ export default function ApplicantAssessmentPlaceholder() {
       .then((data) => {
         setQuestionCount(data.questionCount);
         if (data.completed) {
-          setLocation("/apply/business-development-officer/review");
+          setLocation(`/apply/${roleSlug}/review`);
           return;
         }
         setLoading(false);
@@ -47,9 +56,9 @@ export default function ApplicantAssessmentPlaceholder() {
     <ApplicationShell activeStep={2} showSummary>
       <section>
         <p className="section-kicker">Step 3 of 4</p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">Business Development Assessment</h1>
+        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">Assessment</h1>
         <p className="mt-3 max-w-2xl text-[15px] leading-7 text-muted-foreground">
-          This short role-specific assessment helps us understand your experience, commercial judgement and approach to common Business Development situations.
+          This role-specific assessment helps us understand your experience, judgement and approach to relevant situations.
         </p>
 
         <div className="mt-8 rounded-xl border border-border bg-white p-7 shadow-none sm:p-8">
@@ -81,7 +90,7 @@ export default function ApplicantAssessmentPlaceholder() {
               <div className="mt-8 flex justify-end border-t border-border pt-6">
                 <FoundationButton
                   className="w-full sm:w-auto"
-                  onClick={() => setLocation("/apply/business-development-officer/assessment/questions")}
+                  onClick={() => setLocation(`/apply/${roleSlug}/assessment/questions`)}
                   size="lg"
                 >
                   Start assessment

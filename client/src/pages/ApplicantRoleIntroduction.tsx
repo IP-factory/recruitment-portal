@@ -12,7 +12,7 @@ import { DataErrorState, DataLoadingState } from "@/components/AsyncStates";
 import { AlignmentMark, PublicFooter, PublicNavigation } from "@/components/foundation/navigation";
 import { RichDescription } from "@/components/foundation/RichDescription";
 import { FoundationButton, StatusBadge } from "@/components/foundation/ui";
-import { loadApplicantSession } from "@/lib/applicationApi";
+import { fetchApplication, loadApplicantSession } from "@/lib/applicationApi";
 import { fetchPublicRole, formatRoleDateLabel, type PublicRecruitmentRole } from "@/lib/recruitmentApi";
 import { BriefcaseBusiness, ChevronDown, ChevronLeft, ChevronRight, Clock3, MapPin } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -29,7 +29,7 @@ export default function ApplicantRoleIntroduction() {
   const [role, setRole] = useState<PublicRecruitmentRole | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const hasSession = Boolean(loadApplicantSession());
+  const [hasSession, setHasSession] = useState(false);
 
   const load = () => {
     setStatus("loading");
@@ -38,6 +38,16 @@ export default function ApplicantRoleIntroduction() {
       .catch((err) => { setError(err instanceof Error ? err.message : "Unable to load this recruitment role."); setStatus("error"); });
   };
   useEffect(() => { load(); }, [roleSlug]);
+
+  // Check whether the stored session belongs to THIS role so we show the
+  // correct button label ("Continue" vs "Start application").
+  useEffect(() => {
+    const session = loadApplicantSession();
+    if (!session) { setHasSession(false); return; }
+    fetchApplication()
+      .then((state) => setHasSession(state.roleSlug === roleSlug))
+      .catch(() => setHasSession(false));
+  }, [roleSlug]);
 
   const startApplication = () => setLocation(`/apply/${roleSlug}/information`);
   const isLongDescription = (role?.fullDescription.trim().length ?? 0) > FULL_DESCRIPTION_PREVIEW_LENGTH;

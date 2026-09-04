@@ -16,6 +16,7 @@ import { deriveRoleApplicationCounts, describeLinkedAssessment, describeFramewor
 import type { AdminApplicationSummary } from "@/lib/adminApplicationApi";
 import { RoleEligibilityTab } from "@/components/admin/RoleEligibilityTab";
 import { V2EvaluationFrameworkTab } from "@/components/admin/V2EvaluationFrameworkTab";
+import { AssessmentBuilderGuidance } from "@/components/admin/AssessmentBuilderPrompt";
 import { downloadCsvTemplate, fetchCsvTemplate } from "@/lib/csvImportApi";
 import { ArrowLeft, Download, Pencil, Upload } from "lucide-react";
 import { useState } from "react";
@@ -73,15 +74,20 @@ function CsvImportActions({ roleSlug, onImportCsv }: { roleSlug: string; onImpor
         previewed before anything is saved, and imported questions are scored by the same engine as the Question Bank.
         If you include <span className="font-medium text-primary">dimension_name</span>, <span className="font-medium text-primary">dimension_weight</span> and <span className="font-medium text-primary">dimension_floor</span> in your CSV, the importer can generate the Evaluation Framework automatically when one is missing.
       </p>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      <div className="mt-4">
         <FoundationButton disabled={downloading} onClick={handleDownload} variant="secondary">
           <Download className="size-4" />{downloading ? "Preparing…" : "Download CSV Template"}
         </FoundationButton>
+      </div>
+      {error ? <p className="mt-3 text-[13px] font-medium text-status-error-strong">{error}</p> : null}
+      <div className="mt-4">
+        <AssessmentBuilderGuidance />
+      </div>
+      <div className="mt-4">
         <FoundationButton onClick={onImportCsv} variant="secondary">
           <Upload className="size-4" />Import Questions from CSV
         </FoundationButton>
       </div>
-      {error ? <p className="mt-3 text-[13px] font-medium text-status-error-strong">{error}</p> : null}
     </section>
   );
 }

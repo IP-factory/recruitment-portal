@@ -15,6 +15,8 @@ export interface SubmissionOutcomeInput {
   hasSession: boolean;
   eligibilityStatus?: string | null;
   applicationStatus?: string | null;
+  /** The role slug from the current URL — used to build redirect paths. */
+  roleSlug?: string;
 }
 
 export interface SubmissionOutcome {
@@ -23,11 +25,14 @@ export interface SubmissionOutcome {
   redirect?: string;
 }
 
+/** @deprecated Use resolveSubmissionOutcome with roleSlug instead. */
 export const SUBMISSION_ROUTE_BASE = "/apply/business-development-officer";
 
 export function resolveSubmissionOutcome(input: SubmissionOutcomeInput): SubmissionOutcome {
+  const base = `/apply/${input.roleSlug ?? "business-development-officer"}`;
+
   if (!input.hasSession) {
-    return { kind: "no-session", redirect: SUBMISSION_ROUTE_BASE };
+    return { kind: "no-session", redirect: base };
   }
   // Ineligibility wins over any other status: the applicant must always see
   // the outcome screen rather than a blank page or a success confirmation.
@@ -37,5 +42,5 @@ export function resolveSubmissionOutcome(input: SubmissionOutcomeInput): Submiss
   if (input.applicationStatus === "Submitted") {
     return { kind: "submitted" };
   }
-  return { kind: "in-progress", redirect: `${SUBMISSION_ROUTE_BASE}/review` };
+  return { kind: "in-progress", redirect: `${base}/review` };
 }
