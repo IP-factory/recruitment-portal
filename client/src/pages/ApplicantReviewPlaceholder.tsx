@@ -10,6 +10,7 @@ import { fetchReviewData, submitApplication, ApplicationApiError } from "@/lib/a
 import { AlertTriangle, Check, CheckCircle2, Info, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { useApplicantRoleTitle } from "@/hooks/useApplicantRoleTitle";
 
 function useRoleSlug() {
   return useMemo(() => {
@@ -65,6 +66,7 @@ interface ReviewData {
 export default function ApplicantReviewPlaceholder() {
   const [, setLocation] = useLocation();
   const roleSlug = useRoleSlug();
+  const roleTitle = useApplicantRoleTitle(roleSlug);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reviewData, setReviewData] = useState<ReviewData | null>(null);
@@ -107,11 +109,11 @@ export default function ApplicantReviewPlaceholder() {
   };
 
   if (loading) {
-    return <ApplicationShell activeStep={3}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="flex items-center gap-2 py-12 text-muted-foreground"><Loader2 className="size-5 animate-spin" />Loading your review...</div></section></ApplicationShell>;
+    return <ApplicationShell activeStep={3} roleTitle={roleTitle}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="flex items-center gap-2 py-12 text-muted-foreground"><Loader2 className="size-5 animate-spin" />Loading your review...</div></section></ApplicationShell>;
   }
 
   if (error && !reviewData) {
-    return <ApplicationShell activeStep={3}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="text-status-error-strong">{error}</p></div></section></ApplicationShell>;
+    return <ApplicationShell activeStep={3} roleTitle={roleTitle}><section className="mx-auto max-w-[800px] py-3 sm:py-6"><div className="rounded-xl border border-border bg-white p-6 sm:p-8"><p className="text-status-error-strong">{error}</p></div></section></ApplicationShell>;
   }
 
   const applicant = reviewData?.applicant;
@@ -119,7 +121,7 @@ export default function ApplicantReviewPlaceholder() {
   const responseEntries = Object.entries(assessmentResponses);
 
   return (
-    <ApplicationShell activeStep={3} showSummary submitted={submitted}>
+    <ApplicationShell activeStep={3} roleTitle={roleTitle} showSummary submitted={submitted}>
       <section>
         <p className="section-kicker">Step 4 of 4</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">{submitted ? "Completed application" : "Review your application"}</h1>

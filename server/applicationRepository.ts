@@ -188,46 +188,47 @@ export async function createApplication(
   const applicationStatus: ApplicationStatus = eligible ? "In Progress" : "Eligibility Closed";
   const currentStep = eligible ? "assessment" : "eligibility-closed";
 
-  await db.insert(applications).values({
-    id: applicationId,
-    roleId: role.id,
-    assessmentId: eligible && activeAssessment ? activeAssessment.id : null,
-    fullName: input.fullName,
-    email: normalizeEmail(input.email),
-    phone: input.phone,
-    city: input.city,
-    // currentStatus is stored in the recentRole column for backward-compat.
-    // The recentRole column is NOT NULL so new applications always write a value.
-    recentRole: input.currentStatus,
-    // currentStatusOther (only set when status is "Other") goes into recentEmployer.
-    // The column is nullable so it is fine to store null for non-Other statuses.
-    recentEmployer: input.currentStatusOther || null,
-    totalExperience: input.totalExperience,
-    // relevantExperience is no longer collected from the form; the BD experience
-    // gate is now answered directly in the eligibility section. Pass the empty
-    // string through for new applications; historical values are preserved.
-    relevantExperience: input.relevantExperience || "",
-    linkedinUrl: input.linkedinUrl || null,
-    eligibilityStatus,
-    applicationStatus,
-    currentStep,
-    applicantTokenHash: tokenHash,
-  });
-
-  // Persist eligibility gate responses
+  // Build the eligibility response rows before the transaction so any
+  // construction error is caught before we open a write transaction.
   const eligibilityResponses = eligibilityResult.gates.map((gate) => ({
     id: `elig-${randomBytes(8).toString("hex")}`,
     applicationId,
     gateId: gate.gateId,
-    gateReference: gate.gateReference,
-    responseValue: gate.response,
+    gateReference: gate.gateReference || "",
+    responseValue: gate.response || "",
     outcome: gate.outcome,
     internalFlag: gate.flagReason ?? null,
   }));
 
-  if (eligibilityResponses.length > 0) {
-    await db.insert(applicationEligibilityResponses).values(eligibilityResponses);
-  }
+  // Both inserts run inside a single transaction: if the eligibility-response
+  // insert fails (e.g. FK violation on gateId, constraint on gateReference)
+  // the application row is rolled back too, leaving no orphan record and
+  // allowing the applicant to retry cleanly.
+  await db.transaction(async (tx) => {
+    await tx.insert(applications).values({
+      id: applicationId,
+      roleId: role.id,
+      assessmentId: eligible && activeAssessment ? activeAssessment.id : null,
+      fullName: input.fullName,
+      email: normalizeEmail(input.email),
+      phone: input.phone,
+      city: input.city,
+      // currentStatus is stored in the recentRole column for backward-compat.
+      recentRole: input.currentStatus,
+      recentEmployer: input.currentStatusOther || null,
+      totalExperience: input.totalExperience,
+      relevantExperience: input.relevantExperience || "",
+      linkedinUrl: input.linkedinUrl || null,
+      eligibilityStatus,
+      applicationStatus,
+      currentStep,
+      applicantTokenHash: tokenHash,
+    });
+
+    if (eligibilityResponses.length > 0) {
+      await tx.insert(applicationEligibilityResponses).values(eligibilityResponses);
+    }
+  });
 
   return { applicationId, applicantToken: token };
 }

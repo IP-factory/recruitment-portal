@@ -119,8 +119,8 @@ export const applications = mysqlTable("applications", {
 export const applicationEligibilityResponses = mysqlTable("application_eligibility_responses", {
   id: varchar("id", { length: 64 }).primaryKey(),
   applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
-  gateId: varchar("gate_id", { length: 16 }).notNull(),
-  gateReference: varchar("gate_reference", { length: 16 }).notNull(),
+  gateId: varchar("gate_id", { length: 64 }).notNull(),
+  gateReference: varchar("gate_reference", { length: 64 }).notNull(),
   responseValue: text("response_value").notNull(),
   outcome: varchar("outcome", { length: 64 }).notNull(),
   internalFlag: varchar("internal_flag", { length: 64 }),

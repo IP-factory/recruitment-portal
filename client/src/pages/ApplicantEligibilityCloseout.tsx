@@ -10,27 +10,19 @@
  */
 import { ApplicationShell } from "@/components/application/ApplicationShell";
 import { FoundationButton } from "@/components/foundation/ui";
-import { fetchApplication } from "@/lib/applicationApi";
+import { useApplicantRoleTitle } from "@/hooks/useApplicantRoleTitle";
 import { XCircle } from "lucide-react";
-import { useEffect, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 
 export default function ApplicantEligibilityCloseout() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/apply/:roleSlug/eligibility");
   const roleSlug = params?.roleSlug ?? "";
-  const [roleTitle, setRoleTitle] = useState<string>("");
-
-  useEffect(() => {
-    fetchApplication()
-      .then((state) => setRoleTitle(state.roleTitle || roleSlug))
-      .catch(() => setRoleTitle(roleSlug));
-  }, [roleSlug]);
-
-  const displayTitle = roleTitle || roleSlug;
+  const dynamicRoleTitle = useApplicantRoleTitle(roleSlug);
+  const displayTitle = dynamicRoleTitle || roleSlug;
 
   return (
-    <ApplicationShell activeStep={0} showSummary>
+    <ApplicationShell activeStep={0} roleTitle={displayTitle} showSummary>
       <section className="max-w-2xl">
         <div className="flex size-12 items-center justify-center rounded-full bg-[#fdeaea] text-status-error-strong">
           <XCircle className="size-6" />

@@ -8,6 +8,7 @@
 import { ApplicationShell } from "@/components/application/ApplicationShell";
 import { FoundationButton } from "@/components/foundation/ui";
 import { fetchLiveAssessment } from "@/lib/applicationApi";
+import { useApplicantRoleTitle } from "@/hooks/useApplicantRoleTitle";
 import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -30,6 +31,7 @@ const BEFORE_YOU_BEGIN = [
 export default function ApplicantAssessmentPlaceholder() {
   const [, setLocation] = useLocation();
   const roleSlug = useRoleSlug();
+  const roleTitle = useApplicantRoleTitle(roleSlug);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [questionCount, setQuestionCount] = useState(0);
@@ -53,7 +55,7 @@ export default function ApplicantAssessmentPlaceholder() {
   const countLabel = questionCount > 0 ? String(questionCount) : "a series of";
 
   return (
-    <ApplicationShell activeStep={2} showSummary>
+    <ApplicationShell activeStep={2} roleTitle={roleTitle} showSummary>
       <section>
         <p className="section-kicker">Step 3 of 4</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">Assessment</h1>

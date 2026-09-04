@@ -14,6 +14,7 @@
 import { ApplicationShell } from "@/components/application/ApplicationShell";
 import { FoundationButton } from "@/components/foundation/ui";
 import { ApplicationApiError, fetchApplicantCv, loadApplicantSession, removeApplicantCv, uploadApplicantCv, type ApplicantCvFileMetadata } from "@/lib/applicationApi";
+import { useApplicantRoleTitle } from "@/hooks/useApplicantRoleTitle";
 import { CV_ACCEPTED_EXTENSIONS, CV_MAX_FILE_SIZE, cvExtensionOf, formatFileSize } from "@shared/cvApi";
 import { Check, CheckCircle2, FileText, Loader2, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -30,6 +31,7 @@ function useRoleSlug() {
 export default function ApplicantCvPlaceholder() {
   const [, setLocation] = useLocation();
   const roleSlug = useRoleSlug();
+  const roleTitle = useApplicantRoleTitle(roleSlug);
   const inputRef = useRef<HTMLInputElement>(null);
   const [cv, setCv] = useState<ApplicantCvFileMetadata | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,7 +106,7 @@ export default function ApplicantCvPlaceholder() {
   const uploadStateLabel = uploading ? "Uploading your CV…" : removing ? "Removing your CV…" : "";
 
   return (
-    <ApplicationShell activeStep={1} showSummary>
+    <ApplicationShell activeStep={1} roleTitle={roleTitle} showSummary>
       <section>
         <p className="section-kicker">Step 2 of 4</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">Curriculum Vitae</h1>

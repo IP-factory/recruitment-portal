@@ -10,6 +10,7 @@ import { RoleEligibilitySection } from "@/components/application/RoleEligibility
 import { DataErrorState } from "@/components/AsyncStates";
 import { FieldFrame, FoundationButton, FoundationInput, FoundationSelect } from "@/components/foundation/ui";
 import { usePublicEligibility } from "@/hooks/useRecruitmentData";
+import { useApplicantRoleTitle } from "@/hooks/useApplicantRoleTitle";
 import { BUSINESS_DEVELOPMENT_OFFICER_ROUTE } from "@/lib/eligibilityData";
 import { createApplication, saveApplicantSession, loadApplicantSession, fetchApplication, ApplicationApiError, clearApplicantSession } from "@/lib/applicationApi";
 import type { ApplicantEligibilityAnswers, CreateApplicationInput } from "@shared/applicationApi";
@@ -65,6 +66,8 @@ export default function ApplicantInformation() {
     return gateConfiguration.data.gates;
   }, [gateConfiguration.status, gateConfiguration.data]);
   const configurationUnavailable = gateConfiguration.status === "error" || (gateConfiguration.status === "ready" && eligibilityGates.length === 0);
+
+  const roleTitle = useApplicantRoleTitle(roleSlug);
 
   // Load persisted local form state for UX convenience
   useEffect(() => {
@@ -199,7 +202,7 @@ export default function ApplicantInformation() {
   };
 
   return (
-    <ApplicationShell activeStep={0} showSummary>
+    <ApplicationShell activeStep={0} roleTitle={roleTitle} showSummary>
       <section>
         <p className="section-kicker">Step 1 of 4</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-[-0.035em] text-primary sm:text-[34px]">Tell us about yourself</h1>

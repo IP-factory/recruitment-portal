@@ -50,7 +50,12 @@ function fail(response: Response, status: number, error: string) {
 
 function handleRouteError(context: string) {
   return (error: unknown, response: Response) => {
-    console.error(`[application] ${context} failed:`, error instanceof Error ? error.message : String(error));
+    // Log the full error detail server-side so the real cause is traceable
+    // in server logs without exposing internals to the applicant.
+    const detail = error instanceof Error
+      ? `${error.message}${error.cause ? ` (cause: ${String(error.cause)})` : ""}`
+      : String(error);
+    console.error(`[application] ${context} failed:`, detail);
     fail(response, 503, "Unable to process your request.");
   };
 }
@@ -111,13 +116,11 @@ export function createApplicationApiRouter(): Router {
         if (existing.applicationStatus === "Submitted" || existing.applicationStatus === "Shortlisted") {
           return fail(response, 409, "You have already submitted an application for this role.");
         }
-        // Return existing in-progress application if found (resume)
-        if (existing.applicationStatus === "In Progress" || existing.applicationStatus === "Assessment In Progress") {
-          // We need to generate a new token since we only store the hash.
-          // Instead, return an error asking the user to use their existing session.
-          // Actually per spec: "If an In Progress application exists and the client has the valid token: resume it."
-          // The client may not have the token. For MVP, return existing application ID and let client handle it.
-          return fail(response, 409, "An application for this role is already in progress. Please check your browser for an existing session.");
+        if (existing.applicationStatus === "In Progress" || existing.applicationStatus === "Assessment In Progress"
+            || existing.applicationStatus === "Eligibility Closed") {
+          return fail(response, 409,
+            "An application for this role already exists for this email address, but this browser does not have the session required to resume it. " +
+            "Please use the browser where you originally started the application.");
         }
       }
 
