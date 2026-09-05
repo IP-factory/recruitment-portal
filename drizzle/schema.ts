@@ -13,6 +13,7 @@ export const authSessions = mysqlTable("auth_sessions", {
 }, (table) => ({ userIndex: index("auth_sessions_user_idx").on(table.userId) }));
 
 export const recruitmentRoles = mysqlTable("recruitment_roles", {
+  deletedAt: timestamp("deleted_at"),
   id: varchar("id", { length: 64 }).primaryKey(), slug: varchar("slug", { length: 120 }).notNull().unique(), title: varchar("title", { length: 180 }).notNull(), department: varchar("department", { length: 160 }).notNull(), location: varchar("location", { length: 160 }).notNull(), employmentType: varchar("employment_type", { length: 80 }).notNull(), shortDescription: text("short_description").notNull(), fullDescription: text("full_description").notNull(), status: mysqlEnum("status", ["Draft", "Open", "Closed", "Archived"]).notNull(), openingDate: varchar("opening_date", { length: 32 }), closingDate: varchar("closing_date", { length: 32 }), createdAt: timestamp("created_at").defaultNow().notNull(), updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 

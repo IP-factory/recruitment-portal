@@ -11,6 +11,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createAdminRole,
+  deleteAdminRole,
   createQuestion,
   fetchAdminEligibility,
   fetchAdminRoles,
@@ -61,6 +62,13 @@ describe("public endpoints", () => {
 // ── Task 24C-1: admin endpoints ──────────────────────────────────────────────
 
 describe("admin endpoints", () => {
+  it("deletes the exact role with admin credentials and surfaces failures", async () => {
+    const fetchMock = stubFetch({ ok: true });
+    await deleteAdminRole("role/a b");
+    expect(fetchMock).toHaveBeenCalledWith("/api/admin/recruitment-roles/role%2Fa%20b", { credentials: "include", method: "DELETE" });
+    stubFetch({ ok: false, error: "Unable to delete this role." }, 503);
+    await expect(deleteAdminRole("r1")).rejects.toThrow("Unable to delete this role.");
+  });
   it("createAdminRole POSTs the JSON input and returns the created role", async () => {
     const input = { title: "New Role", status: "Draft" } as any;
     const role = { id: "r1", ...input };

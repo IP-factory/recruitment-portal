@@ -4,6 +4,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "db:migrate:role-deletion": "tsx scripts/migrate-role-deletion.ts",
     "dev": "concurrently --kill-others-on-fail --names \"server,client\" --prefix-colors \"blue,green\" \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite --host --port 3000",
     "dev:server": "tsx watch server/index.ts",

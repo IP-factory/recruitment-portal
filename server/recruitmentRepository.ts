@@ -6,7 +6,7 @@
  * these functions instead of embedding Drizzle queries directly.
  */
 import { randomBytes } from "node:crypto";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import {
   assessmentDimensions,
   eligibilityGates,
@@ -47,17 +47,17 @@ const decimalToNumber = (value: string | number | null): number | null => (value
 
 export async function listRecruitmentRoles() {
   const db = getDatabase();
-  return db.select().from(recruitmentRoles).orderBy(asc(recruitmentRoles.createdAt));
+  return db.select().from(recruitmentRoles).where(isNull(recruitmentRoles.deletedAt)).orderBy(asc(recruitmentRoles.createdAt));
 }
 
 export async function getRecruitmentRoleById(id: string) {
   const db = getDatabase();
-  return (await db.select().from(recruitmentRoles).where(eq(recruitmentRoles.id, id)).limit(1))[0] ?? null;
+  return (await db.select().from(recruitmentRoles).where(and(eq(recruitmentRoles.id, id), isNull(recruitmentRoles.deletedAt))).limit(1))[0] ?? null;
 }
 
 export async function getRecruitmentRoleBySlug(slug: string) {
   const db = getDatabase();
-  return (await db.select().from(recruitmentRoles).where(eq(recruitmentRoles.slug, slug)).limit(1))[0] ?? null;
+  return (await db.select().from(recruitmentRoles).where(and(eq(recruitmentRoles.slug, slug), isNull(recruitmentRoles.deletedAt))).limit(1))[0] ?? null;
 }
 
 /** Resolve an Admin route parameter that may be a database id or a slug. */
@@ -82,9 +82,17 @@ export async function updateRecruitmentRole(id: string, input: RecruitmentRoleIn
   if (!existing) return null;
   // Metadata-only update: gates, dimensions, assessments and screening
   // configuration are never touched by an ordinary role edit.
-  await db.update(recruitmentRoles).set({ ...input, fullDescription: input.fullDescription || "" }).where(eq(recruitmentRoles.id, id));
+  await db.update(recruitmentRoles).set({ ...input, fullDescription: input.fullDescription || "" }).where(and(eq(recruitmentRoles.id, id), isNull(recruitmentRoles.deletedAt)));
   const updated = await getRecruitmentRoleById(id);
   return updated ? toAdminRole(updated) : null;
+}
+
+/** Never cascade-delete a role: candidate records and their scoring configuration must survive. */
+export async function deleteRecruitmentRole(id: string): Promise<boolean> {
+  const [result] = await getDatabase().update(recruitmentRoles)
+    .set({ deletedAt: new Date(), status: "Archived" })
+    .where(and(eq(recruitmentRoles.id, id), isNull(recruitmentRoles.deletedAt)));
+  return result.affectedRows > 0;
 }
 
 export function toAdminRole(role: typeof recruitmentRoles.$inferSelect): AdminRecruitmentRole {

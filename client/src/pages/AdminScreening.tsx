@@ -17,6 +17,7 @@ import {
   type ScreeningBand,
 } from "@/lib/adminApplicationApi";
 import { applicationStatusDisplayLabel, eligibilityDisplayLabel } from "@/lib/adminDisplay";
+import { screeningRoleKey, screeningRoleOptions } from "@/lib/screeningRoles";
 import { calculateOverallCandidateScore, describeCvScore, describeOverallCandidateScore } from "@shared/candidateScore";
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -62,6 +63,7 @@ export default function AdminScreening() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
   const [applicationStatus, setApplicationStatus] = useState("all");
   const [band, setBand] = useState<FilterValue>("all");
   const [shortlistOnly, setShortlistOnly] = useState<FilterValue>("all");
@@ -77,10 +79,13 @@ export default function AdminScreening() {
   };
   useEffect(() => { load(); }, []);
 
+  const roleOptions = useMemo(() => screeningRoleOptions(applications), [applications]);
+
   const filteredRecords = useMemo(() => {
     const term = search.trim().toLowerCase();
     const filtered = applications.filter((app) =>
       (!term || app.fullName.toLowerCase().includes(term) || app.email.toLowerCase().includes(term)) &&
+      (roleFilter === "all" || screeningRoleKey(app) === roleFilter) &&
       (applicationStatus === "all" || app.applicationStatus === applicationStatus) &&
       (band === "all" || (band === "Pending" ? !app.appliedBand : app.appliedBand === band)) &&
       (shortlistOnly === "all" || shortlistOnly === "shortlisted" && app.shortlisted || shortlistOnly === "not-shortlisted" && !app.shortlisted)
@@ -111,10 +116,10 @@ export default function AdminScreening() {
       const comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       return sort === "application-asc" ? comparison : -comparison;
     });
-  }, [applications, applicationStatus, band, search, shortlistOnly, sort]);
+  }, [applications, applicationStatus, band, search, shortlistOnly, sort, roleFilter]);
 
-  const hasFilters = Boolean(search.trim()) || applicationStatus !== "all" || band !== "all" || shortlistOnly !== "all" || sort !== "final-score-desc";
-  const clearFilters = () => { setSearch(""); setApplicationStatus("all"); setBand("all"); setShortlistOnly("all"); setSort("final-score-desc"); };
+  const hasFilters = Boolean(search.trim()) || roleFilter !== "all" || applicationStatus !== "all" || band !== "all" || shortlistOnly !== "all" || sort !== "final-score-desc";
+  const clearFilters = () => { setSearch(""); setRoleFilter("all"); setApplicationStatus("all"); setBand("all"); setShortlistOnly("all"); setSort("final-score-desc"); };
   const shortlistedCount = applications.filter((a) => a.shortlisted).length;
 
   const confirmAction = async () => {
@@ -153,6 +158,7 @@ export default function AdminScreening() {
     <section className="mt-6 rounded-xl border border-border bg-white p-4 shadow-none sm:p-5 lg:p-6">
       <div className="flex flex-col gap-5 border-b border-border pb-5 xl:flex-row xl:items-end xl:justify-between">
         <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[550px]">
+          <div className="sm:col-span-2"><label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="screening-role">Role applied for</label><FoundationSelect id="screening-role" onChange={(e) => setRoleFilter(e.target.value)} value={roleFilter}><option value="all">All roles</option>{roleOptions.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}</FoundationSelect></div>
           <div><label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="screening-sort">Sort by</label><FoundationSelect id="screening-sort" onChange={(e) => setSort(e.target.value as SortOption)} value={sort}><option value="overall-desc">Overall Score — highest first</option><option value="overall-asc">Overall Score — lowest first</option><option value="final-score-desc">Assessment Score — highest first</option><option value="final-score-asc">Assessment Score — lowest first</option><option value="cv-desc">CV Score — highest first</option><option value="cv-asc">CV Score — lowest first</option><option value="application-desc">Application date — newest first</option><option value="application-asc">Application date — oldest first</option><option value="candidate">Candidate name</option></FoundationSelect></div>
           <div><label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="screening-status">Status</label><FoundationSelect id="screening-status" onChange={(e) => setApplicationStatus(e.target.value)} value={applicationStatus}><option value="all">All statuses</option>{statusOptions.filter((s) => s !== "all").map((s) => <option key={s} value={s}>{s}</option>)}</FoundationSelect></div>
         </div>
@@ -170,6 +176,7 @@ export default function AdminScreening() {
       {filteredRecords.length ? <>
         <div className="mt-3 hidden overflow-x-auto md:block"><table className="w-full min-w-[1350px] text-left"><thead className="border-b border-border"><tr>
           <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Candidate</th>
+          <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Role applied for</th>
           <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Eligibility</th>
           <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Assessment Score</th>
           <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">CV Score</th>
@@ -180,6 +187,7 @@ export default function AdminScreening() {
           <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Shortlist</th>
         </tr></thead><tbody className="divide-y divide-border">{filteredRecords.map((app) => <tr key={app.id} className="cursor-pointer transition-colors hover:bg-portal-surface" onClick={() => setLocation(`/admin/applications/${app.id}`)}>
           <td className="px-3 py-4"><div className="flex items-center gap-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-portal-surface text-[11px] font-semibold text-primary">{initials(app.fullName)}</span><div><p className="text-sm font-medium text-primary">{app.fullName}</p><p className="mt-1 text-[12px] text-muted-foreground">{app.email}</p></div></div></td>
+          <td className="min-w-[180px] px-3 py-4 text-[13px] text-primary">{app.roleTitle}</td>
           <td className="px-3 py-4"><EligibilityValue value={app.eligibilityStatus} /></td>
           <td className="px-3 py-4"><ScoreValue score={app.finalScore} status={app.evaluationStatus} /></td>
           <td className="px-3 py-4"><CvScoreValue cvScore={app.cvScore} cvUploaded={app.cvUploaded} /></td>
@@ -193,6 +201,7 @@ export default function AdminScreening() {
         <div className="mt-3 divide-y divide-border md:hidden">{filteredRecords.map((app) => <article className="cursor-pointer py-4 transition-colors hover:bg-portal-surface" key={app.id} onClick={() => setLocation(`/admin/applications/${app.id}`)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setLocation(`/admin/applications/${app.id}`); }}>
           <div className="flex items-start gap-3"><span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-portal-surface text-[11px] font-semibold text-primary">{initials(app.fullName)}</span><div><p className="text-sm font-medium text-primary">{app.fullName}</p><p className="mt-1 text-[12px] text-muted-foreground">{app.email}</p></div></div>
           <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4">
+            <div className="col-span-2"><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Role applied for</p><p className="mt-1 text-[13px] text-primary">{app.roleTitle}</p></div>
             <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Eligibility</p><p className="mt-1"><EligibilityValue value={app.eligibilityStatus} /></p></div>
             <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Assessment Score</p><p className="mt-1"><ScoreValue score={app.finalScore} status={app.evaluationStatus} /></p></div>
             <div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">CV Score</p><p className="mt-1"><CvScoreValue cvScore={app.cvScore} cvUploaded={app.cvUploaded} /></p></div>

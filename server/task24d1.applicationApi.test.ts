@@ -9,7 +9,7 @@ import express from "express";
 import { randomBytes } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApplicationApiRouter } from "./applicationApi";
 import {
   evaluateEligibilityServerSide,
@@ -378,12 +378,19 @@ describe("security: applicant API router", () => {
   });
 
   it("POST application without body returns error", async () => {
-    const response = await fetch(`${baseUrl}/api/public/applications`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    expect(response.status).toBe(400);
+    // Validation happens before opening a connection, but after the configuration guard.
+    // Keep this no-database test independent of the developer's .env file.
+    vi.stubEnv("DATABASE_URL", "mysql://unused-for-input-validation");
+    try {
+      const response = await fetch(`${baseUrl}/api/public/applications`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(response.status).toBe(400);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

@@ -57,6 +57,13 @@
       "when": 1788883200000,
       "tag": "0007_csv_import_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1788969600000,
+      "tag": "0009_soft_delete_recruitment_roles",
+      "breakpoints": true
     }
   ]
 }

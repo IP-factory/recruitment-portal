@@ -44,6 +44,7 @@ var init_schema = __esm({
       createdAt: timestamp("created_at").defaultNow().notNull()
     }, (table) => ({ userIndex: index("auth_sessions_user_idx").on(table.userId) }));
     recruitmentRoles = mysqlTable("recruitment_roles", {
+      deletedAt: timestamp("deleted_at"),
       id: varchar("id", { length: 64 }).primaryKey(),
       slug: varchar("slug", { length: 120 }).notNull().unique(),
       title: varchar("title", { length: 180 }).notNull(),
@@ -95,9 +96,11 @@ var init_schema = __esm({
       required: tinyint("required").default(1).notNull(),
       status: mysqlEnum("status", ["Active", "Inactive", "Draft"]).notNull(),
       timeLimitSec: int("time_limit_sec"),
+      scope: mysqlEnum("scope", ["QUESTION_BANK", "ROLE_ONLY"]).default("QUESTION_BANK").notNull(),
+      ownerRoleId: varchar("owner_role_id", { length: 64 }).references(() => recruitmentRoles.id, { onDelete: "set null" }),
       createdAt: timestamp("created_at").defaultNow().notNull(),
       updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull()
-    }, (table) => ({ typeIndex: index("assessment_questions_type_idx").on(table.questionType), dimensionIndex: index("assessment_questions_dimension_idx").on(table.dimensionId) }));
+    }, (table) => ({ typeIndex: index("assessment_questions_type_idx").on(table.questionType), dimensionIndex: index("assessment_questions_dimension_idx").on(table.dimensionId), scopeIndex: index("assessment_questions_scope_idx").on(table.scope) }));
     questionOptions = mysqlTable("question_options", {
       id: varchar("id", { length: 96 }).primaryKey(),
       questionId: varchar("question_id", { length: 96 }).notNull().references(() => assessmentQuestions.id, { onDelete: "cascade" }),
@@ -264,8 +267,8 @@ var init_schema = __esm({
     applicationEligibilityResponses = mysqlTable("application_eligibility_responses", {
       id: varchar("id", { length: 64 }).primaryKey(),
       applicationId: varchar("application_id", { length: 64 }).notNull().references(() => applications.id, { onDelete: "cascade" }),
-      gateId: varchar("gate_id", { length: 16 }).notNull(),
-      gateReference: varchar("gate_reference", { length: 16 }).notNull(),
+      gateId: varchar("gate_id", { length: 64 }).notNull(),
+      gateReference: varchar("gate_reference", { length: 64 }).notNull(),
       responseValue: text("response_value").notNull(),
       outcome: varchar("outcome", { length: 64 }).notNull(),
       internalFlag: varchar("internal_flag", { length: 64 }),
@@ -766,6 +769,7 @@ async function listQuestions(query) {
   const pageSize = Math.min(50, Math.max(1, query.pageSize ?? 10));
   const search = query.search?.trim() ?? "";
   const conditions = [];
+  conditions.push(eq(assessmentQuestions.scope, "QUESTION_BANK"));
   if (search) {
     const term = `%${search}%`;
     conditions.push(or(like(assessmentQuestions.reference, term), like(assessmentQuestions.prompt, term)));
@@ -809,8 +813,8 @@ async function listQuestions(query) {
 async function getQuestionBankSummary() {
   const db = getDatabase();
   const [totalRow, activeRow] = await Promise.all([
-    db.select({ value: count() }).from(assessmentQuestions),
-    db.select({ value: count() }).from(assessmentQuestions).where(eq(assessmentQuestions.status, "Active"))
+    db.select({ value: count() }).from(assessmentQuestions).where(eq(assessmentQuestions.scope, "QUESTION_BANK")),
+    db.select({ value: count() }).from(assessmentQuestions).where(and(eq(assessmentQuestions.scope, "QUESTION_BANK"), eq(assessmentQuestions.status, "Active")))
   ]);
   const dimensions = await getQuestionDimensions();
   return { total: totalRow[0]?.value ?? 0, active: activeRow[0]?.value ?? 0, dimensionCount: dimensions.length };
@@ -1186,6 +1190,7 @@ var assessmentRepository_exports = {};
 __export(assessmentRepository_exports, {
   AssessmentValidationError: () => AssessmentValidationError,
   addAssessmentQuestion: () => addAssessmentQuestion,
+  buildUniqueSlug: () => buildUniqueSlug,
   createAssessment: () => createAssessment,
   getAssessment: () => getAssessment,
   getAssessmentByIdOrSlug: () => getAssessmentByIdOrSlug,
@@ -1195,7 +1200,8 @@ __export(assessmentRepository_exports, {
   removeAssessmentQuestion: () => removeAssessmentQuestion,
   reorderAssessmentQuestions: () => reorderAssessmentQuestions,
   replaceAssessmentAssignments: () => replaceAssessmentAssignments,
-  updateAssessment: () => updateAssessment
+  updateAssessment: () => updateAssessment,
+  updateAssessmentStatus: () => updateAssessmentStatus
 });
 import { randomBytes as randomBytes2 } from "node:crypto";
 import { and as and2, asc as asc2, count as count2, eq as eq2, inArray as inArray2 } from "drizzle-orm";
@@ -1369,6 +1375,16 @@ async function updateAssessment(idOrSlug, input) {
   const existing = await getAssessmentByIdOrSlug(idOrSlug);
   if (!existing) return null;
   await db.update(assessments).set({ name: input.name, description: input.description }).where(eq2(assessments.id, existing.id));
+  return getAssessment(existing.id);
+}
+async function updateAssessmentStatus(idOrSlug, status) {
+  const db = getDatabase();
+  const existing = await getAssessmentByIdOrSlug(idOrSlug);
+  if (!existing) return null;
+  if (existing.status === "Archived") {
+    throw new AssessmentValidationError("Archived assessments cannot be reactivated.");
+  }
+  await db.update(assessments).set({ status }).where(eq2(assessments.id, existing.id));
   return getAssessment(existing.id);
 }
 async function getAssignmentCount(assessmentId) {
@@ -1583,7 +1599,7 @@ var init_db = __esm({
 
 // server/app.ts
 import mysql2 from "mysql2/promise";
-import express7 from "express";
+import express8 from "express";
 
 // server/adminAuth.ts
 init_schema();
@@ -2617,6 +2633,7 @@ function createAdminApplicationApiRouter() {
           fullName: app2.fullName,
           email: app2.email,
           roleTitle: app2.roleTitle,
+          roleId: app2.roleId,
           eligibilityStatus: app2.eligibilityStatus,
           assessmentStatus,
           applicationStatus: app2.applicationStatus,
@@ -3208,43 +3225,39 @@ async function createApplication(input, role, eligibilityResult, activeAssessmen
   const eligibilityStatus = eligible ? "Eligible" : "Closed";
   const applicationStatus = eligible ? "In Progress" : "Eligibility Closed";
   const currentStep = eligible ? "assessment" : "eligibility-closed";
-  await db.insert(applications).values({
-    id: applicationId,
-    roleId: role.id,
-    assessmentId: eligible && activeAssessment ? activeAssessment.id : null,
-    fullName: input.fullName,
-    email: normalizeEmail(input.email),
-    phone: input.phone,
-    city: input.city,
-    // currentStatus is stored in the recentRole column for backward-compat.
-    // The recentRole column is NOT NULL so new applications always write a value.
-    recentRole: input.currentStatus,
-    // currentStatusOther (only set when status is "Other") goes into recentEmployer.
-    // The column is nullable so it is fine to store null for non-Other statuses.
-    recentEmployer: input.currentStatusOther || null,
-    totalExperience: input.totalExperience,
-    // relevantExperience is no longer collected from the form; the BD experience
-    // gate is now answered directly in the eligibility section. Pass the empty
-    // string through for new applications; historical values are preserved.
-    relevantExperience: input.relevantExperience || "",
-    linkedinUrl: input.linkedinUrl || null,
-    eligibilityStatus,
-    applicationStatus,
-    currentStep,
-    applicantTokenHash: tokenHash
-  });
   const eligibilityResponses = eligibilityResult.gates.map((gate) => ({
     id: `elig-${randomBytes6(8).toString("hex")}`,
     applicationId,
     gateId: gate.gateId,
-    gateReference: gate.gateReference,
-    responseValue: gate.response,
+    gateReference: gate.gateReference || "",
+    responseValue: gate.response || "",
     outcome: gate.outcome,
     internalFlag: gate.flagReason ?? null
   }));
-  if (eligibilityResponses.length > 0) {
-    await db.insert(applicationEligibilityResponses).values(eligibilityResponses);
-  }
+  await db.transaction(async (tx) => {
+    await tx.insert(applications).values({
+      id: applicationId,
+      roleId: role.id,
+      assessmentId: eligible && activeAssessment ? activeAssessment.id : null,
+      fullName: input.fullName,
+      email: normalizeEmail(input.email),
+      phone: input.phone,
+      city: input.city,
+      // currentStatus is stored in the recentRole column for backward-compat.
+      recentRole: input.currentStatus,
+      recentEmployer: input.currentStatusOther || null,
+      totalExperience: input.totalExperience,
+      relevantExperience: input.relevantExperience || "",
+      linkedinUrl: input.linkedinUrl || null,
+      eligibilityStatus,
+      applicationStatus,
+      currentStep,
+      applicantTokenHash: tokenHash
+    });
+    if (eligibilityResponses.length > 0) {
+      await tx.insert(applicationEligibilityResponses).values(eligibilityResponses);
+    }
+  });
   return { applicationId, applicantToken: token };
 }
 async function findApplicationByToken(token) {
@@ -3265,9 +3278,10 @@ async function updateApplicationStatus(applicationId, status, step) {
 }
 async function buildApplicationState(application) {
   const db = getDatabase();
-  const [eligibilityRows, attempt] = await Promise.all([
+  const [eligibilityRows, attempt, roleRow] = await Promise.all([
     db.select().from(applicationEligibilityResponses).where(eq6(applicationEligibilityResponses.applicationId, application.id)),
-    getActiveAttempt(application.id)
+    getActiveAttempt(application.id),
+    db.select({ slug: recruitmentRoles.slug, title: recruitmentRoles.title }).from(recruitmentRoles).where(eq6(recruitmentRoles.id, application.roleId)).limit(1)
   ]);
   let assessmentState = null;
   if (attempt && application.assessmentId) {
@@ -3286,6 +3300,8 @@ async function buildApplicationState(application) {
   }
   return {
     applicationId: application.id,
+    roleSlug: roleRow[0]?.slug ?? "",
+    roleTitle: roleRow[0]?.title ?? "",
     currentStep: application.currentStep,
     applicationStatus: application.applicationStatus,
     eligibilityStatus: application.eligibilityStatus,
@@ -3509,7 +3525,7 @@ init_db();
 // server/recruitmentRepository.ts
 init_schema();
 import { randomBytes as randomBytes7 } from "node:crypto";
-import { asc as asc7, eq as eq7 } from "drizzle-orm";
+import { and as and7, asc as asc7, eq as eq7, isNull as isNull2 } from "drizzle-orm";
 
 // shared/recruitmentApi.ts
 var ROLE_STATUSES = ["Draft", "Open", "Closed", "Archived"];
@@ -3641,15 +3657,15 @@ function parseJson4(value, fallback) {
 var decimalToNumber = (value) => value === null ? null : Number(value);
 async function listRecruitmentRoles() {
   const db = getDatabase();
-  return db.select().from(recruitmentRoles).orderBy(asc7(recruitmentRoles.createdAt));
+  return db.select().from(recruitmentRoles).where(isNull2(recruitmentRoles.deletedAt)).orderBy(asc7(recruitmentRoles.createdAt));
 }
 async function getRecruitmentRoleById(id) {
   const db = getDatabase();
-  return (await db.select().from(recruitmentRoles).where(eq7(recruitmentRoles.id, id)).limit(1))[0] ?? null;
+  return (await db.select().from(recruitmentRoles).where(and7(eq7(recruitmentRoles.id, id), isNull2(recruitmentRoles.deletedAt))).limit(1))[0] ?? null;
 }
 async function getRecruitmentRoleBySlug(slug) {
   const db = getDatabase();
-  return (await db.select().from(recruitmentRoles).where(eq7(recruitmentRoles.slug, slug)).limit(1))[0] ?? null;
+  return (await db.select().from(recruitmentRoles).where(and7(eq7(recruitmentRoles.slug, slug), isNull2(recruitmentRoles.deletedAt))).limit(1))[0] ?? null;
 }
 async function getRecruitmentRoleByIdOrSlug(idOrSlug) {
   return await getRecruitmentRoleById(idOrSlug) ?? await getRecruitmentRoleBySlug(idOrSlug);
@@ -3668,9 +3684,13 @@ async function updateRecruitmentRole(id, input) {
   const db = getDatabase();
   const existing = await getRecruitmentRoleById(id);
   if (!existing) return null;
-  await db.update(recruitmentRoles).set({ ...input, fullDescription: input.fullDescription || "" }).where(eq7(recruitmentRoles.id, id));
+  await db.update(recruitmentRoles).set({ ...input, fullDescription: input.fullDescription || "" }).where(and7(eq7(recruitmentRoles.id, id), isNull2(recruitmentRoles.deletedAt)));
   const updated = await getRecruitmentRoleById(id);
   return updated ? toAdminRole(updated) : null;
+}
+async function deleteRecruitmentRole(id) {
+  const [result] = await getDatabase().update(recruitmentRoles).set({ deletedAt: /* @__PURE__ */ new Date(), status: "Archived" }).where(and7(eq7(recruitmentRoles.id, id), isNull2(recruitmentRoles.deletedAt)));
+  return result.affectedRows > 0;
 }
 function toAdminRole(role) {
   return {
@@ -3846,7 +3866,8 @@ function fail2(response, status, error) {
 }
 function handleRouteError(context) {
   return (error, response) => {
-    console.error(`[application] ${context} failed:`, error instanceof Error ? error.message : String(error));
+    const detail = error instanceof Error ? `${error.message}${error.cause ? ` (cause: ${String(error.cause)})` : ""}` : String(error);
+    console.error(`[application] ${context} failed:`, detail);
     fail2(response, 503, "Unable to process your request.");
   };
 }
@@ -3885,7 +3906,7 @@ function createApplicationApiRouter() {
       const { input } = validated;
       const db = (await Promise.resolve().then(() => (init_db(), db_exports))).getDatabase();
       const role = (await db.select().from(recruitmentRoles).where(eq8(recruitmentRoles.slug, input.roleSlug)).limit(1))[0];
-      if (!role) return fail2(response, 404, "The selected role is not available.");
+      if (!role || role.deletedAt) return fail2(response, 404, "The selected role is not available.");
       if (role.status !== "Open") return fail2(response, 400, "Applications are not currently being accepted for this role.");
       const normalizedEmail = normalizeEmail(input.email);
       const existing = await findExistingApplication(role.id, normalizedEmail);
@@ -3893,8 +3914,12 @@ function createApplicationApiRouter() {
         if (existing.applicationStatus === "Submitted" || existing.applicationStatus === "Shortlisted") {
           return fail2(response, 409, "You have already submitted an application for this role.");
         }
-        if (existing.applicationStatus === "In Progress" || existing.applicationStatus === "Assessment In Progress") {
-          return fail2(response, 409, "An application for this role is already in progress. Please check your browser for an existing session.");
+        if (existing.applicationStatus === "In Progress" || existing.applicationStatus === "Assessment In Progress" || existing.applicationStatus === "Eligibility Closed") {
+          return fail2(
+            response,
+            409,
+            "An application for this role already exists for this email address, but this browser does not have the session required to resume it. Please use the browser where you originally started the application."
+          );
         }
       }
       const gates = await getRoleEligibilityGates(role.id);
@@ -4272,6 +4297,18 @@ function createRecruitmentApiRouter() {
   router.get("/api/public/recruitment-roles/:slug", getPublicRole);
   router.get("/api/admin/recruitment-roles", requireAuthorizedAdmin2, getAdminRoles);
   router.post("/api/admin/recruitment-roles", requireAuthorizedAdmin2, createAdminRole);
+  router.delete("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin2, async (request, response) => {
+    try {
+      const role = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug);
+      if (!role || !await deleteRecruitmentRole(role.id)) {
+        return void fail3(response, 404, "Unable to find this recruitment role.");
+      }
+      response.json({ ok: true });
+    } catch (error) {
+      console.error("[recruitment] delete role failed:", error instanceof Error ? error.message : String(error));
+      fail3(response, 503, "Unable to delete this recruitment role. Please try again.");
+    }
+  });
   router.get("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin2, getAdminRole);
   router.patch("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin2, patchAdminRole);
   router.get("/api/admin/recruitment-roles/:idOrSlug/eligibility", requireAuthorizedAdmin2, getAdminRoleEligibility);
@@ -4367,6 +4404,20 @@ function createAssessmentApiRouter() {
     } catch (error) {
       if (error instanceof AssessmentValidationError) return fail3(response, 400, error.message);
       handleRouteError2("admin assessment update")(error, response);
+    }
+  });
+  router.patch("/api/admin/assessments/:idOrSlug/status", requireAuthorizedAdmin2, async (request, response) => {
+    try {
+      const { status } = request.body ?? {};
+      if (!status || !["Active", "Inactive", "Draft"].includes(status)) {
+        return fail3(response, 400, "Status must be Active, Inactive or Draft.");
+      }
+      const assessment = await updateAssessmentStatus(request.params.idOrSlug ?? "", status);
+      if (!assessment) return fail3(response, 404, "Assessment not found.");
+      response.json({ ok: true, assessment });
+    } catch (error) {
+      if (error instanceof AssessmentValidationError) return fail3(response, 400, error.message);
+      handleRouteError2("admin assessment status update")(error, response);
     }
   });
   router.get("/api/admin/assessments/:idOrSlug/preview", requireAuthorizedAdmin2, async (request, response) => {
@@ -5017,8 +5068,1172 @@ function createCvApiRouter() {
   return router;
 }
 
-// server/questionBankApi.ts
+// server/csvImportApi.ts
 import express6 from "express";
+
+// server/csvImportRepository.ts
+init_schema();
+import { asc as asc8, count as count3, desc as desc3, eq as eq10, inArray as inArray3 } from "drizzle-orm";
+init_questionBankRepository();
+init_assessmentRepository();
+init_db();
+init_questionBankApi();
+
+// shared/csvImport.ts
+init_questionBankApi();
+var MAX_CSV_QUESTIONS = 100;
+var MAX_CSV_ROWS = 400;
+var MAX_CSV_BYTES = 1e6;
+var MAX_CSV_CELL_LENGTH = 4e3;
+var MAX_OPTION_COLUMNS = 10;
+var MAX_NUMERIC_BANDS = 5;
+var CSV_SCOPES = ["QUESTION_BANK", "ROLE_ONLY"];
+var CSV_QUESTION_TYPES = ["ORDINAL", "MULTI", "NUMERIC", "SJT", "OPEN", "EVIDENCE"];
+var CORE_COLUMNS = [
+  "question_code",
+  "question_text",
+  "question_type",
+  "dimension_code",
+  "dimension_name",
+  "dimension_weight",
+  "dimension_floor",
+  "display_order",
+  "q_weight",
+  "max_score",
+  "required",
+  "help_text",
+  "status",
+  "time_limit_sec",
+  "claimed_question_reference"
+];
+function optionColumns() {
+  const columns = [];
+  for (let index2 = 1; index2 <= MAX_OPTION_COLUMNS; index2 += 1) {
+    columns.push(`option_${index2}_text`, `option_${index2}_score`, `option_${index2}_explanation`);
+  }
+  return columns;
+}
+function numericColumns() {
+  const columns = ["numeric_mode", "calculation_type"];
+  for (let index2 = 1; index2 <= 2; index2 += 1) {
+    columns.push(`input_${index2}_key`, `input_${index2}_label`, `input_${index2}_unit`);
+  }
+  for (let index2 = 1; index2 <= MAX_NUMERIC_BANDS; index2 += 1) {
+    columns.push(`band_${index2}_min`, `band_${index2}_max`, `band_${index2}_score`);
+  }
+  return columns;
+}
+function openColumns() {
+  return [
+    "rubric_low_min",
+    "rubric_low_max",
+    "rubric_low_anchor",
+    "rubric_mid_min",
+    "rubric_mid_max",
+    "rubric_mid_anchor",
+    "rubric_high_min",
+    "rubric_high_max",
+    "rubric_high_anchor",
+    "open_min_words",
+    "open_max_words",
+    "open_paste_allowed"
+  ];
+}
+var CSV_COLUMNS = [...CORE_COLUMNS, ...optionColumns(), ...numericColumns(), ...openColumns()];
+var REQUIRED_COLUMNS = ["question_code", "question_text", "question_type"];
+function extractCsvFrameworkDimensions(rawRows, header) {
+  const columnIndex = /* @__PURE__ */ new Map();
+  header.forEach((name, position) => {
+    if (!columnIndex.has(name)) columnIndex.set(name, position);
+  });
+  const getCell = (cells, colName) => {
+    const idx = columnIndex.get(colName);
+    return idx !== void 0 ? (cells[idx] ?? "").trim() : "";
+  };
+  const accumulator = /* @__PURE__ */ new Map();
+  for (let position = 1; position < rawRows.length; position += 1) {
+    const cells = rawRows[position];
+    const rowNumber = position + 1;
+    const isBlankRow = cells.every((v) => v.trim() === "");
+    if (isBlankRow) continue;
+    const codeRaw = getCell(cells, "dimension_code");
+    if (!codeRaw) continue;
+    const code = codeRaw.toUpperCase();
+    const nameRaw = getCell(cells, "dimension_name");
+    const name = nameRaw === "" ? null : nameRaw;
+    const weightRaw = getCell(cells, "dimension_weight");
+    let weight = null;
+    if (weightRaw !== "") {
+      const parsed = Number(weightRaw);
+      weight = Number.isFinite(parsed) ? parsed : Number.NaN;
+    }
+    const floorRaw = getCell(cells, "dimension_floor");
+    let floor = null;
+    if (floorRaw !== "") {
+      const parsed = Number(floorRaw);
+      floor = Number.isFinite(parsed) ? parsed : Number.NaN;
+    }
+    const entry = accumulator.get(code);
+    if (!entry) {
+      accumulator.set(code, {
+        canonical: { code, name, weight, floor },
+        inconsistencyReasons: [],
+        firstRowNumber: rowNumber
+      });
+    } else {
+      const c = entry.canonical;
+      if (c.name !== name) {
+        entry.inconsistencyReasons.push(
+          `dimension_name differs: "${c.name ?? ""}" vs "${name ?? ""}" (rows ${entry.firstRowNumber} and ${rowNumber}).`
+        );
+      }
+      if (c.weight !== weight) {
+        entry.inconsistencyReasons.push(
+          `dimension_weight differs: ${c.weight ?? "blank"} vs ${weight ?? "blank"} (rows ${entry.firstRowNumber} and ${rowNumber}).`
+        );
+      }
+      if (c.floor !== floor) {
+        entry.inconsistencyReasons.push(
+          `dimension_floor differs: ${c.floor ?? "blank"} vs ${floor ?? "blank"} (rows ${entry.firstRowNumber} and ${rowNumber}).`
+        );
+      }
+    }
+  }
+  return Array.from(accumulator.values()).map(({ canonical, inconsistencyReasons }) => ({
+    code: canonical.code,
+    name: canonical.name,
+    weight: canonical.weight,
+    floor: canonical.floor,
+    consistent: inconsistencyReasons.length === 0,
+    inconsistencyReason: inconsistencyReasons.length > 0 ? inconsistencyReasons[0] : null
+  }));
+}
+function buildFrameworkPreview(csvDimensions, existingDimensions) {
+  const existingByCode = new Map(existingDimensions.map((d) => [d.reference.toUpperCase(), d]));
+  const dimensions = [];
+  const missingCodes = [];
+  const conflictingCodes = [];
+  let newWeightTotal = 0;
+  let allWeightTotal = 0;
+  for (const csvDim of csvDimensions) {
+    const existing = existingByCode.get(csvDim.code);
+    const weight = typeof csvDim.weight === "number" && !Number.isNaN(csvDim.weight) ? csvDim.weight : 0;
+    const floor = typeof csvDim.floor === "number" && !Number.isNaN(csvDim.floor) ? csvDim.floor : null;
+    const name = csvDim.name ?? "";
+    if (!existing) {
+      missingCodes.push(csvDim.code);
+      newWeightTotal += weight;
+      allWeightTotal += weight;
+      dimensions.push({ code: csvDim.code, name, weight, floor, isNew: true, conflictsWith: null });
+    } else {
+      allWeightTotal += existing.weight;
+      const hasConflict = csvDim.name !== null && (existing.name.trim() !== name.trim() || existing.weight !== weight || (existing.minimumFloor ?? null) !== floor);
+      if (hasConflict) {
+        conflictingCodes.push(csvDim.code);
+        dimensions.push({
+          code: csvDim.code,
+          name: existing.name,
+          weight: existing.weight,
+          floor: existing.minimumFloor ?? null,
+          isNew: false,
+          conflictsWith: { name, weight, floor }
+        });
+      } else {
+        dimensions.push({
+          code: csvDim.code,
+          name: existing.name,
+          weight: existing.weight,
+          floor: existing.minimumFloor ?? null,
+          isNew: false,
+          conflictsWith: null
+        });
+      }
+    }
+  }
+  const blockingReasons = [];
+  const inconsistent = csvDimensions.filter((d) => !d.consistent);
+  if (inconsistent.length > 0) {
+    blockingReasons.push(
+      `Dimension ${inconsistent[0].code} has inconsistent configuration across rows: ${inconsistent[0].inconsistencyReason}`
+    );
+  }
+  if (conflictingCodes.length > 0) {
+    blockingReasons.push(
+      `${conflictingCodes.join(", ")} already ${conflictingCodes.length === 1 ? "exists" : "exist"} in this role's framework with different configuration. Resolve the conflict manually.`
+    );
+  }
+  for (const dim of csvDimensions.filter((d) => !existingByCode.has(d.code))) {
+    if (!dim.name || dim.name.trim() === "") {
+      blockingReasons.push(`Dimension ${dim.code} is missing a dimension_name in the CSV.`);
+    }
+    if (dim.weight === null || Number.isNaN(dim.weight)) {
+      blockingReasons.push(`Dimension ${dim.code} is missing a dimension_weight in the CSV.`);
+    } else if (dim.weight <= 0) {
+      blockingReasons.push(`Dimension ${dim.code} has an invalid dimension_weight: weight must be greater than zero.`);
+    }
+    if (dim.floor !== null && Number.isNaN(dim.floor)) {
+      blockingReasons.push(`Dimension ${dim.code} has an invalid dimension_floor value in the CSV.`);
+    }
+  }
+  const existingWeightTotal = existingDimensions.reduce((sum, d) => sum + d.weight, 0);
+  const projectedTotal = existingWeightTotal + newWeightTotal;
+  if (missingCodes.length > 0 && projectedTotal !== 100) {
+    blockingReasons.push(
+      `Dimension weights total ${projectedTotal}% after adding the new dimensions. The full framework must total 100%.`
+    );
+  }
+  const canAutoCreate = blockingReasons.length === 0 && missingCodes.length > 0;
+  return {
+    dimensions,
+    newDimensionWeightTotal: newWeightTotal,
+    allDimensionWeightTotal: allWeightTotal,
+    missingCodes,
+    conflictingCodes,
+    canAutoCreate,
+    cannotAutoCreateReason: blockingReasons.length > 0 ? blockingReasons[0] : null
+  };
+}
+var CsvParseError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "CsvParseError";
+  }
+};
+function parseCsv(rawText) {
+  let text2 = rawText;
+  if (text2.charCodeAt(0) === 65279) text2 = text2.slice(1);
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+  let index2 = 0;
+  const pushField = () => {
+    if (field.length > MAX_CSV_CELL_LENGTH) {
+      throw new CsvParseError(`A cell exceeds the ${MAX_CSV_CELL_LENGTH}-character limit.`);
+    }
+    row.push(field);
+    field = "";
+  };
+  const pushRow = () => {
+    pushField();
+    rows.push(row);
+    row = [];
+    if (rows.length > MAX_CSV_ROWS) {
+      throw new CsvParseError(`The file exceeds the ${MAX_CSV_ROWS}-row limit.`);
+    }
+  };
+  while (index2 < text2.length) {
+    const char = text2[index2];
+    if (inQuotes) {
+      if (char === '"') {
+        if (text2[index2 + 1] === '"') {
+          field += '"';
+          index2 += 2;
+          continue;
+        }
+        inQuotes = false;
+        index2 += 1;
+        continue;
+      }
+      field += char;
+      index2 += 1;
+      continue;
+    }
+    if (char === '"') {
+      inQuotes = true;
+      index2 += 1;
+      continue;
+    }
+    if (char === ",") {
+      pushField();
+      index2 += 1;
+      continue;
+    }
+    if (char === "\r") {
+      if (text2[index2 + 1] === "\n") index2 += 1;
+      pushRow();
+      index2 += 1;
+      continue;
+    }
+    if (char === "\n") {
+      pushRow();
+      index2 += 1;
+      continue;
+    }
+    field += char;
+    index2 += 1;
+  }
+  if (inQuotes) throw new CsvParseError("The file contains an unterminated quoted field.");
+  if (field.length > 0 || row.length > 0) pushRow();
+  return rows;
+}
+function normalizeHeader(name) {
+  return name.trim().toLowerCase().replace(/\s+/g, "_");
+}
+function cell(record, name) {
+  return record.cells.get(name) ?? "";
+}
+function isBlank(value) {
+  return value.trim() === "";
+}
+function parseBoolean(value, fallback) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "") return fallback;
+  if (["true", "yes", "y", "1"].includes(normalized)) return true;
+  if (["false", "no", "n", "0"].includes(normalized)) return false;
+  return fallback;
+}
+function parseIntegerCell(value) {
+  if (isBlank(value)) return null;
+  const parsed = Number(value.trim());
+  return Number.isInteger(parsed) ? parsed : Number.NaN;
+}
+function parseNumberCell(value) {
+  if (isBlank(value)) return null;
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+function readOptions(record) {
+  const options = [];
+  for (let index2 = 1; index2 <= MAX_OPTION_COLUMNS; index2 += 1) {
+    const text2 = cell(record, `option_${index2}_text`);
+    const score = cell(record, `option_${index2}_score`);
+    const explanation = cell(record, `option_${index2}_explanation`);
+    if (isBlank(text2) && isBlank(score) && isBlank(explanation)) continue;
+    options.push({ text: text2.trim(), score, explanation: explanation.trim() });
+  }
+  return options;
+}
+function normalizeStatus(value) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "inactive") return "Inactive";
+  return "Active";
+}
+function normalizeNumericMode(value) {
+  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, "");
+  if (normalized === "twovaluederived" || normalized === "twovalue" || normalized === "derived" || normalized === "percentage") {
+    return "twoValueDerived";
+  }
+  return "calendarYearExperience";
+}
+function transformRow(record) {
+  const prefix = `Row ${record.rowNumber}`;
+  const errors = [];
+  const typeRaw = cell(record, "question_type").trim();
+  const type = typeRaw.toUpperCase();
+  const reference = cell(record, "question_code").trim();
+  const prompt = cell(record, "question_text").trim();
+  const helpText = cell(record, "help_text").trim();
+  const dimensionCode = isBlank(cell(record, "dimension_code")) ? null : cell(record, "dimension_code").trim().toUpperCase();
+  const status = normalizeStatus(cell(record, "status"));
+  const required = parseBoolean(cell(record, "required"), true);
+  const timeLimitSec = parseIntegerCell(cell(record, "time_limit_sec"));
+  const qWeightCell = parseIntegerCell(cell(record, "q_weight"));
+  const maxScoreCell = parseIntegerCell(cell(record, "max_score"));
+  const options = readOptions(record);
+  if (timeLimitSec !== null && (Number.isNaN(timeLimitSec) || timeLimitSec <= 0)) errors.push(`${prefix}: time_limit_sec must be a positive number of seconds.`);
+  if (!typeRaw) errors.push(`${prefix}: Missing question type.`);
+  else if (!QUESTION_TYPES.includes(type)) errors.push(`${prefix}: Unsupported question type "${typeRaw}".`);
+  else if (type === "GATE") errors.push(`${prefix}: GATE questions are configured under the role's Eligibility settings, not CSV import.`);
+  else if (!CSV_QUESTION_TYPES.includes(type)) errors.push(`${prefix}: Unsupported question type "${typeRaw}".`);
+  if (!reference) errors.push(`${prefix}: Missing question code.`);
+  else if (reference.length > QUESTION_REFERENCE_MAX_LENGTH) errors.push(`${prefix}: Question code is longer than ${QUESTION_REFERENCE_MAX_LENGTH} characters.`);
+  if (!prompt) errors.push(`${prefix}: Missing question text.`);
+  const scored = isScoredQuestionType(type);
+  if (scored && maxScoreCell !== null && maxScoreCell !== SCORED_QUESTION_MAX) {
+    errors.push(`${prefix}: max_score must be ${SCORED_QUESTION_MAX} (the engine uses a fixed ${SCORED_QUESTION_MAX}-point scale) or left blank.`);
+  }
+  if (errors.length) {
+    return { input: null, errors, type, optionCount: options.length, qWeight: Number.isInteger(qWeightCell) ? qWeightCell : null, maxScoreCell };
+  }
+  const base = {
+    reference,
+    dimensionReference: dimensionCode,
+    required,
+    prompt,
+    helpText,
+    status,
+    timeLimitSec
+  };
+  let candidate;
+  switch (type) {
+    case "ORDINAL": {
+      candidate = {
+        ...base,
+        type: "ORDINAL",
+        qWeight: qWeightCell,
+        options: options.map((option) => ({ text: option.text, rawScore: parseIntegerCell(option.score) }))
+      };
+      break;
+    }
+    case "MULTI": {
+      const scoreCap = maxScoreCell !== null && Number.isInteger(maxScoreCell) ? maxScoreCell : MULTI_DEFAULT_SCORE_CAP;
+      candidate = {
+        ...base,
+        type: "MULTI",
+        qWeight: qWeightCell,
+        scoreCap,
+        // A −1 option is a decoy: MULTI scorable options are 0…5, so −1 is
+        // only valid as a decoy (validateQuestionInput enforces decoy === −1).
+        options: options.map((option) => {
+          const score = parseNumberCell(option.score);
+          return { text: option.text, rawScore: score, isDecoy: score === -1 };
+        })
+      };
+      break;
+    }
+    case "SJT": {
+      candidate = {
+        ...base,
+        type: "SJT",
+        qWeight: qWeightCell,
+        options: options.map((option) => ({ text: option.text, rawScore: parseIntegerCell(option.score), internalExplanation: option.explanation }))
+      };
+      break;
+    }
+    case "NUMERIC": {
+      const mode = normalizeNumericMode(cell(record, "numeric_mode"));
+      const calculationType = cell(record, "calculation_type").trim();
+      const inputDefinitions = [];
+      for (let index2 = 1; index2 <= 2; index2 += 1) {
+        const label = cell(record, `input_${index2}_label`).trim();
+        const key = cell(record, `input_${index2}_key`).trim();
+        const unit = cell(record, `input_${index2}_unit`).trim();
+        const resolvedLabel = label || key;
+        if (resolvedLabel) inputDefinitions.push({ label: resolvedLabel, unit });
+      }
+      const bands = [];
+      for (let index2 = 1; index2 <= MAX_NUMERIC_BANDS; index2 += 1) {
+        const min = parseNumberCell(cell(record, `band_${index2}_min`));
+        const max = parseNumberCell(cell(record, `band_${index2}_max`));
+        const score = parseIntegerCell(cell(record, `band_${index2}_score`));
+        if (min === null && max === null && score === null) continue;
+        bands.push({ lowerBound: min, upperBound: max === null ? null : max, rawScore: score });
+      }
+      candidate = {
+        ...base,
+        type: "NUMERIC",
+        qWeight: qWeightCell,
+        numericConfig: {
+          mode,
+          inputDefinitions,
+          ...calculationType ? { derivedCalculationType: calculationType } : {},
+          bands
+        }
+      };
+      break;
+    }
+    case "OPEN": {
+      const rubric = [];
+      ["low", "mid", "high"].forEach((band) => {
+        const min = parseIntegerCell(cell(record, `rubric_${band}_min`));
+        const max = parseIntegerCell(cell(record, `rubric_${band}_max`));
+        const anchor = cell(record, `rubric_${band}_anchor`).trim();
+        if (min === null && max === null && !anchor) return;
+        rubric.push({ scoreMin: min, scoreMax: max === null ? min : max, anchorText: anchor });
+      });
+      const minimumWords = parseIntegerCell(cell(record, "open_min_words"));
+      const maximumWords = parseIntegerCell(cell(record, "open_max_words"));
+      candidate = {
+        ...base,
+        type: "OPEN",
+        qWeight: qWeightCell,
+        openConfig: {
+          minimumWords,
+          maximumWords,
+          timeLimitSec,
+          pasteAllowed: parseBoolean(cell(record, "open_paste_allowed"), false),
+          rubric
+        }
+      };
+      break;
+    }
+    case "EVIDENCE": {
+      const claimedQuestionReference = cell(record, "claimed_question_reference").trim();
+      candidate = {
+        ...base,
+        type: "EVIDENCE",
+        // The weight cell is passed through rather than dropped, so an EVIDENCE
+        // row carrying a q_weight is rejected with the same message the manual
+        // Question Bank form uses instead of being silently ignored. The shared
+        // validator never echoes qWeight back for unweighted types.
+        qWeight: qWeightCell,
+        claimedQuestionReference,
+        // For EVIDENCE the option "score" column carries the verification
+        // multiplier (1.00 / 0.95 / 0.85), matching the existing structure.
+        options: options.map((option) => ({ text: option.text, verificationMultiplier: parseNumberCell(option.score) }))
+      };
+      break;
+    }
+    default:
+      candidate = null;
+  }
+  const validated = validateQuestionInput(candidate);
+  if ("errors" in validated) {
+    return {
+      input: null,
+      errors: validated.errors.map((message) => `${prefix}: ${message}`),
+      type,
+      optionCount: options.length,
+      qWeight: Number.isInteger(qWeightCell) ? qWeightCell : null,
+      maxScoreCell
+    };
+  }
+  return {
+    input: validated.input,
+    errors: [],
+    type,
+    optionCount: options.length,
+    qWeight: "qWeight" in validated.input ? validated.input.qWeight : null,
+    maxScoreCell
+  };
+}
+function parseAndValidateCsv(text2) {
+  if (typeof text2 !== "string" || text2.trim() === "") {
+    return { detected: 0, rows: [], errors: ["The uploaded file is empty."], frameworkDimensions: [] };
+  }
+  if (text2.length > MAX_CSV_BYTES) {
+    return { detected: 0, rows: [], errors: [`The file exceeds the ${MAX_CSV_BYTES}-byte size limit.`], frameworkDimensions: [] };
+  }
+  let rawRows;
+  try {
+    rawRows = parseCsv(text2);
+  } catch (error) {
+    return { detected: 0, rows: [], errors: [error instanceof CsvParseError ? error.message : "The file could not be parsed as CSV."], frameworkDimensions: [] };
+  }
+  if (rawRows.length === 0) return { detected: 0, rows: [], errors: ["The uploaded file is empty."], frameworkDimensions: [] };
+  const header = rawRows[0].map(normalizeHeader);
+  const missingColumns = REQUIRED_COLUMNS.filter((column) => !header.includes(column));
+  if (missingColumns.length > 0) {
+    return { detected: 0, rows: [], errors: [`The CSV is missing required column${missingColumns.length > 1 ? "s" : ""}: ${missingColumns.join(", ")}.`], frameworkDimensions: [] };
+  }
+  const columnIndex = /* @__PURE__ */ new Map();
+  header.forEach((name, position) => {
+    if (!columnIndex.has(name)) columnIndex.set(name, position);
+  });
+  const rows = [];
+  const seenCodes = /* @__PURE__ */ new Map();
+  const seenOrders = /* @__PURE__ */ new Map();
+  const fileErrors = [];
+  for (let position = 1; position < rawRows.length; position += 1) {
+    const rawCells = rawRows[position];
+    const rowNumber = position + 1;
+    const isRowEmpty = rawCells.every((value) => value.trim() === "");
+    if (isRowEmpty) continue;
+    if (rawCells.length > header.length) {
+      fileErrors.push(`Row ${rowNumber} has more columns than the header.`);
+    }
+    const cells = /* @__PURE__ */ new Map();
+    columnIndex.forEach((sourceIndex, name) => {
+      cells.set(name, (rawCells[sourceIndex] ?? "").toString());
+    });
+    const record = { rowNumber, cells };
+    const transformed = transformRow(record);
+    const code = cell(record, "question_code").trim();
+    if (code) {
+      const previous = seenCodes.get(code.toLowerCase());
+      if (previous !== void 0) transformed.errors.push(`Row ${rowNumber}: Duplicate question code "${code}" (also on row ${previous}).`);
+      else seenCodes.set(code.toLowerCase(), rowNumber);
+    }
+    const orderCell = parseIntegerCell(cell(record, "display_order"));
+    let order = null;
+    if (orderCell === null) {
+      order = rows.length + 1;
+    } else if (Number.isInteger(orderCell) && orderCell > 0) {
+      order = orderCell;
+      const previous = seenOrders.get(orderCell);
+      if (previous !== void 0) transformed.errors.push(`Row ${rowNumber}: Duplicate display_order ${orderCell} (also on row ${previous}).`);
+      else seenOrders.set(orderCell, rowNumber);
+    } else {
+      transformed.errors.push(`Row ${rowNumber}: display_order must be a positive whole number.`);
+      order = rows.length + 1;
+    }
+    rows.push({
+      rowNumber,
+      order,
+      code,
+      question: cell(record, "question_text").trim(),
+      type: cell(record, "question_type").trim().toUpperCase(),
+      dimension: cell(record, "dimension_code").trim().toUpperCase(),
+      qWeight: transformed.qWeight,
+      maxScore: isScoredQuestionType(transformed.type) ? SCORED_QUESTION_MAX : null,
+      optionCount: transformed.optionCount,
+      status: normalizeStatus(cell(record, "status")),
+      input: transformed.input,
+      dimensionCode: isBlank(cell(record, "dimension_code")) ? null : cell(record, "dimension_code").trim().toUpperCase(),
+      errors: transformed.errors
+    });
+  }
+  if (rows.length === 0 && fileErrors.length === 0) {
+    fileErrors.push("No question rows were found in the file.");
+  }
+  if (rows.length > MAX_CSV_QUESTIONS) {
+    fileErrors.push(`The file contains ${rows.length} questions, exceeding the ${MAX_CSV_QUESTIONS}-question limit.`);
+  }
+  const frameworkDimensions = extractCsvFrameworkDimensions(rawRows, header);
+  return { detected: rows.length, rows, errors: fileErrors, frameworkDimensions };
+}
+function escapeCsvField(value) {
+  if (value === null || value === void 0) return "";
+  const text2 = String(value);
+  if (/[",\r\n]/.test(text2)) return `"${text2.replace(/"/g, '""')}"`;
+  return text2;
+}
+function toCsvRow(values) {
+  return values.map(escapeCsvField).join(",");
+}
+function exampleRow(values) {
+  return toCsvRow(CSV_COLUMNS.map((column) => values[column] !== void 0 ? values[column] : ""));
+}
+function templateExampleRows() {
+  return [
+    // ORDINAL — scores through the existing ORDINAL scorer.
+    exampleRow({
+      question_code: "EXAMPLE.D1.Q1",
+      question_text: "Which best describes your business development experience?",
+      question_type: "ORDINAL",
+      dimension_code: "D1",
+      dimension_name: "Commercial Track Record",
+      dimension_weight: 30,
+      dimension_floor: 50,
+      display_order: 1,
+      q_weight: 3,
+      max_score: 5,
+      required: "TRUE",
+      help_text: "Select one",
+      status: "Active",
+      option_1_text: "Business development has been the core of my career",
+      option_1_score: 5,
+      option_2_text: "I have substantial direct business development experience",
+      option_2_score: 4,
+      option_3_text: "I have some business development exposure",
+      option_3_score: 2,
+      option_4_text: "I have limited direct experience",
+      option_4_score: 0
+    }),
+    // MULTI — option scores are summed by the existing MULTI scorer and capped
+    // at max_score. A −1 option is treated as a decoy.
+    exampleRow({
+      question_code: "EXAMPLE.D3.Q1",
+      question_text: "Select every outbound channel you have personally run.",
+      question_type: "MULTI",
+      dimension_code: "D3",
+      dimension_name: "Sales & Channel Execution",
+      dimension_weight: 20,
+      dimension_floor: "",
+      display_order: 2,
+      q_weight: 2,
+      max_score: 5,
+      required: "TRUE",
+      status: "Active",
+      option_1_text: "Cold email sequences",
+      option_1_score: 3,
+      option_2_text: "LinkedIn outreach",
+      option_2_score: 3,
+      option_3_text: "Partner referrals",
+      option_3_score: 2,
+      option_4_text: "I have not run outbound channels",
+      option_4_score: -1
+    }),
+    // NUMERIC — configuration-driven; the label is the field the applicant
+    // answers and the value the existing numeric scorer keys on.
+    exampleRow({
+      question_code: "EXAMPLE.D2.Q1",
+      question_text: "In which year did you first work in a revenue role?",
+      question_type: "NUMERIC",
+      dimension_code: "D2",
+      dimension_name: "Revenue Experience",
+      dimension_weight: 25,
+      dimension_floor: 50,
+      display_order: 3,
+      q_weight: 2,
+      max_score: 5,
+      required: "TRUE",
+      status: "Active",
+      numeric_mode: "calendarYearExperience",
+      input_1_label: "Calendar year",
+      input_1_unit: "year",
+      band_1_min: 0,
+      band_1_max: 2,
+      band_1_score: 2,
+      band_2_min: 3,
+      band_2_max: 5,
+      band_2_score: 4,
+      band_3_min: 6,
+      band_3_score: 5
+    }),
+    // SJT — exactly four options, each with an internal explanation. Scores may
+    // be negative (e.g. −2) exactly as the existing engine permits.
+    exampleRow({
+      question_code: "EXAMPLE.D5.Q1",
+      question_text: "A key prospect goes quiet mid-negotiation. What do you do first?",
+      question_type: "SJT",
+      dimension_code: "D5",
+      dimension_name: "Judgement & Resilience",
+      dimension_weight: 15,
+      dimension_floor: "",
+      display_order: 4,
+      q_weight: 3,
+      max_score: 5,
+      required: "TRUE",
+      status: "Active",
+      option_1_text: "Diagnose the stall reason with a targeted follow-up",
+      option_1_score: 5,
+      option_1_explanation: "Shows commercial judgement and initiative",
+      option_2_text: "Offer a discount to revive interest",
+      option_2_score: 1,
+      option_2_explanation: "Reactive; erodes margin",
+      option_3_text: "Escalate to the sales director immediately",
+      option_3_score: 2,
+      option_3_explanation: "Reasonable but premature",
+      option_4_text: "Wait for the prospect to respond",
+      option_4_score: -2,
+      option_4_explanation: "Passive; loses momentum"
+    }),
+    // OPEN — manual Admin rubric review only (no automated scoring).
+    exampleRow({
+      question_code: "EXAMPLE.D6.Q1",
+      question_text: "Describe a deal you closed and your specific contribution.",
+      question_type: "OPEN",
+      dimension_code: "D6",
+      dimension_name: "Communication & Narrative",
+      dimension_weight: 10,
+      dimension_floor: "",
+      display_order: 5,
+      q_weight: 3,
+      max_score: 5,
+      required: "TRUE",
+      status: "Active",
+      open_min_words: 40,
+      open_max_words: 250,
+      rubric_low_min: 0,
+      rubric_low_max: 1,
+      rubric_low_anchor: "Weak, incomplete or off-brief response",
+      rubric_mid_min: 2,
+      rubric_mid_max: 3,
+      rubric_mid_anchor: "Adequate but generic response",
+      rubric_high_min: 4,
+      rubric_high_max: 5,
+      rubric_high_anchor: "Strong, specific and commercially credible response"
+    }),
+    // EVIDENCE — the option "score" is the verification multiplier (1.00/0.95/0.85).
+    // claimed_question_reference points at the question this evidence verifies.
+    exampleRow({
+      question_code: "EXAMPLE.D2.Q1E",
+      question_text: "How was your revenue achievement verified?",
+      question_type: "EVIDENCE",
+      dimension_code: "D2",
+      dimension_name: "Revenue Experience",
+      dimension_weight: 25,
+      dimension_floor: 50,
+      display_order: 6,
+      required: "TRUE",
+      status: "Active",
+      claimed_question_reference: "EXAMPLE.D2.Q1",
+      option_1_text: "Confirmed by employer reference",
+      option_1_score: 1,
+      option_2_text: "Supported by documents",
+      option_2_score: 0.95,
+      option_3_text: "Self-reported only",
+      option_3_score: 0.85
+    })
+  ];
+}
+function buildCsvTemplate() {
+  const lines = [toCsvRow(CSV_COLUMNS), ...templateExampleRows()];
+  return `${lines.join("\r\n")}\r
+`;
+}
+function csvTemplateInstructions() {
+  return [
+    "Use the template to configure questions, options, scores and assessment order. Upload the completed file to validate and preview the questions before import.",
+    "Delete or replace the EXAMPLE rows before importing \u2014 question codes must be unique and dimensions must already exist in this role's Evaluation Framework.",
+    "dimension_name, dimension_weight and dimension_floor are optional when the role's Evaluation Framework already exists. When the framework is missing, the importer can generate it from these columns automatically \u2014 leave dimension_floor blank for no floor.",
+    "Dimension information repeats across rows when multiple questions share the same dimension_code. Every row for the same dimension_code must carry identical dimension_name, dimension_weight and dimension_floor values.",
+    "question_type must be one of: ORDINAL, MULTI, NUMERIC, SJT, OPEN, EVIDENCE. GATE questions stay under the role's Eligibility configuration.",
+    "Scored questions use a fixed 5-point scale: set max_score to 5 (or leave it blank). q_weight must be 1, 2 or 3.",
+    "Options use option_1_text \u2026 option_10_text with matching option_N_score. SJT also needs option_N_explanation and exactly four options.",
+    "MULTI: a \u22121 option score marks a decoy. NUMERIC: fill numeric_mode, input_N_label and band_N_min/max/score. OPEN: fill the rubric_low/mid/high columns.",
+    "EVIDENCE: put the verification multiplier (1.00, 0.95 or 0.85) in option_N_score and set claimed_question_reference to the question it verifies.",
+    "All rows must be valid before Confirm Import is enabled. A maximum of 100 questions can be imported per file."
+  ];
+}
+
+// server/csvImportRepository.ts
+import { randomBytes as randomBytes9 } from "node:crypto";
+var CsvImportValidationError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "CsvImportValidationError";
+  }
+};
+async function loadRoleDimensions(roleId) {
+  const db = getDatabase();
+  return db.select({
+    id: assessmentDimensions.id,
+    reference: assessmentDimensions.reference,
+    name: assessmentDimensions.name,
+    weight: assessmentDimensions.weight,
+    minimumFloor: assessmentDimensions.minimumFloor
+  }).from(assessmentDimensions).where(eq10(assessmentDimensions.roleId, roleId)).orderBy(asc8(assessmentDimensions.displayOrder));
+}
+async function resolveTargetAssessment(role) {
+  const db = getDatabase();
+  const rows = await db.select({ id: assessments.id, name: assessments.name, status: assessments.status, slug: assessments.slug, version: assessments.version }).from(assessments).where(eq10(assessments.roleId, role.id)).orderBy(desc3(assessments.version));
+  const latest = rows[0];
+  if (latest) return { id: latest.id, name: latest.name, status: latest.status, slug: latest.slug, version: latest.version, willCreate: false };
+  return { id: null, name: `${role.title} Assessment`, status: "Draft", slug: null, version: 1, willCreate: true };
+}
+async function prepareImport(roleIdOrSlug, csvText) {
+  const role = await getRecruitmentRoleByIdOrSlug(roleIdOrSlug);
+  if (!role) throw new CsvImportValidationError("Unable to load this role.");
+  const dimensions = await loadRoleDimensions(role.id);
+  const dimensionByReference = new Map(dimensions.map((dimension) => [dimension.reference.toUpperCase(), dimension]));
+  const parsed = parseAndValidateCsv(csvText);
+  const fileErrors = [...parsed.errors];
+  const frameworkPreviewRaw = buildFrameworkPreview(parsed.frameworkDimensions, dimensions);
+  let frameworkState;
+  let frameworkPreview = null;
+  if (parsed.frameworkDimensions.length === 0) {
+    frameworkState = "ok";
+  } else if (frameworkPreviewRaw.conflictingCodes.length > 0) {
+    frameworkState = "conflict";
+    frameworkPreview = frameworkPreviewRaw;
+  } else if (frameworkPreviewRaw.missingCodes.length > 0) {
+    frameworkState = dimensions.length === 0 ? "no_framework" : "partial";
+    frameworkPreview = frameworkPreviewRaw;
+  } else {
+    frameworkState = "ok";
+    frameworkPreview = frameworkPreviewRaw;
+  }
+  const db = getDatabase();
+  const codes = parsed.rows.map((row) => row.code).filter((code) => code.length > 0);
+  const batchCodes = new Set(codes.map((code) => code.toLowerCase()));
+  const existingRefs = /* @__PURE__ */ new Set();
+  if (codes.length > 0) {
+    const rows = await db.select({ reference: assessmentQuestions.reference }).from(assessmentQuestions).where(inArray3(assessmentQuestions.reference, codes));
+    rows.forEach((row) => existingRefs.add(row.reference.toLowerCase()));
+  }
+  const externalClaimed = /* @__PURE__ */ new Set();
+  for (const parsedRow of parsed.rows) {
+    const input = parsedRow.input;
+    if (input && input.type === "EVIDENCE") {
+      const claimed = input.claimedQuestionReference;
+      if (claimed && !batchCodes.has(claimed.toLowerCase())) externalClaimed.add(claimed);
+    }
+  }
+  const claimedExists = /* @__PURE__ */ new Set();
+  if (externalClaimed.size > 0) {
+    const rows = await db.select({ reference: assessmentQuestions.reference }).from(assessmentQuestions).where(inArray3(assessmentQuestions.reference, Array.from(externalClaimed)));
+    rows.forEach((row) => claimedExists.add(row.reference.toLowerCase()));
+  }
+  const preparedRows = parsed.rows.map((row) => {
+    const errors = [...row.errors];
+    const frameworkErrors = [];
+    let dimensionId = null;
+    const input = row.input;
+    if (input) {
+      if (!row.dimensionCode) {
+        const msg = `Row ${row.rowNumber}: dimension_code is required and must match this role's Evaluation Framework.`;
+        errors.push(msg);
+        frameworkErrors.push(msg);
+      } else {
+        const dimension = dimensionByReference.get(row.dimensionCode.toUpperCase());
+        if (!dimension) {
+          const msg = `Row ${row.rowNumber}: Dimension ${row.dimensionCode} does not exist in this role's Evaluation Framework.`;
+          errors.push(msg);
+          frameworkErrors.push(msg);
+        } else {
+          dimensionId = dimension.id;
+        }
+      }
+      if (row.code && existingRefs.has(row.code.toLowerCase())) {
+        errors.push(`Row ${row.rowNumber}: Question code "${row.code}" already exists. CSV import creates new questions only.`);
+      }
+      if (input.type === "EVIDENCE") {
+        const claimed = input.claimedQuestionReference;
+        if (claimed && !batchCodes.has(claimed.toLowerCase()) && !claimedExists.has(claimed.toLowerCase())) {
+          errors.push(`Row ${row.rowNumber}: Claimed question "${claimed}" does not exist.`);
+        }
+      }
+    }
+    return { row, dimensionId, errors, frameworkErrors };
+  });
+  const target = await resolveTargetAssessment(role);
+  return { role, dimensions, target, rows: preparedRows, fileErrors, detected: parsed.detected, frameworkState, frameworkPreview };
+}
+function toPreview(prepared) {
+  const rows = prepared.rows.map(({ row, errors, frameworkErrors }) => {
+    const valid2 = errors.length === 0 && row.input !== null;
+    const structurallyValid = row.input !== null && errors.length === frameworkErrors.length && row.errors.length === 0;
+    return {
+      rowNumber: row.rowNumber,
+      order: row.order,
+      code: row.code,
+      question: row.question,
+      type: row.type,
+      dimension: row.dimension,
+      qWeight: row.qWeight,
+      maxScore: row.maxScore,
+      optionCount: row.optionCount,
+      status: row.status,
+      valid: valid2,
+      structurallyValid,
+      errors
+    };
+  });
+  const valid = rows.filter((row) => row.valid).length;
+  const structurallyValidCount = rows.filter((row) => row.structurallyValid).length;
+  return {
+    detected: prepared.detected,
+    valid,
+    structurallyValidCount,
+    errorCount: rows.length - valid,
+    rows,
+    errors: prepared.fileErrors,
+    dimensions: prepared.dimensions.map((dimension) => ({ reference: dimension.reference, name: dimension.name })),
+    assessment: { id: prepared.target.id, name: prepared.target.name, status: prepared.target.status, willCreate: prepared.target.willCreate },
+    frameworkState: prepared.frameworkState,
+    frameworkPreview: prepared.frameworkPreview
+  };
+}
+async function previewCsvImport(roleIdOrSlug, csvText) {
+  return toPreview(await prepareImport(roleIdOrSlug, csvText));
+}
+async function persistImport(role, target, validRows, scope) {
+  const db = getDatabase();
+  const slug = target.willCreate ? await buildUniqueSlug(target.name, target.version) : target.slug;
+  const assessmentId = await db.transaction(async (tx) => {
+    let resolvedAssessmentId = target.id;
+    if (!resolvedAssessmentId) {
+      resolvedAssessmentId = newId("assessment");
+      await tx.insert(assessments).values({
+        id: resolvedAssessmentId,
+        slug: slug ?? "assessment",
+        roleId: role.id,
+        name: target.name,
+        description: `Questions imported from CSV for ${role.title}.`,
+        status: "Draft",
+        version: target.version
+      });
+    }
+    const idByCode = /* @__PURE__ */ new Map();
+    for (const prepared of validRows) {
+      const input = prepared.row.input;
+      const questionId = newId("question");
+      idByCode.set(prepared.row.code, questionId);
+      const scored = isScoredQuestionType(input.type);
+      const qWeight = scored && "qWeight" in input ? input.qWeight : null;
+      await tx.insert(assessmentQuestions).values({
+        id: questionId,
+        reference: input.reference,
+        dimensionId: prepared.dimensionId,
+        questionType: input.type,
+        prompt: input.prompt,
+        helpText: input.helpText,
+        qWeight,
+        maxScore: scored ? SCORED_QUESTION_MAX : null,
+        required: input.required ? 1 : 0,
+        status: input.status,
+        timeLimitSec: input.timeLimitSec,
+        scope: scope === "ROLE_ONLY" ? "ROLE_ONLY" : "QUESTION_BANK",
+        ownerRoleId: scope === "ROLE_ONLY" ? role.id : null
+      });
+    }
+    for (const prepared of validRows) {
+      await insertNestedConfiguration(tx, idByCode.get(prepared.row.code), prepared.row.input);
+    }
+    const [existing] = await tx.select({ value: count3() }).from(assessmentQuestionAssignments).where(eq10(assessmentQuestionAssignments.assessmentId, resolvedAssessmentId));
+    let nextOrder = existing?.value ?? 0;
+    const ordered = [...validRows].sort((a, b) => (a.row.order ?? 0) - (b.row.order ?? 0) || a.row.rowNumber - b.row.rowNumber);
+    for (const prepared of ordered) {
+      nextOrder += 1;
+      await tx.insert(assessmentQuestionAssignments).values({
+        id: newId("assignment"),
+        assessmentId: resolvedAssessmentId,
+        questionId: idByCode.get(prepared.row.code),
+        displayOrder: nextOrder
+      });
+    }
+    return resolvedAssessmentId;
+  });
+  const [finalAssessment] = await db.select({ name: assessments.name, slug: assessments.slug }).from(assessments).where(eq10(assessments.id, assessmentId)).limit(1);
+  return {
+    assessmentId,
+    assessmentName: finalAssessment?.name ?? target.name,
+    assessmentSlug: finalAssessment?.slug ?? slug ?? "assessment",
+    importedCount: validRows.length,
+    scope,
+    createdAssessment: target.willCreate
+  };
+}
+async function createCsvFramework(roleIdOrSlug, csvText) {
+  const role = await getRecruitmentRoleByIdOrSlug(roleIdOrSlug);
+  if (!role) throw new CsvImportValidationError("Unable to load this role.");
+  const db = getDatabase();
+  const parsed = parseAndValidateCsv(csvText);
+  if (parsed.frameworkDimensions.length === 0) {
+    throw new CsvImportValidationError("The CSV does not contain any dimension information.");
+  }
+  const existingDimensions = await loadRoleDimensions(role.id);
+  const existingByCode = new Map(existingDimensions.map((d) => [d.reference.toUpperCase(), d]));
+  const toCreate = parsed.frameworkDimensions.filter((d) => !existingByCode.has(d.code));
+  if (toCreate.length === 0) {
+    return previewCsvImport(roleIdOrSlug, csvText);
+  }
+  for (const dim of toCreate) {
+    if (!dim.consistent) {
+      throw new CsvImportValidationError(
+        `Dimension ${dim.code} has inconsistent configuration across rows: ${dim.inconsistencyReason}`
+      );
+    }
+    if (!dim.name || dim.name.trim() === "") {
+      throw new CsvImportValidationError(
+        `The CSV does not contain enough information to create the Evaluation Framework automatically: dimension_name is missing for ${dim.code}.`
+      );
+    }
+    if (dim.weight === null || Number.isNaN(dim.weight)) {
+      throw new CsvImportValidationError(
+        `The CSV does not contain enough information to create the Evaluation Framework automatically: dimension_weight is missing for ${dim.code}.`
+      );
+    }
+    if (dim.weight <= 0) {
+      throw new CsvImportValidationError(
+        `Dimension ${dim.code} has an invalid dimension_weight: weight must be greater than zero.`
+      );
+    }
+    if (dim.floor !== null && Number.isNaN(dim.floor)) {
+      throw new CsvImportValidationError(
+        `Dimension ${dim.code} has an invalid dimension_floor value in the CSV.`
+      );
+    }
+    const existing = existingByCode.get(dim.code);
+    if (existing) {
+      throw new CsvImportValidationError(
+        `Dimension ${dim.code} already exists for this role. Existing dimensions cannot be overwritten via CSV.`
+      );
+    }
+  }
+  const existingWeightTotal = existingDimensions.reduce((sum, d) => sum + d.weight, 0);
+  const newWeightTotal = toCreate.reduce((sum, d) => sum + (d.weight ?? 0), 0);
+  const projectedTotal = existingWeightTotal + newWeightTotal;
+  if (projectedTotal !== 100) {
+    throw new CsvImportValidationError(
+      `Dimension weights total ${projectedTotal}% after adding the new dimensions. The full framework must total 100%.`
+    );
+  }
+  const nextDisplayOrder = existingDimensions.length;
+  await db.transaction(async (tx) => {
+    for (let i = 0; i < toCreate.length; i++) {
+      const dim = toCreate[i];
+      const id = `dim-${randomBytes9(8).toString("hex")}`;
+      const floor = dim.floor !== null && !Number.isNaN(dim.floor) ? Math.round(dim.floor) : null;
+      await tx.insert(assessmentDimensions).values({
+        id,
+        roleId: role.id,
+        reference: dim.code,
+        name: dim.name.trim(),
+        weight: Math.round(dim.weight),
+        minimumFloor: floor,
+        displayOrder: nextDisplayOrder + i + 1,
+        status: "Active"
+      });
+    }
+  });
+  return previewCsvImport(roleIdOrSlug, csvText);
+}
+async function confirmCsvImport(roleIdOrSlug, csvText, scope) {
+  if (!CSV_SCOPES.includes(scope)) {
+    throw new CsvImportValidationError("Choose where to store the imported questions.");
+  }
+  const prepared = await prepareImport(roleIdOrSlug, csvText);
+  const preview = toPreview(prepared);
+  if (preview.errors.length > 0) throw new CsvImportValidationError(preview.errors[0]);
+  const invalid = preview.rows.find((row) => !row.valid);
+  if (invalid) throw new CsvImportValidationError(invalid.errors[0] ?? `Row ${invalid.rowNumber} is not valid.`);
+  if (preview.detected === 0) throw new CsvImportValidationError("No question rows were found in the file.");
+  if (preview.detected > MAX_CSV_QUESTIONS) {
+    throw new CsvImportValidationError(`The file contains ${preview.detected} questions, exceeding the ${MAX_CSV_QUESTIONS}-question limit.`);
+  }
+  const validRows = prepared.rows.filter((preparedRow) => preparedRow.errors.length === 0 && preparedRow.row.input !== null);
+  const result = await persistImport(prepared.role, prepared.target, validRows, scope);
+  try {
+    await updateAssessmentStatus(result.assessmentId, "Active");
+  } catch {
+    console.error("[csv-import] auto-activate failed for assessment", result.assessmentId);
+  }
+  return result;
+}
+
+// server/csvImportApi.ts
+var CSV_BODY_LIMIT = "2mb";
+function readCsvBody(request) {
+  return typeof request.body === "string" ? request.body : "";
+}
+function createCsvImportApiRouter() {
+  const router = express6.Router();
+  router.get("/api/admin/recruitment-roles/:idOrSlug/assessment/csv-template", requireAuthorizedAdmin2, async (_request, response) => {
+    try {
+      response.json({
+        ok: true,
+        filename: "assessment-question-import-template.csv",
+        template: buildCsvTemplate(),
+        instructions: csvTemplateInstructions(),
+        columns: CSV_COLUMNS
+      });
+    } catch (error) {
+      handleRouteError2("admin csv template")(error, response);
+    }
+  });
+  router.post(
+    "/api/admin/recruitment-roles/:idOrSlug/assessment/csv-preview",
+    requireAuthorizedAdmin2,
+    express6.text({ type: () => true, limit: CSV_BODY_LIMIT }),
+    async (request, response) => {
+      try {
+        const preview = await previewCsvImport(request.params.idOrSlug ?? "", readCsvBody(request));
+        response.json({ ok: true, preview });
+      } catch (error) {
+        if (error instanceof CsvImportValidationError) return fail3(response, 400, error.message);
+        handleRouteError2("admin csv preview")(error, response);
+      }
+    }
+  );
+  router.post(
+    "/api/admin/recruitment-roles/:idOrSlug/assessment/csv-framework",
+    requireAuthorizedAdmin2,
+    express6.text({ type: () => true, limit: CSV_BODY_LIMIT }),
+    async (request, response) => {
+      try {
+        const preview = await createCsvFramework(request.params.idOrSlug ?? "", readCsvBody(request));
+        response.json({ ok: true, preview });
+      } catch (error) {
+        if (error instanceof CsvImportValidationError) return fail3(response, 400, error.message);
+        handleRouteError2("admin csv framework create")(error, response);
+      }
+    }
+  );
+  router.post(
+    "/api/admin/recruitment-roles/:idOrSlug/assessment/csv-import",
+    requireAuthorizedAdmin2,
+    express6.text({ type: () => true, limit: CSV_BODY_LIMIT }),
+    async (request, response) => {
+      try {
+        const scopeParam = request.query.scope;
+        const scope = typeof scopeParam === "string" ? scopeParam : "";
+        const result = await confirmCsvImport(request.params.idOrSlug ?? "", readCsvBody(request), scope);
+        response.json({ ok: true, result });
+      } catch (error) {
+        if (error instanceof CsvImportValidationError) return fail3(response, 400, error.message);
+        handleRouteError2("admin csv import")(error, response);
+      }
+    }
+  );
+  return router;
+}
+
+// server/questionBankApi.ts
+import express7 from "express";
 init_questionBankRepository();
 init_questionBankApi();
 var SORT_KEYS = ["reference", "dimension", "type", "qWeight", "status"];
@@ -5027,7 +6242,7 @@ function toPositiveInt(value, fallback) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 function createQuestionBankApiRouter() {
-  const router = express6.Router();
+  const router = express7.Router();
   router.get("/api/admin/questions", requireAuthorizedAdmin2, async (request, response) => {
     try {
       const query = request.query;
@@ -5085,11 +6300,11 @@ function createQuestionBankApiRouter() {
 }
 
 // server/app.ts
-var app = express7();
+var app = express8();
 if (process.env.TRUST_PROXY) {
   app.set("trust proxy", process.env.TRUST_PROXY);
 }
-app.use(express7.json({ limit: "100kb" }));
+app.use(express8.json({ limit: "100kb" }));
 app.get("/api/health/database", async (_req, res) => {
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -5112,6 +6327,7 @@ app.use(createAdminAuthRouter());
 app.use(createRecruitmentApiRouter());
 app.use(createQuestionBankApiRouter());
 app.use(createAssessmentApiRouter());
+app.use(createCsvImportApiRouter());
 app.use(createApplicationApiRouter());
 app.use(createCvApiRouter());
 app.use(createAdminApplicationApiRouter());

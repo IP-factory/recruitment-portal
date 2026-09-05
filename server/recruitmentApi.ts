@@ -16,6 +16,7 @@ import {
   createEligibilityGate,
   createRecruitmentRole,
   deleteEligibilityGate,
+  deleteRecruitmentRole,
   getEligibilityGateById,
   getRecruitmentRoleByIdOrSlug,
   getRoleEligibilityGates,
@@ -241,6 +242,18 @@ export function createRecruitmentApiRouter(): Router {
   // Admin endpoints (Task 24B authorization)
   router.get("/api/admin/recruitment-roles", requireAuthorizedAdmin, getAdminRoles);
   router.post("/api/admin/recruitment-roles", requireAuthorizedAdmin, createAdminRole);
+  router.delete("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin, async (request, response) => {
+    try {
+      const role = await getRecruitmentRoleByIdOrSlug(request.params.idOrSlug);
+      if (!role || !await deleteRecruitmentRole(role.id)) {
+        return void fail(response, 404, "Unable to find this recruitment role.");
+      }
+      response.json({ ok: true });
+    } catch (error) {
+      console.error("[recruitment] delete role failed:", error instanceof Error ? error.message : String(error));
+      fail(response, 503, "Unable to delete this recruitment role. Please try again.");
+    }
+  });
   router.get("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin, getAdminRole);
   router.patch("/api/admin/recruitment-roles/:idOrSlug", requireAuthorizedAdmin, patchAdminRole);
   router.get("/api/admin/recruitment-roles/:idOrSlug/eligibility", requireAuthorizedAdmin, getAdminRoleEligibility);

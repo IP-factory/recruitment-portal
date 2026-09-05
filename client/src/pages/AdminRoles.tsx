@@ -6,12 +6,14 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { DataErrorState, DataLoadingState } from "@/components/AsyncStates";
 import { FoundationButton, FoundationInput, FoundationSelect, StatusBadge } from "@/components/foundation/ui";
 import { useAdminApplicationsLive, useAdminRoles } from "@/hooks/useRecruitmentData";
-import { formatRoleUpdatedLabel, ROLE_STATUSES, type AdminRecruitmentRole, type RoleStatus } from "@/lib/recruitmentApi";
+import { deleteAdminRole, formatRoleUpdatedLabel, ROLE_STATUSES, type AdminRecruitmentRole, type RoleStatus } from "@/lib/recruitmentApi";
 import { deriveRoleApplicationCounts } from "@/lib/roleConfigurationDisplay";
 import type { AdminApplicationSummary } from "@/lib/adminApplicationApi";
-import { Search } from "lucide-react";
+import { Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const statusOptions: RoleStatus[] = [...ROLE_STATUSES];
 function RoleCell({ role }: { role: AdminRecruitmentRole }) { return <div><p className="font-medium text-primary">{role.title}</p><p className="mt-1 text-[12px] text-muted-foreground">{role.employmentType}</p></div>; }
@@ -23,6 +25,31 @@ export default function AdminRoles() {
   const liveApplications: AdminApplicationSummary[] = applicationsState.status === "ready" && applicationsState.data ? applicationsState.data.applications : [];
   const applicationCountFor = (role: AdminRecruitmentRole) => applicationsState.status === "loading" ? "…" : deriveRoleApplicationCounts(liveApplications, role.title).total;
   const roles = data ?? [];
+  const [pendingDelete, setPendingDelete] = useState<AdminRecruitmentRole | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const requestDelete = (role: AdminRecruitmentRole) => { setDeleteError(null); setPendingDelete(role); };
+  const confirmDelete = async () => {
+    if (!pendingDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAdminRole(pendingDelete.id);
+      setPendingDelete(null);
+      toast.success("Role deleted. Existing applications and scores have been preserved.");
+      reload();
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Unable to delete this role. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+  const deleteButton = (role: AdminRecruitmentRole) => <button
+    type="button" aria-label={`Delete ${role.title}`} title={`Delete ${role.title}`}
+    className="inline-flex size-10 items-center justify-center rounded-md text-status-error-strong hover:bg-red-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+    onClick={(event) => { event.stopPropagation(); requestDelete(role); }}
+    onKeyDown={(event) => event.stopPropagation()}
+  ><Trash2 aria-hidden="true" className="size-4" /></button>;
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const normalisedSearch = search.trim().toLowerCase();
@@ -37,6 +64,16 @@ export default function AdminRoles() {
       : <>
     <section className="mt-6 grid gap-3 sm:grid-cols-3" aria-label="Role summary"><article className="rounded-xl border border-border bg-white p-4"><p className="text-[12px] font-medium text-muted-foreground">Total Roles</p><p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-primary">{roles.length}</p><p className="mt-1.5 text-[12px] text-muted-foreground">Across all statuses</p></article><article className="rounded-xl border border-border bg-white p-4"><p className="text-[12px] font-medium text-muted-foreground">Open Roles</p><p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-primary">{openRoles}</p><p className="mt-1.5 text-[12px] text-muted-foreground">Currently accepting applications</p></article><article className="rounded-xl border border-border bg-white p-4"><p className="text-[12px] font-medium text-muted-foreground">Draft Roles</p><p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-primary">{draftRoles}</p><p className="mt-1.5 text-[12px] text-muted-foreground">Not yet published</p></article></section>
     <section className="mt-6 rounded-xl border border-border bg-white p-4 sm:p-5 lg:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div className="relative w-full sm:max-w-sm"><label className="sr-only" htmlFor="role-search">Search roles</label><Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><FoundationInput className="pl-10" id="role-search" onChange={(event) => setSearch(event.target.value)} placeholder="Search roles" value={search} /></div><div className="w-full sm:w-[190px]"><label className="mb-1.5 block text-[12px] font-medium text-muted-foreground" htmlFor="role-status-filter">Status</label><FoundationSelect id="role-status-filter" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}><option value="all">All statuses</option>{statusOptions.map((item) => <option key={item} value={item}>{item}</option>)}</FoundationSelect></div></div><div className="mt-5 flex items-center justify-between gap-4 border-t border-border pt-4"><p className="text-[13px] text-muted-foreground">{visibleRoles.length} {visibleRoles.length === 1 ? "role" : "roles"}</p>{hasActiveFilters ? <button className="text-[13px] font-medium text-portal-blue transition-colors hover:text-primary hover:underline" onClick={resetFilters} type="button">Clear filters</button> : null}</div>
-      {visibleRoles.length ? <><div className="mt-3 hidden overflow-x-auto md:block"><table className="w-full min-w-[900px] text-left"><thead className="border-b border-border"><tr>{["Role", "Department", "Location", "Applications", "Status", "Last Updated"].map((heading) => <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground" key={heading}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-border">{visibleRoles.map((role) => <tr key={role.id} className="cursor-pointer transition-colors hover:bg-portal-surface" onClick={() => setLocation(`/admin/roles/${role.slug}`)}><td className="px-3 py-4 text-sm"><RoleCell role={role} /></td><td className="px-3 py-4 text-[13px] text-muted-foreground">{role.department}</td><td className="px-3 py-4 text-[13px] text-muted-foreground">{role.location}</td><td className="px-3 py-4 text-[13px] text-primary">{applicationCountFor(role)}</td><td className="px-3 py-4"><StatusBadge status={role.status} /></td><td className="whitespace-nowrap px-3 py-4 text-[13px] text-muted-foreground">{formatRoleUpdatedLabel(role.updatedAt)}</td></tr>)}</tbody></table></div><div className="mt-3 divide-y divide-border md:hidden">{visibleRoles.map((role) => <article className="cursor-pointer py-4 transition-colors hover:bg-portal-surface" key={role.id} onClick={() => setLocation(`/admin/roles/${role.slug}`)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setLocation(`/admin/roles/${role.slug}`); }}><RoleCell role={role} /><div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Department</p><p className="mt-1 text-[13px] text-primary">{role.department}</p></div><div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Location</p><p className="mt-1 text-[13px] text-primary">{role.location}</p></div><div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Applications</p><p className="mt-1 text-[13px] text-primary">{applicationCountFor(role)}</p></div><div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Status</p><div className="mt-1.5"><StatusBadge status={role.status} /></div></div></div></article>)}</div></> : <div className="py-14 text-center"><h3 className="text-base font-semibold text-primary">No roles found</h3><p className="mt-2 text-sm text-muted-foreground">Try changing your search or filter.</p><button className="mt-4 text-[13px] font-medium text-portal-blue transition-colors hover:text-primary hover:underline" onClick={resetFilters} type="button">Clear filters</button></div>}</section>
-      </>}</AdminShell>;
+      {visibleRoles.length ? <><div className="mt-3 hidden overflow-x-auto md:block"><table className="w-full min-w-[900px] text-left"><thead className="border-b border-border"><tr>{["Role", "Department", "Location", "Applications", "Status", "Last Updated", "Actions"].map((heading) => <th className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground" key={heading}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-border">{visibleRoles.map((role) => <tr key={role.id} className="cursor-pointer transition-colors hover:bg-portal-surface" onClick={() => setLocation(`/admin/roles/${role.slug}`)}><td className="px-3 py-4 text-sm"><RoleCell role={role} /></td><td className="px-3 py-4 text-[13px] text-muted-foreground">{role.department}</td><td className="px-3 py-4 text-[13px] text-muted-foreground">{role.location}</td><td className="px-3 py-4 text-[13px] text-primary">{applicationCountFor(role)}</td><td className="px-3 py-4"><StatusBadge status={role.status} /></td><td className="whitespace-nowrap px-3 py-4 text-[13px] text-muted-foreground">{formatRoleUpdatedLabel(role.updatedAt)}</td><td className="px-3 py-4">{deleteButton(role)}</td></tr>)}</tbody></table></div><div className="mt-3 divide-y divide-border md:hidden">{visibleRoles.map((role) => <article className="cursor-pointer py-4 transition-colors hover:bg-portal-surface" key={role.id} onClick={() => setLocation(`/admin/roles/${role.slug}`)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setLocation(`/admin/roles/${role.slug}`); }}><div className="flex items-start justify-between gap-3"><RoleCell role={role} />{deleteButton(role)}</div><div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Department</p><p className="mt-1 text-[13px] text-primary">{role.department}</p></div><div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Location</p><p className="mt-1 text-[13px] text-primary">{role.location}</p></div><div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Applications</p><p className="mt-1 text-[13px] text-primary">{applicationCountFor(role)}</p></div><div><p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Status</p><div className="mt-1.5"><StatusBadge status={role.status} /></div></div></div></article>)}</div></> : <div className="py-14 text-center"><h3 className="text-base font-semibold text-primary">No roles found</h3><p className="mt-2 text-sm text-muted-foreground">Try changing your search or filter.</p><button className="mt-4 text-[13px] font-medium text-portal-blue transition-colors hover:text-primary hover:underline" onClick={resetFilters} type="button">Clear filters</button></div>}</section>
+      </>}
+    <Dialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open && !deleting) setPendingDelete(null); }}>
+      <DialogContent showCloseButton={!deleting} onEscapeKeyDown={(event) => { if (deleting) event.preventDefault(); }} onPointerDownOutside={(event) => { if (deleting) event.preventDefault(); }}>
+        <DialogHeader><DialogTitle>Delete recruitment role?</DialogTitle><DialogDescription>
+          “{pendingDelete?.title}” will be removed from recruitment listings and will stop accepting new applications. Existing applications, CVs and scores will remain available in Applications and Screening. This action cannot be undone from the admin platform.
+        </DialogDescription></DialogHeader>
+        {deleteError && <p role="alert" className="text-sm text-status-error-strong">{deleteError}</p>}
+        <DialogFooter><FoundationButton variant="secondary" disabled={deleting} onClick={() => setPendingDelete(null)}>Cancel</FoundationButton><FoundationButton className="bg-red-700 text-white hover:bg-red-800" disabled={deleting} onClick={confirmDelete}>{deleting ? "Deleting…" : "Delete role"}</FoundationButton></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </AdminShell>;
 }

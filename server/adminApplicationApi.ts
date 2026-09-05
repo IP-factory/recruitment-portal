@@ -185,6 +185,7 @@ export function createAdminApplicationApiRouter(): Router {
           fullName: app.fullName,
           email: app.email,
           roleTitle: app.roleTitle,
+          roleId: app.roleId,
           eligibilityStatus: app.eligibilityStatus,
           assessmentStatus,
           applicationStatus: app.applicationStatus,

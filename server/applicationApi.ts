@@ -106,7 +106,7 @@ export function createApplicationApiRouter(): Router {
       // Resolve role from database
       const db = (await import("./db")).getDatabase();
       const role = (await db.select().from(recruitmentRoles).where(eq(recruitmentRoles.slug, input.roleSlug)).limit(1))[0];
-      if (!role) return fail(response, 404, "The selected role is not available.");
+      if (!role || role.deletedAt) return fail(response, 404, "The selected role is not available.");
       if (role.status !== "Open") return fail(response, 400, "Applications are not currently being accepted for this role.");
 
       // Check for duplicate application

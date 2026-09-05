@@ -78,6 +78,8 @@ export interface AdminApplicationSummary {
   fullName: string;
   email: string;
   roleTitle: string;
+  /** Stable role identity; optional for compatibility with older API responses. */
+  roleId?: string;
   eligibilityStatus: string;
   assessmentStatus: string;
   applicationStatus: string;

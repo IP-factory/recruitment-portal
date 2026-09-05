@@ -11,6 +11,7 @@ import ApplicantAssessmentComplete from "@/pages/ApplicantAssessmentComplete";
 import ApplicantReviewPlaceholder from "@/pages/ApplicantReviewPlaceholder";
 import ApplicantSubmissionOutcome from "@/pages/ApplicantSubmissionOutcome";
 import AdminDashboard from "@/pages/AdminDashboard";
+import AdminHelp from "@/pages/AdminHelp";
 import AdminApplications from "@/pages/AdminApplications";
 import AdminCandidatePlaceholder from "@/pages/AdminCandidatePlaceholder";
 import AdminLogin from "@/pages/AdminLogin";
@@ -76,6 +77,8 @@ function Router() {
       <Route path="/admin/questions/:questionId">{() => <AdminRoute><AdminQuestionDetail /></AdminRoute>}</Route>
       <Route path="/admin/questions">{() => <AdminRoute><AdminQuestionBank /></AdminRoute>}</Route>
       <Route path="/admin/settings">{() => <AdminRoute><AdminPlaceholder title="Settings" /></AdminRoute>}</Route>
+      <Route path="/admin/help/:section">{() => <AdminRoute><AdminHelp /></AdminRoute>}</Route>
+      <Route path="/admin/help">{() => <AdminRoute><AdminHelp /></AdminRoute>}</Route>
       <Route component={Apply} path="/apply" />
       {/* Task 24G — the DB-driven role introduction page precedes the information step. */}
       <Route component={ApplicantRoleIntroduction} path="/apply/business-development-officer" />

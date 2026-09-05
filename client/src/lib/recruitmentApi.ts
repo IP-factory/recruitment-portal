@@ -155,6 +155,10 @@ export async function fetchAdminEligibility(idOrSlug: string): Promise<{ roleId:
   return request<{ roleId: string; gates: AdminEligibilityGate[] }>(`/api/admin/recruitment-roles/${encodeURIComponent(idOrSlug)}/eligibility`);
 }
 
+export async function deleteAdminRole(idOrSlug: string): Promise<void> {
+  await request<{ ok: boolean }>(`/api/admin/recruitment-roles/${encodeURIComponent(idOrSlug)}`, { method: "DELETE" });
+}
+
 export async function createAdminEligibilityGate(idOrSlug: string, input: EligibilityGateInput): Promise<AdminEligibilityGate> {
   const payload = await request<{ gate: AdminEligibilityGate }>(`/api/admin/recruitment-roles/${encodeURIComponent(idOrSlug)}/eligibility`, jsonBody(input));
   return payload.gate;

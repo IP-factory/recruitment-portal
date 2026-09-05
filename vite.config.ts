@@ -79,7 +79,7 @@ function vitePluginManusDebugCollector(): Plugin {
     name: "manus-debug-collector",
 
     transformIndexHtml(html) {
-      if (process.env.NODE_ENV === "production") {
+      if (process.env.NODE_ENV === "production" || !fs.existsSync(path.join(PROJECT_ROOT, "client/public/__manus__/debug-collector.js"))) {
         return html;
       }
       return {

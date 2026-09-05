@@ -206,8 +206,11 @@ npm run dev
 
 npm run dev:server
 
- npx pnpm@latest-10 run dev  
+npx pnpm@latest-10 run dev  
 
 
 
- 
+corepack pnpm run check
+corepack pnpm test
+corepack pnpm run build
+corepack pnpm run build:vercel-api

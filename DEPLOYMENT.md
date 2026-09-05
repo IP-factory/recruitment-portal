@@ -6,6 +6,29 @@ TiDB/MySQL database.
 
 ---
 
+## Role deletion update
+
+Before deploying the admin role-deletion feature, apply the tracked migration
+`0009_soft_delete_recruitment_roles.sql` to add the nullable `deleted_at` column.
+Run the normal migration procedure below and verify that the column exists
+before starting the updated server. Existing application versions tolerate
+this additive column, so apply the migration before deploying the code.
+
+For existing installations with manually applied migration history, use the
+targeted, repeatable command `npm run db:migrate:role-deletion`. It loads `.env`,
+adds the column only if missing, verifies the role-list query, and records
+migration 0009 without replaying unrelated migrations.
+
+Deleting a role sets its deletion timestamp and changes its status to Archived.
+It does not delete any applications, CV files, evaluations, assessment questions
+or configuration. Deleted roles are excluded from recruitment lists and direct
+role-management lookups; historical applications remain available to admins.
+Ordinary Archived roles remain visible in role management.
+
+The historical `0008_widen_eligibility_response_gate_columns.sql` file is
+documented as manually applied and is not in the existing migration journal;
+this release leaves that history unchanged. Migration 0009 is tracked.
+
 ## Prerequisites
 
 - **Node.js** ≥ 20 (LTS recommended)
